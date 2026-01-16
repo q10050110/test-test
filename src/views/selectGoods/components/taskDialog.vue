@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { QuestionCircleOutlined } from '@ant-design/icons-vue';
-
+import type { FormInstance } from 'ant-design-vue'
+import type { Rule } from 'ant-design-vue/es/form';
 import type { Task } from '@/types/selectGoods';
 
 const open = ref(false)
@@ -60,6 +61,17 @@ const formData = ref<Task>({ ...initData.value })
 const rules = ref({})
 const openDialog = () => open.value = true
 
+// 创建采集任务
+const formRef = ref<FormInstance>()
+const cancelHandle = () => {
+  open.value = false
+  formRef.value?.resetFields()
+}
+
+const saveHandle = async (type: 'save' | 'execute') => {
+
+}
+
 defineExpose({
   formData,
   openDialog
@@ -68,9 +80,9 @@ defineExpose({
 
 <template>
   <div class="task-page">
-    <a-modal v-model:open="open" :title="formData.id ? '编辑任务' : '新增任务'" style="width: 1000px;">
+    <a-modal v-model:open="open" :title="formData.id ? '编辑任务' : '新增任务'" style="width: 1000px;" @close="cancelHandle">
       <a-form :model="formData" layout="horizontal" :label-col="{ span: 8 }" :wrapper-col="{ span: 24 }"
-        style="padding:0 60px;" :rules="rules">
+        style="padding:0 60px;" :rules="rules" ref="formRef">
         <a-row class="bold">基础信息</a-row>
         <a-row>
           <a-col :span="12">
@@ -326,9 +338,9 @@ defineExpose({
         </a-row>
       </a-form>
       <template #footer>
-        <a-button>取消</a-button>
-        <a-button style="margin: 0 10px;" type="primary">保存</a-button>
-        <a-button type="primary">保存并执行</a-button>
+        <a-button @click="cancelHandle">取消</a-button>
+        <a-button style="margin: 0 10px;" type="primary" @click="saveHandle('save')">保存</a-button>
+        <a-button type="primary" @click="saveHandle('execute')">保存并执行</a-button>
       </template>
     </a-modal>
   </div>
