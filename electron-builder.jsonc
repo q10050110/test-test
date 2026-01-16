@@ -1,0 +1,94 @@
+{
+  // 应用的基本信息
+  "appId": "com.example.myapp",       // 应用的唯一标识，一般是反向域名
+  "productName": "MyElectronApp",     // 应用名称，会用于生成安装包和桌面快捷方式
+  "copyright": "Copyright © 2026 YourName", // 版权信息
+
+  // 构建目录相关
+  "directories": {
+    "output": "release",     // 打包输出目录
+    "buildResources": "build" // 图标、安装程序资源目录
+  },
+
+  // Electron打包平台配置
+  "win": {
+    "target": [
+      "nsis",      // Windows安装包类型，nsis: 可安装，zip: 压缩包
+      "zip"        // 可选，发布zip压缩包
+    ],
+    "icon": "build/icons/win/icon.ico",  // Windows应用图标路径
+    "requestedExecutionLevel": "requireAdministrator", // 安装时权限要求
+    "publisherName": "YourCompany",     // 用于签名（可选）
+    "verifyUpdateCodeSignature": false   // 验证更新签名
+  },
+
+  "nsis": {
+    "oneClick": false,       // 是否一键安装，false表示可自定义安装路径
+    "allowElevation": true,  // 允许管理员权限提升
+    "allowToChangeInstallationDirectory": true, // 安装路径可修改
+    "installerIcon": "build/icons/win/installerIcon.ico", // 安装程序图标
+    "uninstallerIcon": "build/icons/win/uninstallerIcon.ico", // 卸载程序图标
+    "installerHeaderIcon": "build/icons/win/installerHeader.ico", // 安装程序顶部图标
+    "createDesktopShortcut": true,  // 是否创建桌面快捷方式
+    "createStartMenuShortcut": true, // 是否创建开始菜单快捷方式
+    "shortcutName": "MyElectronApp"  // 快捷方式名称
+  },
+
+  "mac": {
+    "target": [
+      "dmg",       // DMG 镜像
+      "zip"        // 压缩包
+    ],
+    "icon": "build/icons/mac/icon.icns", // macOS图标
+    "category": "public.app-category.utilities", // 应用分类，用于App Store
+    "hardenedRuntime": true, // 启用安全运行时（打包时用于签名）
+    "gatekeeperAssess": false // 是否绕过Gatekeeper检查
+  },
+
+  "linux": {
+    "target": [
+      "AppImage",  // 可执行镜像
+      "deb",       // Debian包
+      "rpm"        // RedHat包
+    ],
+    "icon": "build/icons/png",  // Linux图标文件夹，通常提供不同尺寸png
+    "category": "Utility",      // 应用分类
+    "desktop": {
+      "Name": "MyElectronApp",
+      "Comment": "My cross-platform Electron application"
+    }
+  },
+
+  // 构建文件通用配置
+  "files": [
+    "dist/**/*",     // 生产环境构建文件
+    "package.json"   // 必须包含package.json
+  ],
+
+  // 排除不需要打包的文件
+  "extraFiles": [
+    {
+      "from": "assets/",
+      "to": "assets",
+      "filter": ["**/*"]
+    }
+  ],
+
+  // Node模块的外部依赖处理
+  "asar": true, // 打包成asar归档文件，提升加载速度并隐藏源码
+
+  // 发布配置
+  "publish": [
+    {
+      "provider": "github",          // 发布到GitHub
+      "owner": "your-github-user",   // 仓库拥有者
+      "repo": "my-electron-app",     // 仓库名称
+      "token": "YOUR_GITHUB_TOKEN"   // GitHub访问Token
+    }
+  ],
+
+  // 高级配置
+  "compression": "maximum",      // 压缩等级
+  "electronVersion": "26.2.0",   // 指定Electron版本
+  "npmRebuild": false             // 是否在打包前重建本地依赖
+}
