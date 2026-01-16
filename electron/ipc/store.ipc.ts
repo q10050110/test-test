@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { operationStore } from '../store/index.ts'
+import { operationStore } from '../store/index.js'
 export const storeIpc = () => {
   ipcMain.handle('store-get', (_, key: string) => operationStore.get(key))
   ipcMain.handle('store-set', (_, key: string, value: any) => operationStore.set(key, value))

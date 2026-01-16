@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron'
-import { createWindow } from './windows/main.window.ts'
+import { createWindow } from './windows/main.window.js'
 
 /**
  * 应用准备就绪

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "electron/main.ts",
+  "main": "dist-electron/main.js",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
@@ -11,8 +11,9 @@
     "electron": "electron .",
     "dev": "cross-env NODE_ENV=development VITE_DEV_SERVER_URL=http://localhost:3000 npm-run-all -p vite:dev electron",
     "vite:dev": "vite",
-    "build": "yarn build-only && electron-builder",
+    "build": "yarn build-only && yarn build:electron && electron-builder",
     "build-only": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "type-check": "vue-tsc --build",
     "format": "prettier --write src/"

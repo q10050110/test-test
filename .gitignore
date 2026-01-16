@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 release
+dist-electron
 .DS_Store
 dist
 dist-ssr

@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { SysTemUtils } from '../utils/system.ts'
+import { SysTemUtils } from '../utils/system.js'
 export const windowIpc = (win: BrowserWindow) => {
   ipcMain.on('window', (event, data: 'hide' | 'close' | 'maximize' | 'minimize') => {
     switch (data) {

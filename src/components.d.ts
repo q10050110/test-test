@@ -14,7 +14,6 @@ declare module 'vue' {
   export interface GlobalComponents {
     AButton: typeof import('ant-design-vue/es')['Button']
     ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
-    ACheckboxGroup: typeof import('ant-design-vue/es')['CheckboxGroup']
     ACol: typeof import('ant-design-vue/es')['Col']
     ADropdown: typeof import('ant-design-vue/es')['Dropdown']
     AForm: typeof import('ant-design-vue/es')['Form']
@@ -23,7 +22,6 @@ declare module 'vue' {
     AMenu: typeof import('ant-design-vue/es')['Menu']
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
-    APagination: typeof import('ant-design-vue/es')['Pagination']
     ARadio: typeof import('ant-design-vue/es')['Radio']
     ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
     ARow: typeof import('ant-design-vue/es')['Row']
@@ -43,7 +41,6 @@ declare module 'vue' {
 declare global {
   const AButton: typeof import('ant-design-vue/es')['Button']
   const ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
-  const ACheckboxGroup: typeof import('ant-design-vue/es')['CheckboxGroup']
   const ACol: typeof import('ant-design-vue/es')['Col']
   const ADropdown: typeof import('ant-design-vue/es')['Dropdown']
   const AForm: typeof import('ant-design-vue/es')['Form']
@@ -52,7 +49,6 @@ declare global {
   const AMenu: typeof import('ant-design-vue/es')['Menu']
   const AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
   const AModal: typeof import('ant-design-vue/es')['Modal']
-  const APagination: typeof import('ant-design-vue/es')['Pagination']
   const ARadio: typeof import('ant-design-vue/es')['Radio']
   const ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
   const ARow: typeof import('ant-design-vue/es')['Row']

@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resisterAllIpc } from '../ipc/main.ipc.ts'
+import { resisterAllIpc } from '../ipc/main.ipc.js'
 // __dirname 表示当前文件所在目录的绝对路径
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export let mainWindow: BrowserWindow | null
@@ -18,7 +18,7 @@ export const createWindow = () => {
     webPreferences: {
       nodeIntegration: false, // 禁止网页使用nodejs的API
       contextIsolation: true, // 启用上下文隔离
-      preload: path.join(__dirname, '../preload.js')
+      preload: path.join(__dirname, '../../electron/preload.js')
     }
   })
 
@@ -31,7 +31,7 @@ export const createWindow = () => {
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:3000/login')
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist/index.html'))
+    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'))
   }
 
   mainWindow.on('closed', () => {

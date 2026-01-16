@@ -1,3 +1,5 @@
+type TaskStatus = 'pending' | 'running' | 'completed' | 'failed'
+
 interface Task {
   id?: string
   name?: string

@@ -12,7 +12,7 @@ export default {
   appId: "com.example.myapp",
 
   // 应用名称（安装包和桌面图标显示）
-  productName: "MyElectronApp",
+  productName: "上品帮自动化助手",
 
   // 输出目录
   directories: {
@@ -22,11 +22,11 @@ export default {
   asar: true,
   // 文件排除规则
   files: [
-    "electron/main.ts",
-    "electron/preload.cjs",
-    "dist/**/*",        // 打包前端构建文件
+    "dist-electron/**/*",   // Electron 主进程编译后的文件
+    "electron/preload.js",  // preload 脚本
+    "dist/**/*",            // 打包前端构建文件
     "node_modules/**/*",
-    "!**/*.map"         // 排除 source map
+    "!**/*.map"             // 排除 source map
   ],
 
   // Windows 配置
@@ -37,7 +37,7 @@ export default {
     ],
     icon: "build/icons/win/icon.ico", // Windows 图标
     legalTrademarks: "MyCompany",
-    requestedExecutionLevel: "requireAdministrator"
+    requestedExecutionLevel: "asInvoker" // requireAdministrator管理员权限运行
   },
 
   // NSIS 安装器配置
@@ -47,7 +47,7 @@ export default {
     allowToChangeInstallationDirectory: true, // 可修改安装目录
     createDesktopShortcut: true,  // 创建桌面快捷方式
     createStartMenuShortcut: true, // 创建开始菜单快捷方式
-    shortcutName: "MyElectronApp"  // 快捷方式名称
+    shortcutName: "上品帮自动化助手"  // 快捷方式名称
   },
 
   // macOS 配置
