@@ -4,7 +4,7 @@ interface Info {
   token: string
   [key: string]: any
 }
-const store = new Store<Info>({
+export const store = new Store<Info>({
   name: 'store',
   defaults: {
     token: ''

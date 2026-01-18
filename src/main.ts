@@ -7,6 +7,8 @@ import './permissions'
 import { ConfigProvider } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import 'dayjs/locale/zh-cn'
+
+
 const app = createApp(App)
 
 app.use(pinia)
@@ -14,4 +16,5 @@ app.use(router)
 app.use(ConfigProvider, {
   locale: zhCN
 })
+
 app.mount('#app')

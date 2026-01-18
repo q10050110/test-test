@@ -1,8 +1,7 @@
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export type Task = {
   id?: string
-  name?: string
   status?: TaskStatus
   progress?: string
   createTime?: string
@@ -13,9 +12,9 @@ export type Task = {
   internalExpress?: string
   rubExpressPrice?: number
   elsePercent?: number
-  sourceType: string
-  targetCount: string
-  targetProfitPercent: number
+  sourceType?: string
+  targetCount?: number
+  targetProfitPercent?: number
   brandType?: string
   soldCountMin?: number
   soldCountMax?: number
@@ -49,4 +48,5 @@ export type Task = {
   followMin?: number
   followMax?: number
   token?: string
+  log?: { log: string, date: string }[]
 }

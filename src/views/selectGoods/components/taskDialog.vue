@@ -3,25 +3,26 @@ import { QuestionCircleOutlined } from '@ant-design/icons-vue';
 import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form';
 import type { Task } from '@/types/selectGoods';
+import feedback from '@/utils/feedback';
 
+const emits = defineEmits(['refresh'])
 const open = ref(false)
 const initData = ref<Task>(
   {
     id: undefined,
-    name: undefined,
     status: 'pending',
     progress: undefined,
     createTime: undefined,
     updateTime: undefined,
-    taskName: '',
-    targetUrl: '',
-    myProfitPercent: 0,
+    taskName: '1',
+    targetUrl: 'https://www.ozon.ru/category/kompyutery-i-komplektuyushchie-15530000/?miniapp=supermarket&__rr=1',
+    myProfitPercent: undefined,
     internalExpress: '',
     rubExpressPrice: 0,
     elsePercent: 0,
-    sourceType: 'default',
-    targetCount: '100',
-    targetProfitPercent: 0,
+    sourceType: '1',
+    targetCount: 11,
+    targetProfitPercent: 1,
     brandType: 'unknown',
     soldCountMin: 0,
     soldCountMax: 0,
@@ -58,7 +59,13 @@ const initData = ref<Task>(
   }
 )
 const formData = ref<Task>({ ...initData.value })
-const rules = ref({})
+const rules: Record<string, Rule[]> = {
+  taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
+  targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
+  sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
+  targetCount: [{ required: true, message: '请输入目标数量', trigger: ['change', 'blur'] }],
+  targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
+}
 const openDialog = () => open.value = true
 
 // 创建采集任务
@@ -69,7 +76,15 @@ const cancelHandle = () => {
 }
 
 const saveHandle = async (type: 'save' | 'execute') => {
-
+  await formRef.value?.validate()
+  const { code, message } = type === 'execute' ? await window.electronAPI.invoke('collection-create-and-start', { data: toRaw(formData.value), type }) : await window.electronAPI.invoke('collection-create', { data: toRaw(formData.value), type })
+  if (code === 200) {
+    emits('refresh')
+    feedback.success('操作成功')
+    cancelHandle()
+    return
+  }
+  feedback.error(message)
 }
 
 defineExpose({

@@ -67,4 +67,13 @@ contextBridge.exposeInMainWorld('electronStore', {
   set: (key, value) => ipcRenderer.invoke('store-set', key, value),
   delete: (key) => ipcRenderer.invoke('store-delete', key)
 })
+
+// 日志 API
+contextBridge.exposeInMainWorld('electronLog', {
+  info: (...args) => ipcRenderer.invoke('log-info', args),
+  warn: (...args) => ipcRenderer.invoke('log-warn', args),
+  error: (...args) => ipcRenderer.invoke('log-error', args),
+  debug: (...args) => ipcRenderer.invoke('log-debug', args)
+})
+
 console.log('Preload Script Loaded Successfully')
