@@ -19,7 +19,6 @@ export const windowIpc = (win: BrowserWindow) => {
   })
 
   ipcMain.handle('app', (event, data: any) => {
-    console.log(SysTemUtils.getAppInfo())
     return SysTemUtils.getAppInfo()
   })
 }

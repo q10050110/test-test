@@ -9,15 +9,17 @@ const request = axios.create({
 request.interceptors.request.use(async config => {
   const store = useUserStore()
   const token = await store.getToken()
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  if (token) config.data.token = token
   return config
 }, error => {
   return Promise.reject(error)
 })
 
 request.interceptors.response.use(response => {
+  const store = useUserStore()
   const { code, message } = response.data
   if (code !== 0) {
+    if (code === 402 || code === 401) store.logout()
     Promise.reject(new Error(message))
     feedback.error(message)
   }

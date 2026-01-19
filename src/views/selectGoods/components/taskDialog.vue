@@ -4,20 +4,20 @@ import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form';
 import type { Task } from '@/types/selectGoods';
 import feedback from '@/utils/feedback';
-
+import { createTaskAPI, editTaskAPI } from '@/api/collection'
 const emits = defineEmits(['refresh'])
 const open = ref(false)
 const initData = ref<Task>(
   {
-    id: undefined,
-    status: 'pending',
+    _id: undefined,
+    taskStatus: 'noExecuted',
     progress: undefined,
     createTime: undefined,
     updateTime: undefined,
     taskName: '1',
     targetUrl: 'https://www.ozon.ru/category/kompyutery-i-komplektuyushchie-15530000/?miniapp=supermarket&__rr=1',
     myProfitPercent: undefined,
-    internalExpress: '',
+    internalExpress: 'CDEK',
     rubExpressPrice: 0,
     elsePercent: 0,
     sourceType: '1',
@@ -78,6 +78,7 @@ const cancelHandle = () => {
 const saveHandle = async (type: 'save' | 'execute') => {
   await formRef.value?.validate()
   const { code, message } = type === 'execute' ? await window.electronAPI.invoke('collection-create-and-start', { data: toRaw(formData.value), type }) : await window.electronAPI.invoke('collection-create', { data: toRaw(formData.value), type })
+
   if (code === 200) {
     emits('refresh')
     feedback.success('操作成功')
@@ -95,7 +96,7 @@ defineExpose({
 
 <template>
   <div class="task-page">
-    <a-modal v-model:open="open" :title="formData.id ? '编辑任务' : '新增任务'" style="width: 1000px;" @close="cancelHandle">
+    <a-modal v-model:open="open" :title="formData._id ? '编辑任务' : '新增任务'" style="width: 1000px;" @close="cancelHandle">
       <a-form :model="formData" layout="horizontal" :label-col="{ span: 8 }" :wrapper-col="{ span: 24 }"
         style="padding:0 60px;" :rules="rules" ref="formRef">
         <a-row class="bold">基础信息</a-row>
@@ -292,7 +293,7 @@ defineExpose({
           <a-col :span="12">
             <a-form-item label="促销活动的转换率">
               <a-input placeholder="最小值" addon-after="%" style="width:110px"
-                v-model="formData.promotionDynamicsMin" /><span>至</span><a-input placeholder="最大值" addon-after="%"
+                v-model:value="formData.promotionDynamicsMin" /><span>至</span><a-input placeholder="最大值" addon-after="%"
                 style="width:110px" v-model:value="formData.promotionDynamicsMax" />
             </a-form-item>
           </a-col>

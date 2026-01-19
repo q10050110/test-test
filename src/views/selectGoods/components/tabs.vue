@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import type { Task } from '@/types/selectGoods';
+import type { Task, TaskStatus } from '@/types/selectGoods';
 import { DesktopOutlined } from '@ant-design/icons-vue';
 // 标签页
 const activeKey = ref()
 const taskStackList = ref<Task[]>([])
 
 // 获取任务栈列表
-const getTaskStackList = (task?: Task) => {
-  if (!task) return
-  if (task.status === 'running') {
-    if (!taskStackList.value.map(item => item.id).includes(task.id)) {
+const getTaskStackList = (data?: any) => {
+  const { task, status } = data
+  if (!task || !status) return
+
+  if (status === 'running') {
+    console.log('进来了吗！')
+    if (!taskStackList.value.map(item => item._id).includes(task._id)) {
       taskStackList.value.unshift(task)
-      activeKey.value = task.id!
+      activeKey.value = task._id
     }
   } else {
-    taskStackList.value = taskStackList.value.filter(task => task.id !== task.id)
+    taskStackList.value = taskStackList.value.filter(item => item._id !== task._id)
   }
 }
 
@@ -27,8 +30,8 @@ onUnmounted(() => {
 })
 
 // 写入日志内容
-const writeLog = (taskId: string, data: { log: string, date: string }) => {
-  const obj = taskStackList.value.find(item => item.id === taskId)
+const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
+  const obj = taskStackList.value.find(item => item._id === taskId)
   if (obj) {
     if (!obj.log) obj.log = []
     obj.log.push(data)
@@ -42,11 +45,11 @@ defineExpose({
 
 <template>
   <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
-    <a-tab-pane :key="item.id" :tab="item.taskName" v-for="(item, i) in taskStackList">
+    <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
       <div v-for="(log, i) in item.log" :key="i">
         {{ log.date }}
         <DesktopOutlined />
-        {{ log.log }}
+        {{ log.taskLog }}
       </div>
     </a-tab-pane>
   </a-tabs>

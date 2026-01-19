@@ -6,3 +6,9 @@ export const loginAPI = (data: Login) => request<Response<{ token: string }>, Re
   method: 'post',
   data
 })
+
+export const logoutAPI = (data: { token: string }) => request<Response<null>, Response<null>>({
+  url: '/user/userBase/logoutAuto',
+  method: 'post',
+  data
+})

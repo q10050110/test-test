@@ -12,3 +12,8 @@ export type AppInfo = {
   homePath: string
   tempDirectory: string
 }
+
+export interface Params {
+  pageNo: number
+  pageSize: number
+}

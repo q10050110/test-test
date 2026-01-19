@@ -6,6 +6,7 @@ router.beforeEach(async (to, from, next) => {
   const store = useUserStore()
   const token = await store.getToken()
   if (token) {
+    if (!store.user?._id) await store.initUser()
     if (to.path === '/login') {
       next('/')
     } else {

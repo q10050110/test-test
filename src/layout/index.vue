@@ -21,7 +21,7 @@ const store = useUserStore()
           <div class="info">
             <a-dropdown placement="bottom">
               <div class="username">
-                用户001
+                {{ store.user?.name }}
                 <span class="icon"></span>
               </div>
               <template #overlay>
@@ -30,7 +30,7 @@ const store = useUserStore()
                 </a-menu>
               </template>
             </a-dropdown>
-            <div class="mobile">18250069801</div>
+            <div class="mobile">{{ store.user?.phone }}</div>
           </div>
         </div>
       </div>

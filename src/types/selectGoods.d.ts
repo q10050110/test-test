@@ -1,8 +1,8 @@
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export type Task = {
-  id?: string
-  status?: TaskStatus
+  _id?: string
+  taskStatus?: TaskStatus
   progress?: string
   createTime?: string
   updateTime?: string
@@ -48,5 +48,10 @@ export type Task = {
   followMin?: number
   followMax?: number
   token?: string
-  log?: { log: string, date: string }[]
+  log?: { taskLog: string, date: string }[]
+}
+
+export type TaskList = {
+  list: Task[]
+  total: number
 }
