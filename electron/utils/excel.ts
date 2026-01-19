@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs'
+import { promises as fsPromises } from 'fs';
+import { dirname } from 'path';
 import type {
   Workbook,
   Worksheet,
@@ -16,7 +18,8 @@ export class ExcelWriter {
   private workbook: Workbook
   private worksheet: Worksheet
   private filePath: string
-
+  private writeQueue: Promise<any> = Promise.resolve()
+  private sheetName: string
   /** 
    * 构造函数 - 初始化ExcelWriter实例 
    *  @param filePath 输出Excel文件路径 
@@ -26,6 +29,197 @@ export class ExcelWriter {
     this.workbook = new ExcelJS.Workbook()
     this.worksheet = this.workbook.addWorksheet(sheetName)
     this.filePath = filePath
+    this.sheetName = sheetName
+  }
+
+  /**
+     * 从现有文件加载工作簿
+     * @param filePath 要加载的文件路径
+     */
+  async loadExistingFile(): Promise<this> {
+    try {
+      await fsPromises.access(this.filePath)
+
+      const tempWorkbook = new ExcelJS.Workbook()
+      await tempWorkbook.xlsx.readFile(this.filePath)
+
+      this.workbook = tempWorkbook
+
+      // ⚠️ 永远按名称取 sheet，绝不按 index
+      let sheet = this.workbook.getWorksheet(this.sheetName)
+
+      if (!sheet) {
+        sheet = this.workbook.addWorksheet(this.sheetName)
+      }
+
+      this.worksheet = sheet
+
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        this.workbook = new ExcelJS.Workbook()
+        this.worksheet = this.workbook.addWorksheet(this.sheetName)
+      } else {
+        throw error
+      }
+    }
+
+    return this
+  }
+
+  /**
+   * 读取现有表格的所有数据
+   * @returns 返回表格中的所有数据数组
+   */
+  async readAllData(): Promise<any[]> {
+    try {
+      // 先加载现有文件
+      await this.loadExistingFile();
+
+      const data: any[] = [];
+      const rows = this.worksheet.getRows(1, this.worksheet.rowCount) || [];
+
+      if (rows.length === 0) {
+        return data;
+      }
+
+      // 获取表头（假设第二行是表头）
+      const headerRow = rows[0]; // 第一行作为表头
+      const headers: string[] = [];
+
+      headerRow.eachCell((cell, colNumber) => {
+        headers[colNumber - 1] = cell.value as string || `column${colNumber}`;
+      });
+
+      // 从第二行开始读取数据
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const rowData: any = {};
+
+        row.eachCell((cell, colNumber) => {
+          const header = headers[colNumber - 1] || `column${colNumber}`;
+          rowData[header] = cell.value;
+        });
+
+        data.push(rowData);
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`读取表格数据失败: ${error}`);
+      return [];
+    }
+  }
+
+  /**
+   * 在现有数据后面追加新数据
+   * @param newData 要追加的新数据
+   */
+  async appendAndSave(
+    rows: Array<Record<string, any>>
+  ): Promise<{
+    success: boolean
+    startRow: number
+    endRow: number
+    totalRows: number
+  }> {
+    return (this.writeQueue = this.writeQueue.then(async () => {
+      await this.loadExistingFile()
+
+      if (!rows || rows.length === 0) {
+        return {
+          success: true,
+          startRow: this.worksheet.rowCount,
+          endRow: this.worksheet.rowCount,
+          totalRows: this.worksheet.rowCount
+        }
+      }
+
+      /** 写入前行数 */
+      const beforeCount = this.worksheet.rowCount
+
+      /** 追加 */
+      this.worksheet.addRows(rows)
+
+      /** 立即刷盘 */
+      await this.workbook.xlsx.writeFile(this.filePath)
+
+      /** 重新加载文件做物理校验 */
+      const verifyBook = new ExcelJS.Workbook()
+      await verifyBook.xlsx.readFile(this.filePath)
+      const verifySheet = verifyBook.getWorksheet(1)!
+
+      const afterCount = verifySheet.rowCount
+
+      const expected = beforeCount + rows.length
+      const success = afterCount === expected
+
+      if (!success) {
+        throw new Error(
+          `Excel写入校验失败: 期望 ${expected} 行, 实际 ${afterCount} 行`
+        )
+      }
+
+      return {
+        success: true,
+        startRow: beforeCount + 1,
+        endRow: afterCount,
+        totalRows: afterCount
+      }
+    }))
+  }
+
+  /**
+   * 读取现有表格的列定义
+   * @returns 返回列定义数组
+   */
+  async readColumns(): Promise<Array<{ header: string; key: string; width?: number }>> {
+    try {
+      await this.loadExistingFile();
+
+      const columns: Array<{ header: string; key: string; width?: number }> = [];
+      const firstRow = this.worksheet.getRow(1); // 假设第一行是表头
+
+      firstRow.eachCell((cell, colNumber) => {
+        columns.push({
+          header: cell.value as string || `Column${colNumber}`,
+          key: cell.value as string || `column${colNumber}`,
+          width: this.worksheet.getColumn(colNumber).width
+        });
+      });
+
+      return columns;
+    } catch (error) {
+      console.error(`读取列定义失败: ${error}`);
+      return [];
+    }
+  }
+
+  /**
+   * 在现有表格中添加新的列定义（不影响现有数据）
+   * @param newColumns 新的列定义
+   */
+  async addNewColumns(newColumns: Array<{ header: string; key: string; width?: number }>): Promise<this> {
+    try {
+      await this.loadExistingFile();
+
+      // 获取现有列
+      const existingColumns = this.worksheet.columns || [];
+
+      // 添加新列到现有列之后
+      const allColumns = [...existingColumns.map(col => ({
+        header: col.header as string || '',
+        key: col.key || '',
+        width: col.width
+      })), ...newColumns];
+
+      // 重新设置列定义
+      this.worksheet.columns = allColumns;
+
+      return this;
+    } catch (error) {
+      console.error(`添加新列失败: ${error}`);
+      throw error;
+    }
   }
 
   /** 
@@ -146,8 +340,27 @@ export class ExcelWriter {
    * 保存Excel文件到磁盘 
    * @returns Promise<void> 异步操作完成的Promise 
   */
-  async save(): Promise<void> {
-    await this.workbook.xlsx.writeFile(this.filePath)
+  async save(): Promise<string> {
+    try {
+      // 确保目录存在
+      const dir = dirname(this.filePath);
+
+      try {
+        await fsPromises.access(dir);
+        console.log(`Created directory: ${dir}`);
+
+      } catch {
+        // 目录不存在，创建它（包括父目录）
+        await fsPromises.mkdir(dir, { recursive: true });
+        console.log(`Created directory: ${dir}`);
+
+      }
+      await this.workbook.xlsx.writeFile(this.filePath)
+      return this.filePath
+    } catch (error) {
+      console.error(`Failed to save Excel file: ${error}`)
+      throw error
+    }
   }
 
   /** 

@@ -68,17 +68,18 @@ export class Collection {
   private browserWindow: BrowserWindow | null = null;
   private mainWindow: BrowserWindow;
   private excel: ExcelWriter | null = null;
-  private extractedLinks: string[] = []; // 处理中
+  private extractedLinks: string[] = []; // 提取的链接
   private collectedLinks: string[] = []; // 累计爬取
-  private matchList: any[] = [];
+  private processed: number = 0
   private timers: NodeJS.Timeout[] = [];
   // 用于避免重复状态更新
   private lastServerStatus: TaskStatus | null = null;
+  private tableFilePath: string | null = null
 
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task }; // 深拷贝任务对象
     this.mainWindow = mainWindow;
-    this.excel = new ExcelWriter(join(__dirname, '../public/excel/', this.collectionTask.taskName));
+    this.excel = new ExcelWriter(join(__dirname, '../public/excel/', `${this.collectionTask.taskName}.xlsx`));
     this.lastServerStatus = task.taskStatus;
   }
 
@@ -107,19 +108,19 @@ export class Collection {
 
   // 更新任务状态
   async updateStatus(status: TaskStatus, taskLog?: string) {
+    if (this.lastServerStatus === 'cancelled' && status === 'completed') return
     try {
-      // 本地立即更新状态，以便UI能立刻响应
+
       const previousStatus = this.collectionTask.taskStatus;
       this.collectionTask.taskStatus = status;
       this.collectionTask.updateTime = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
 
-      // 更新进度
       this.collectionTask.progress = {
-        current: Math.min(this.extractedLinks.length, +this.collectionTask.targetCount),
+        current: Math.min(this.processed, +this.collectionTask.targetCount),
         total: Math.min(this.collectedLinks.length, +this.collectionTask.targetCount),
       };
 
-      // 立即通知UI
+
       if (this.mainWindow) {
         this.mainWindow.webContents.send('task-progress', {
           collectionTask: this.collectionTask,
@@ -127,19 +128,18 @@ export class Collection {
         });
       }
 
-      // 异步更新服务器状态，只有在状态确实改变了的时候才更新
       if (status !== previousStatus) {
         await this.syncStatusToServer(status);
       }
     } catch (error) {
       log.error('更新任务状态失败', error);
-      // 即使失败也要通知UI，这样用户知道出了问题
+
       if (this.mainWindow) {
         this.mainWindow.webContents.send('task-progress', {
           collectionTask: this.collectionTask,
           log: {
             date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`,
-            taskLog: `状态更新失败: ${error instanceof Error ? error.message : '未知错误'}`
+            taskLog: `状态更新失败: ${error instanceof Error ? error.message : error}`
           },
         });
       }
@@ -270,7 +270,7 @@ export class Collection {
     // 获取初始链接
     const initialLinks = await this.extractLinks();
     this.collectedLinks = [...initialLinks];
-
+    if (initialLinks.length) this.handleLink(initialLinks)
     await this.updateStatus('running', `初始加载 ${this.collectedLinks.length} 个链接`);
 
     // 如果还没达到目标数量，继续滚动加载
@@ -305,6 +305,7 @@ export class Collection {
 
       if (uniqueNewLinks.length > 0) {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
+        this.handleLink(uniqueNewLinks)
       }
 
       this.updateStatus('running', `已收集 ${this.collectedLinks.length} / ${targetCount} 个链接`);
@@ -323,30 +324,36 @@ export class Collection {
       }
     }
 
-    this.updateStatus('completed', `任务完成，共收集到 ${this.collectedLinks.length} 个链接`);
+    this.updateStatus('running', `任务完成，共收集到 ${this.collectedLinks.length} 个链接`);
 
     return this.collectedLinks.slice(0, targetCount);
   }
 
   // 处理链接
   private async handleLink(links: string[]) {
-    const requestList: string[] = [];
+    const ids: any[] = []
+    this.processed = ids.length
     for (const link of links) {
-      const id = link.match(/-(\d+)(?=\/|\?)/)?.[1] || null;
-      // todo 发起请求
-      requestList.push();
+      const id = link.match(/-(\d+)(?=\/|\?)/)?.[1] || null
+      ids.push(id)
     }
     try {
-      await Promise.all(requestList).then(res => {
-        console.log(res);
-        // 写入数据
-        this.excel?.addRow;
-      }).catch(err => {
-        console.log(err);
-      });
-      this.excel?.save();
+      const res = await request({
+        url: '/api/goods/hotSales/getOzonSaleDataByIds',
+        method: 'post',
+        data: {
+          type: 1,
+          cellectUrl: this.collectionTask.targetUrl,
+          goodsIds: ids,
+          saleFilterForm: {}
+        }
+      })
+      this.processed = 0
+      log.info('获取商品数据成功', res.data)
+      const data = res.data.map((item: any) => ({ productId: item.goods_id, ...item, ...item.data }))
+      this.excel?.appendAndSave(data)
     } catch (error) {
-
+      log.error('获取商品数据失败', error)
     }
   }
 
@@ -409,7 +416,7 @@ export class Collection {
     }
   }
 
-  // 提取链接 - 从指定容器提取
+  // 提取链接
   private async extractLinks(): Promise<string[]> {
     if (!this.browserWindow) return [];
 
@@ -438,17 +445,123 @@ export class Collection {
     }
   }
 
-  // 获取商品数据
-  async getGoodsData() {
-
-  }
-
   // 导出表格
   async initTable() {
-    this.excel?.setColumns([
-      { header: '商品名称', key: 'name' },
-      { header: '商品链接', key: 'link' },
-    ]);
+    if (!this.excel) log.error('表格实例初始化失败')
+    // 定义所有列
+    const columns = [
+      // 基础信息
+      { header: '商品ID', key: 'productId' },
+      { header: '商品链接', key: 'productLink' },
+      { header: '商品主图', key: 'productImage' },
+      { header: '商品名称', key: 'productName' },
+      { header: '商品名称（中文）', key: 'productNameZh' },
+      { header: '商品类目', key: 'category' },
+      { header: '类目佣金（RFBS）', key: 'commissionRfbs' },
+      { header: '类目佣金（FBP）', key: 'commissionFbp' },
+      { header: '品牌', key: 'brand' },
+
+      // 价格信息
+      { header: '销售价格（卢布）', key: 'salePriceRub' },
+      { header: '原价（卢布）', key: 'originalPriceRub' },
+      { header: '商品评分', key: 'rating' },
+      { header: '评价次数', key: 'reviewCount' },
+      { header: '跟卖人数', key: 'competitorCount' },
+      { header: '商品创建日期', key: 'creationDate' },
+      { header: '上架时间（天）', key: 'daysOnShelf' },
+      { header: '发货模式', key: 'shippingMode' },
+
+      // 销售数据
+      { header: '月销售额(卢布)', key: 'monthlyRevenueRub' },
+      { header: '月销售动态(%)', key: 'monthlyDynamicsPercent' },
+      { header: '月销量(件)', key: 'monthlySalesUnits' },
+      { header: '平均日销售额(卢布)', key: 'avgDailyRevenueRub' },
+      { header: '平均日销量(件)', key: 'avgDailySalesUnits' },
+      { header: '搜索和目录浏览量', key: 'searchViews' },
+      { header: '商品卡片浏览量', key: 'cardViews' },
+      { header: '搜索和目录加购率(%)', key: 'searchAddToCartRate' },
+      { header: '商品卡片加购率(%)', key: 'cardAddToCartRate' },
+      { header: '广告份额（%）', key: 'adSharePercent' },
+      { header: '参与促销天数', key: 'promotionDays' },
+      { header: '参与促销折扣(%)', key: 'promotionDiscount' },
+      { header: '促销活动的转化率(%)', key: 'promotionConversionRate' },
+      { header: '付费推广天数', key: 'paidAdDays' },
+      { header: '平均价格(卢布)', key: 'avgPriceRub' },
+      { header: '已错过销售(卢布)', key: 'missedSalesRub' },
+      { header: '商品可用性(%)', key: 'availabilityPercent' },
+
+      // 物流信息
+      { header: '配送时间（天）', key: 'deliveryTimeDays' },
+      { header: '商品体积（升）', key: 'volumeLiters' },
+      { header: '包装长(mm)', key: 'packageLengthMm' },
+      { header: '包装宽(mm)', key: 'packageWidthMm' },
+      { header: '包装高(mm)', key: 'packageHeightMm' },
+      { header: '包装重量(g)', key: 'packageWeightG' },
+
+      // 成本和利润
+      { header: 'RFBS佣金(元)', key: 'rfbsCommissionYuan' },
+      { header: '国际物流', key: 'internationalLogistics' },
+      { header: '国际物流费用（元）', key: 'internationalLogisticsCostYuan' },
+      { header: '国内运费（元）', key: 'domesticShippingCostYuan' },
+      { header: '其他费用（提醒、货损）（元）', key: 'otherCostsYuan' },
+      { header: '1688货源地址', key: 'sourceUrl1688' },
+      { header: '货源图片', key: 'sourceImage' },
+      { header: '货源价格（元）', key: 'sourcePriceYuan' },
+      { header: '对方利润率（%）', key: 'competitorProfitMargin' },
+      { header: '对方利润（元）', key: 'competitorProfitYuan' },
+      { header: '我的售价（元）', key: 'mySellingPriceYuan' },
+      { header: '我的利润率（%）', key: 'myProfitMargin' },
+      { header: '我的利润（元）', key: 'myProfitYuan' }
+    ];
+
+    if (this.excel) {
+      // 首先设置列定义
+      this.excel.setColumns(columns);
+
+      // 然后插入第一行作为主类别标题行
+      // 插入空的第一行
+      const mainCategoryRowValues = Array(columns.length).fill('');
+      const worksheet = this.excel.getWorksheet(); // 使用公共方法获取worksheet
+
+      // 在第一行插入主类别标题
+      worksheet.spliceRows(1, 0, mainCategoryRowValues);
+
+      // 设置主类别标题
+      worksheet.getCell('A1').value = '基础信息';
+      worksheet.getCell('R1').value = '销售数据';
+      worksheet.getCell('BJ1').value = '尺寸重量';
+      worksheet.getCell('BO1').value = '我的定价';
+
+      // 合并单元格
+      this.excel.mergeCells('A1:Q1');    // 基础信息 (A1-Q1, 17列)
+      this.excel.mergeCells('R1:BG1');   // 销售数据 (R1-BG1, 从第18列到第55列，共38列)
+      this.excel.mergeCells('BJ1:BN1');  // 尺寸重量 (BJ1-BN1, 从第52列到第56列，共5列)
+      this.excel.mergeCells('BO1:BZ1');  // 我的定价 (BO1-BZ1, 从第57列到第78列，共22列)
+
+      // 设置表头样式
+      this.excel.setRowStyle(1, {
+        font: { bold: true, size: 12 },
+        alignment: { vertical: 'middle', horizontal: 'center' },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E0E0E0' }
+        }
+      });
+
+      this.excel.setRowStyle(2, {
+        font: { bold: true, size: 10 },
+        alignment: { vertical: 'middle', horizontal: 'center' },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'F0F0F0' }
+        }
+      });
+    }
+
+    this.tableFilePath = await this.excel!.save()
+    log.info('创建表格：', this.tableFilePath)
   }
 
   // 终止任务
@@ -463,15 +576,17 @@ export class Collection {
 
   async run(): Promise<Task> {
     try {
+      await this.initTable()
       this.updateStatus('running', '任务开始执行...');
 
       await this.createCollectionWindow();
-      await this.initTable();
+
 
       // 任务执行完成后关闭窗口
       if (this.browserWindow) {
         this.browserWindow.close();
         this.browserWindow = null;
+        this.updateStatus('completed', '任务完成...')
       }
 
       return this.collectionTask;

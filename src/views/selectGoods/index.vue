@@ -91,8 +91,10 @@ const pagination = ref({
   }
 })
 const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
+  console.log(reset, resetPage, params.value)
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
+  console.log(params.value)
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
   total.value = data.total
@@ -157,7 +159,7 @@ onUnmounted(() => {
   <div class="select-goods-page">
     <a-form class="form" layout="inline">
       <a-form-item>
-        <a-input placeholder="请输入任务名称" style="width: 180px;" v-mode:value="params.taskName">
+        <a-input placeholder="请输入任务名称" style="width: 180px;" v-model:value="params.taskName">
           <template #prefix>
             <SearchOutlined />
           </template>
@@ -170,9 +172,7 @@ onUnmounted(() => {
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="getTaskList(false, true
-
-        )">查询</a-button>
+        <a-button type="primary" @click="getTaskList(false, true)">查询</a-button>
         <a-button type="primary" style="margin: 0 10px;" @click="openTaskDialogHandle()">新建任务</a-button>
         <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
       </a-form-item>
