@@ -4,7 +4,23 @@ import { DesktopOutlined } from '@ant-design/icons-vue';
 // 标签页
 const activeKey = ref()
 const taskStackList = ref<Task[]>([])
-
+const logRefs = ref<Record<string, HTMLElement>>({})
+const setLogRef = (el: HTMLElement | null, taskId: string) => {
+  if (el) {
+    logRefs.value[taskId] = el
+  }
+}
+// 自动滚动到底部
+const scrollToBottom = async (taskId: string) => {
+  await nextTick()
+  const logContainer = logRefs.value[taskId]
+  if (logContainer) {
+    logContainer.scrollTo({
+      top: logContainer.scrollHeight,
+      behavior: 'smooth'
+    })
+  }
+}
 // 获取任务栈列表
 const getTaskStackList = (data?: any) => {
   const { task, status } = data
@@ -34,6 +50,7 @@ const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
   if (obj) {
     if (!obj.log) obj.log = []
     obj.log.push(data)
+    scrollToBottom(taskId)
   }
 }
 
@@ -45,10 +62,12 @@ defineExpose({
 <template>
   <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
     <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
-      <div v-for="(log, i) in item.log" :key="i">
-        {{ log.date }}
-        <DesktopOutlined />
-        {{ log.taskLog }}
+      <div class="log-container" :ref="el => setLogRef(el as HTMLElement, item._id as string)">
+        <div v-for="(log, i) in item.log" :key="i" class="log-item">
+          {{ log.date }}
+          <DesktopOutlined />
+          {{ log.taskLog }}
+        </div>
       </div>
     </a-tab-pane>
   </a-tabs>
@@ -58,7 +77,7 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
-:deep(.ant-tabs-content-holder) {
+.log-container {
   height: 120px;
   overflow-y: auto;
 }

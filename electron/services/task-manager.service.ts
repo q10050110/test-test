@@ -359,4 +359,11 @@ export class TaskManager {
       throw error;
     }
   }
+
+  // 下载表格
+  downloadExcel(taskId: string) {
+    const task = this.tasks.get(taskId)
+    if (!task) log.error('找不到该任务')
+    this.mainWindow?.webContents.downloadURL(`file://${task!.tableFilePath}`)
+  }
 }

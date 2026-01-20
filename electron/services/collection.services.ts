@@ -1,7 +1,6 @@
 import request from '../utils/request.js';
 import dayjs from 'dayjs';
 import { dirname, join } from 'path';
-import os from 'os'
 import { BrowserWindow } from 'electron';
 import * as cheerio from 'cheerio';
 import log from '../log/index.js';
@@ -73,7 +72,7 @@ export class Collection {
   private timers: NodeJS.Timeout[] = [];
   // 用于避免重复状态更新
   private lastServerStatus: TaskStatus | null = null;
-  private tableFilePath: string = '';
+  tableFilePath: string = '';
 
   // 用于跟踪异步任务
   private pendingTasks: Promise<any>[] = [];
@@ -322,8 +321,8 @@ export class Collection {
       }
 
       // 随机延迟，模拟人类行为
-      const randomDelay = this.getRandomDelay(1000, 2000);
-      this.updateStatus('running', `滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${this.collectedLinks.length}/${targetCount}`);
+      const randomDelay = this.getRandomDelay(2000, 4000);
+      this.updateStatus('running', `滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${Math.min(previousLength, +targetCount)}/${targetCount}`);
 
       await this.delay(randomDelay);
 
@@ -340,8 +339,7 @@ export class Collection {
 
       // 提取新链接 - 从指定容器提取
       const newLinks = await this.extractLinks();
-      const uniqueNewLinks = newLinks.filter(item => !this.collectedLinks.map(obj => obj.id).includes(item.id));
-
+      const uniqueNewLinks = newLinks.filter(item => !this.collectedLinks.map(obj => obj.id).includes(item.id)).slice(0, targetCount - previousLength > 0 ? targetCount - previousLength : 0);
       if (uniqueNewLinks.length > 0) {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
         this.handleLink(uniqueNewLinks); // 不等待，继续执行
@@ -363,8 +361,9 @@ export class Collection {
       }
     }
 
-    this.updateStatus('running', `收集完成，共收集到 ${this.collectedLinks.length} 个链接`);
-    return this.collectedLinks.slice(0, targetCount);
+    this.updateStatus('running', `收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
+    this.collectedLinks = this.collectedLinks.slice(0, targetCount)
+    return this.collectedLinks
   }
 
 
@@ -450,33 +449,13 @@ export class Collection {
         const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
         const link = `https://www.ozon.ru/product/${id}`
         const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '')
-        const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '')
+        const sourcePrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '')
         const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0]
         const name = $(element).parent().find('a').children('div').children('span').text()
         const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1)
         const reviewCount = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/(\d+)\s*отзывов/)?.[1]) || 0
-        if (!linksParent.map(item => item.id).includes(id)) linksParent.push({ href, price, oPrice, discount, link, cover, name, id, rating, sku: id, requestUrl, reviewCount })
+        if (!linksParent.map(item => item.id).includes(id)) linksParent.push({ href, price, sourcePrice, discount, link, cover, name, id, rating, sku: id, requestUrl, reviewCount })
       });
-
-      await Promise.all(linksParent.map(async item => {
-        try {
-          // 执行浏览器内的 fetch 请求并获取响应
-          const response = await this.browserWindow!.webContents.executeJavaScript(`
-          fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
-          .then(response => response.json())
-          .then(data => ({ success: true, data: data }))
-      `);
-
-          if (response.success) {
-            // 例如，您可以将 API 响应数据存储到 item 中
-            item.sellerNumber = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || "{}")?.sellers?.length || 0;
-          } else {
-            log.error('获取跟卖人数失败');
-          }
-        } catch (error) {
-          console.error('Error processing item:', error);
-        }
-      }));
       return linksParent;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}提取链接时出错:`, error);
@@ -484,20 +463,37 @@ export class Collection {
     }
   }
 
-  // 处理链接
-  private handleLink(links: any[]): void {
+  // 处理链接，生成表格
+  private async handleLink(links: any[]): Promise<void> {
     if (!links || links.length === 0) return;
 
     const ids = links.map(item => item.id).filter(item => item);
     if (ids.length === 0) return;
-
     // 创建一个异步任务，但不等待它完成
     const task = (async () => {
-      this.processed = ids.length;
+      this.processed += ids.length;
       this.updateStatus('running', '处理商品中...');
 
       try {
-        const [res] = await Promise.all([
+        await Promise.all(links.map(async item => {
+          try {
+            // 执行浏览器内的 fetch 请求并获取响应
+            const response = await this.browserWindow!.webContents.executeJavaScript(`
+          fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
+          .then(response => response.json())
+          .then(data => ({ success: true, data: data }))
+      `);
+
+            if (response.success) {
+              item.sellerNumber = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || "{}")?.sellers?.length || 0;
+            } else {
+              log.error('获取跟卖人数失败');
+            }
+          } catch (error) {
+            console.error('获取跟卖人数失败:', error);
+          }
+        }));
+        const [res, res2] = await Promise.all([
           request({
             url: '/api/goods/hotSales/getOzonSaleDataByIds',
             method: 'post',
@@ -506,14 +502,14 @@ export class Collection {
               v: 5
             }
           }),
-          /*          request({
-                     url: '/api/auto/filterGoods/goodsFilter',
-                     method: 'post',
-                     data: {
-                       taskId: this.collectionTask._id,
-                       reqDatas: links
-                     }
-                   }) */
+          request({
+            url: '/api/auto/filterGoods/goodsFilter',
+            method: 'post',
+            data: {
+              taskId: this.collectionTask._id,
+              reqDatas: links
+            }
+          })
         ]);
 
         const dataSource = new Map();
@@ -523,34 +519,30 @@ export class Collection {
             dataSource.set(item.productId, item);
           });
         }
-
-        /*         if (res2 && res2.data) {
-                  res2.data.forEach((item: any) => {
-                    if (dataSource.has(item.id)) {
-                      const data = dataSource.get(item.id);
-                      dataSource.set(item.id, { ...data, ...item });
-                    } else {
-                      dataSource.set(item.id, item);
-                    }
-                  });
-                } */
-
+        if (res2 && res2.data) {
+          res2.data.forEach((item: any) => {
+            if (dataSource.has(item.id)) {
+              const data = dataSource.get(item.id);
+              dataSource.set(item.id, { ...data, ...item });
+            } else {
+              dataSource.set(item.id, item);
+            }
+          });
+        }
         const tabledData = links.map(item => ({
           ...dataSource.get(item.id),
           ...item
-        })).filter(item => item.id);
-
-        this.updateStatus('running', '完成部分商品的处理...');
-        await this.excel?.appendAndSave(tabledData.slice(0, +this.collectionTask.targetCount));
-        this.processed = 0;
-        this.totalCount += tabledData.length;
-        log.info(tabledData.length, '符合商品的数据');
+        }))
+        this.updateStatus('running', `完成${ids.length}商品的处理...`);
         this.updateStatus('running', '表格写入中...');
-
+        this.excel?.appendAndSave(tabledData);
+        this.processed -= ids.length;
+        this.totalCount += tabledData.length;
         this.collectionTask.tableFilePath = this.tableFilePath
+        this.updateStatus('running', '表格写入完成，已生成下载链接');
       } catch (error) {
-        this.processed = 0;
-        this.updateStatus('running', '部分商品处理失败...');
+        this.processed -= ids.length;
+        this.updateStatus('running', `${ids.length}个商品处理失败...`);
         log.error(error);
       }
     })();
@@ -651,7 +643,7 @@ export class Collection {
         { header: '类目佣金（FBP）', key: 'commissionFbp', width: 15 },
         { header: '品牌', key: 'brand', width: 20 },
         { header: '销售价格（卢布）', key: 'price', width: 15 },
-        { header: '原价（卢布）', key: 'oPrice', width: 15 },
+        { header: '原价（卢布）', key: 'sourcePrice', width: 15 },
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCount', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },
@@ -704,7 +696,7 @@ export class Collection {
 
       // 首先设置列定义
       await this.excel.init(); // 确保初始化完成
-
+      this.excel.clearContent()
       // 检查是否已有列定义（即是否已有表头）
       const worksheet = this.excel.getWorksheet();
       const hasHeaders = worksheet.getRow(1).values && worksheet.getRow(1).values.length;

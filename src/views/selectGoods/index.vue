@@ -116,9 +116,11 @@ const startTask = async (task: Task) => {
 }
 // 复制任务
 const copyHandle = async (task: Task) => {
-  task._id = undefined
-  task.taskName = `${task.taskName}-副本`
-  const { code, message } = await window.electronAPI.invoke('collection-create', { data: toRaw(task) })
+  const newTask = JSON.parse(JSON.stringify(task))
+  newTask._id = undefined
+  newTask.taskStatus = 'noExecuted'
+  newTask.taskName = `${task.taskName}-副本`
+  const { code, message } = await window.electronAPI.invoke('collection-create', { data: toRaw(newTask) })
   await getTaskList(undefined, true)
   if (code === 200) return feedback.success('复制成功')
   feedback.error(message)
@@ -154,29 +156,8 @@ const getLogisticsSimpleList = async () => {
 getLogisticsSimpleList()
 
 // 导出表格
-const exportHandle = async (filePath: string, name: string) => {
-  try {
-    // 使用 fetch 读取文件内容
-    console.log(filePath, 'filePath')
-    const response = await fetch(`file://${filePath}`);
-    const blob = await response.blob();
-
-    // 创建下载链接
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = name; // 使用文件名
-
-    document.body.appendChild(a);
-    a.click();
-
-    // 清理
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  } catch (error) {
-    console.error('下载文件失败:', error);
-  }
+const exportHandle = async (taskId: string) => {
+  window.electronAPI.invoke('collection-download-excel', taskId)
 }
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
@@ -249,7 +230,7 @@ onUnmounted(() => {
                 :disabled="record.taskStatus === 'running'">编辑</a-button>
               <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)">复制</a-button>
               <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
-                @click="exportHandle(record?.tableFilePath, record?.taskName)">导出</a-button>
+                @click="exportHandle(record?._id)">导出</a-button>
             </template>
           </template>
         </a-table>

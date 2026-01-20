@@ -8,7 +8,7 @@ const request = axios.create({
 request.interceptors.request.use(async config => {
   const token = operationStore.get('token')
   if (token) config.data.token = token
-  console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
+  // console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
   return config
 }, error => {
   return Promise.reject(error)
