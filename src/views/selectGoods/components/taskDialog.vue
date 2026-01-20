@@ -2,9 +2,13 @@
 import { QuestionCircleOutlined } from '@ant-design/icons-vue';
 import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form';
-import type { Task } from '@/types/selectGoods';
+import type { LogisticsSimpleList, Task } from '@/types/selectGoods';
 import feedback from '@/utils/feedback';
-import { createTaskAPI, editTaskAPI } from '@/api/collection'
+
+defineProps<{
+  logisticsSimpleList: LogisticsSimpleList
+}>()
+
 const emits = defineEmits(['refresh'])
 const open = ref(false)
 const initData = ref<Task>(
@@ -14,16 +18,16 @@ const initData = ref<Task>(
     progress: undefined,
     createTime: undefined,
     updateTime: undefined,
-    taskName: '1',
-    targetUrl: 'https://www.ozon.ru/category/kompyutery-i-komplektuyushchie-15530000/?miniapp=supermarket&__rr=1',
+    taskName: '',
+    targetUrl: '',
     myProfitPercent: undefined,
-    internalExpress: 'CDEK',
+    internalExpress: undefined,
     rubExpressPrice: 0,
     elsePercent: 0,
-    sourceType: '1',
-    targetCount: 11,
-    targetProfitPercent: 1,
-    brandType: 'unknown',
+    sourceType: undefined,
+    targetCount: undefined,
+    targetProfitPercent: undefined,
+    brandType: undefined,
     soldCountMin: 0,
     soldCountMax: 0,
     gmvSumMin: 0,
@@ -134,7 +138,10 @@ defineExpose({
           </a-col>
           <a-col :span="12">
             <a-form-item label="国际物流" name="internalExpress">
-              <a-select placeholder="请选择物流" v-model:value="formData.internalExpress"></a-select>
+              <a-select placeholder="请选择物流" v-model:value="formData.internalExpress">
+                <a-select-option :value="item.value" v-for="item in logisticsSimpleList">{{ item.label
+                }}</a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
         </a-row>
@@ -201,9 +208,9 @@ defineExpose({
           <a-col :span="12">
             <a-form-item label="品牌类型">
               <a-radio-group v-model:value="formData.brandType">
-                <a-radio :value="0">有品牌</a-radio>
-                <a-radio :value="1">无品牌</a-radio>
-                <a-radio :value="2">不限</a-radio>
+                <a-radio value="0">有品牌</a-radio>
+                <a-radio value="1">无品牌</a-radio>
+                <a-radio value="2">不限</a-radio>
               </a-radio-group>
             </a-form-item>
           </a-col>

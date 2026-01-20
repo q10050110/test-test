@@ -12,7 +12,7 @@ export type Task = {
   internalExpress?: string
   rubExpressPrice?: number
   elsePercent?: number
-  sourceType?: string
+  sourceType?: string | number
   targetCount?: number
   targetProfitPercent?: number
   brandType?: string
@@ -48,10 +48,19 @@ export type Task = {
   followMin?: number
   followMax?: number
   token?: string
-  log?: { taskLog: string, date: string }[]
+  log?: { taskLog: string, date: string }[],
+  tableFilePath?: string
 }
 
 export type TaskList = {
   list: Task[]
   total: number
 }
+
+export type LogisticsSimple = {
+  label: string
+  value: string
+  icon: string
+}
+
+export type LogisticsSimpleList = LogisticsSimple[]

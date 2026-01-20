@@ -1,308 +1,232 @@
 import ExcelJS from 'exceljs'
-import { promises as fsPromises } from 'fs';
-import { dirname } from 'path';
-import type {
-  Workbook,
-  Worksheet,
-  Row,
-  Font,
-  Fill,
-  Border,
-  CellValue
-} from 'exceljs'
+import { promises as fsPromises } from 'fs'
+import { dirname, join } from 'path'
+import type { Workbook, Worksheet, Row, Font, Fill, Border, CellValue } from 'exceljs'
+import log from '../log/index.js'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 
-/**
- * ExcelWriter 类 - 提供 Excel 文件持续写入能力（ESM + Electron Main 专用）
- */
+const execAsync = promisify(exec)
+
 export class ExcelWriter {
-  private workbook: Workbook
-  private worksheet: Worksheet
+  private workbook!: Workbook
+  private worksheet!: Worksheet
   private filePath: string
-  private writeQueue: Promise<any> = Promise.resolve()
   private sheetName: string
-  /** 
-   * 构造函数 - 初始化ExcelWriter实例 
-   *  @param filePath 输出Excel文件路径 
-   *  @param sheetName 工作表名称，默认为'Sheet1' 
-  */
+
+  /** 是否已初始化加载过文件 */
+  private initialized = false
+
+  /** 是否正在写入磁盘 */
+  private saving = false
+
+  /** 内存写入队列（仅操作内存，不碰磁盘） */
+  private memoryQueue: Promise<void> = Promise.resolve()
+
   constructor(filePath: string, sheetName = 'Sheet1') {
-    this.workbook = new ExcelJS.Workbook()
-    this.worksheet = this.workbook.addWorksheet(sheetName)
     this.filePath = filePath
     this.sheetName = sheetName
   }
 
   /**
-     * 从现有文件加载工作簿
-     * @param filePath 要加载的文件路径
-     */
-  async loadExistingFile(): Promise<this> {
+   * 初始化工作簿（只允许执行一次）
+   * 应用生命周期内禁止重复 load
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return
+
+    log.info(`ExcelWriter 初始化: ${this.filePath}`)
+
     try {
       await fsPromises.access(this.filePath)
 
-      const tempWorkbook = new ExcelJS.Workbook()
-      await tempWorkbook.xlsx.readFile(this.filePath)
+      this.workbook = new ExcelJS.Workbook()
+      await this.workbook.xlsx.readFile(this.filePath)
 
-      this.workbook = tempWorkbook
+      this.worksheet =
+        this.workbook.getWorksheet(this.sheetName) ||
+        this.workbook.worksheets[0]
 
-      // ⚠️ 永远按名称取 sheet，绝不按 index
-      let sheet = this.workbook.getWorksheet(this.sheetName)
-
-      if (!sheet) {
-        sheet = this.workbook.addWorksheet(this.sheetName)
+      if (!this.worksheet) {
+        this.worksheet = this.workbook.addWorksheet(this.sheetName)
       }
 
-      this.worksheet = sheet
+      log.info(`成功加载现有文件: ${this.filePath}`)
+    } catch {
+      this.workbook = new ExcelJS.Workbook()
+      this.worksheet = this.workbook.addWorksheet(this.sheetName)
 
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        this.workbook = new ExcelJS.Workbook()
-        this.worksheet = this.workbook.addWorksheet(this.sheetName)
+      log.info(`文件不存在，创建新工作簿: ${this.filePath}`)
+    }
+
+    this.initialized = true
+  }
+
+  /**
+   * 追加数据（仅写入内存，不写磁盘）
+   * 该方法可高频调用，不会损坏文件
+   */
+  async appendRows(rows: Array<Record<string, any>>): Promise<void> {
+    await this.init()
+
+    this.memoryQueue = this.memoryQueue.then(async () => {
+      log.info(`内存追加 ${rows.length} 行数据`)
+
+      for (const row of rows) {
+        this.worksheet.addRow(row)
+      }
+    })
+
+    return this.memoryQueue
+  }
+
+  /**
+     * 追加数据并立即保存到磁盘
+     * @param rows 要追加的数据行
+     */
+  async appendAndSave(rows: Array<Record<string, any>>): Promise<void> {
+    await this.init()
+
+    this.memoryQueue = this.memoryQueue.then(async () => {
+      log.info(`内存追加 ${rows.length} 行数据并立即保存`)
+
+      for (const row of rows) {
+        this.worksheet.addRow(row)
+      }
+
+      // 立即保存到磁盘
+      await this.flushToDisk()
+    })
+
+    return this.memoryQueue
+  }
+
+
+  /**
+   * 获取真实有效行数（不使用 rowCount）
+   */
+  getRealRowCount(): number {
+    let count = 0
+    this.worksheet.eachRow(row => {
+      if (row.hasValues) count++
+    })
+    return count
+  }
+
+  /**
+   * 安全写入磁盘
+   * 只允许串行执行，避免并发损坏文件
+   */
+  async flushToDisk(): Promise<void> {
+    await this.init()
+
+    if (this.saving) {
+      log.warn(`已有写盘任务进行中，跳过本次 flush`)
+      return
+    }
+
+    this.saving = true
+
+    try {
+      const dir = dirname(this.filePath)
+      await fsPromises.mkdir(dir, { recursive: true })
+
+
+      // 如果写入失败，尝试关闭占用文件的 Excel 进程
+      await this.writeFileWithProcessHandling(this.filePath)
+
+      log.info(`Excel 写入完成: ${this.filePath}`)
+    } finally {
+      this.saving = false
+    }
+  }
+
+  /**
+   * 尝试关闭占用 Excel 文件的进程并写入文件
+   */
+  private async writeFileWithProcessHandling(filePath: string): Promise<void> {
+    try {
+      // 尝试直接写入
+      await this.workbook.xlsx.writeFile(filePath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EBUSY' || (error as NodeJS.ErrnoException).code === 'EPERM') {
+        log.warn(`文件 ${filePath} 被占用，尝试关闭相关进程...`)
+
+        // 尝试关闭 Excel 进程
+        await this.closeExcelProcesses()
+
+        // 等待片刻再尝试写入
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        try {
+          await this.workbook.xlsx.writeFile(filePath)
+          log.info(`成功在关闭 Excel 进程后写入文件`)
+        } catch (finalError) {
+          log.error(`即使关闭 Excel 进程后仍无法写入文件:`, finalError)
+          throw finalError
+        }
       } else {
+        // 其他错误直接抛出
         throw error
       }
     }
-
-    return this
   }
 
   /**
-   * 读取现有表格的所有数据
-   * @returns 返回表格中的所有数据数组
+   * 关闭与 Excel 相关的进程（Windows）
    */
-  async readAllData(): Promise<any[]> {
+  private async closeExcelProcesses(): Promise<void> {
     try {
-      // 先加载现有文件
-      await this.loadExistingFile();
-
-      const data: any[] = [];
-      const rows = this.worksheet.getRows(1, this.worksheet.rowCount) || [];
-
-      if (rows.length === 0) {
-        return data;
-      }
-
-      // 获取表头（假设第二行是表头）
-      const headerRow = rows[0]; // 第一行作为表头
-      const headers: string[] = [];
-
-      headerRow.eachCell((cell, colNumber) => {
-        headers[colNumber - 1] = cell.value as string || `column${colNumber}`;
-      });
-
-      // 从第二行开始读取数据
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const rowData: any = {};
-
-        row.eachCell((cell, colNumber) => {
-          const header = headers[colNumber - 1] || `column${colNumber}`;
-          rowData[header] = cell.value;
-        });
-
-        data.push(rowData);
-      }
-
-      return data;
-    } catch (error) {
-      console.error(`读取表格数据失败: ${error}`);
-      return [];
-    }
-  }
-
-  /**
-   * 在现有数据后面追加新数据
-   * @param newData 要追加的新数据
-   */
-  async appendAndSave(
-    rows: Array<Record<string, any>>
-  ): Promise<{
-    success: boolean
-    startRow: number
-    endRow: number
-    totalRows: number
-  }> {
-    return (this.writeQueue = this.writeQueue.then(async () => {
-      await this.loadExistingFile()
-
-      if (!rows || rows.length === 0) {
-        return {
-          success: true,
-          startRow: this.worksheet.rowCount,
-          endRow: this.worksheet.rowCount,
-          totalRows: this.worksheet.rowCount
+      // 检测操作系统
+      if (process.platform === 'win32') {
+        // Windows 系统 - 结束 Excel 相关进程
+        const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq EXCEL.EXE"')
+        if (stdout.includes('EXCEL.EXE')) {
+          log.info('检测到 Excel 进程，正在关闭...')
+          await execAsync('taskkill /F /IM EXCEL.EXE')
+          log.info('Excel 进程已关闭')
+        } else {
+          log.info('未检测到 Excel 进程')
+        }
+      } else if (process.platform === 'darwin') {
+        // macOS 系统
+        const { stdout } = await execAsync('ps aux | grep -i excel | grep -v grep')
+        if (stdout.trim()) {
+          log.info('检测到 Excel 进程，正在关闭...')
+          await execAsync('pkill -f "Microsoft Excel"')
+          log.info('Excel 进程已关闭')
+        }
+      } else {
+        // Linux 系统
+        const { stdout } = await execAsync('ps aux | grep -i libreoffice | grep -v grep')
+        if (stdout.trim()) {
+          log.info('检测到 LibreOffice 进程，正在关闭...')
+          await execAsync('pkill -f libreoffice')
+          log.info('LibreOffice 进程已关闭')
         }
       }
-
-      /** 写入前行数 */
-      const beforeCount = this.worksheet.rowCount
-
-      /** 追加 */
-      this.worksheet.addRows(rows)
-
-      /** 立即刷盘 */
-      await this.workbook.xlsx.writeFile(this.filePath)
-
-      /** 重新加载文件做物理校验 */
-      const verifyBook = new ExcelJS.Workbook()
-      await verifyBook.xlsx.readFile(this.filePath)
-      const verifySheet = verifyBook.getWorksheet(1)!
-
-      const afterCount = verifySheet.rowCount
-
-      const expected = beforeCount + rows.length
-      const success = afterCount === expected
-
-      if (!success) {
-        throw new Error(
-          `Excel写入校验失败: 期望 ${expected} 行, 实际 ${afterCount} 行`
-        )
-      }
-
-      return {
-        success: true,
-        startRow: beforeCount + 1,
-        endRow: afterCount,
-        totalRows: afterCount
-      }
-    }))
-  }
-
-  /**
-   * 读取现有表格的列定义
-   * @returns 返回列定义数组
-   */
-  async readColumns(): Promise<Array<{ header: string; key: string; width?: number }>> {
-    try {
-      await this.loadExistingFile();
-
-      const columns: Array<{ header: string; key: string; width?: number }> = [];
-      const firstRow = this.worksheet.getRow(1); // 假设第一行是表头
-
-      firstRow.eachCell((cell, colNumber) => {
-        columns.push({
-          header: cell.value as string || `Column${colNumber}`,
-          key: cell.value as string || `column${colNumber}`,
-          width: this.worksheet.getColumn(colNumber).width
-        });
-      });
-
-      return columns;
     } catch (error) {
-      console.error(`读取列定义失败: ${error}`);
-      return [];
+      log.warn(`关闭 Excel 进程时出错:`, error)
+      // 不抛出错误，因为这只是一个辅助功能
     }
   }
 
   /**
-   * 在现有表格中添加新的列定义（不影响现有数据）
-   * @param newColumns 新的列定义
+   * 设置列定义
    */
-  async addNewColumns(newColumns: Array<{ header: string; key: string; width?: number }>): Promise<this> {
-    try {
-      await this.loadExistingFile();
-
-      // 获取现有列
-      const existingColumns = this.worksheet.columns || [];
-
-      // 添加新列到现有列之后
-      const allColumns = [...existingColumns.map(col => ({
-        header: col.header as string || '',
-        key: col.key || '',
-        width: col.width
-      })), ...newColumns];
-
-      // 重新设置列定义
-      this.worksheet.columns = allColumns;
-
-      return this;
-    } catch (error) {
-      console.error(`添加新列失败: ${error}`);
-      throw error;
-    }
-  }
-
-  /** 
-   * 设置工作表的列定义 
-   * @param columns 列定义数组，包含header和key属性 
-  */
   setColumns(columns: Array<{ header: string; key: string; width?: number }>) {
     this.worksheet.columns = columns
   }
 
-  /** 
-   * 添加单行数据 
-   * @param rowData 行数据对象 
-   */
-  addRow(rowData: Record<string, any>) {
-    this.worksheet.addRow(rowData)
-  }
-
-  /** 
-   * 批量添加多行数据 
-   * @param rowsData 多行数据数组 
-   */
-  addRows(rowsData: Array<Record<string, any>>) {
-    this.worksheet.addRows(rowsData)
-  }
-
-  /** 
-   * 获取当前工作表的行数 
-   * @returns 返回当前行数 
-   */
-  getCurrentRowCount(): number {
-    return this.worksheet.rowCount || 0
-  }
-
-  /** 
-   * 设置特定单元格的值 
-   * @param row 行号 * @param col 列号或列名 
-   * @param value 单元格值 
+  /**
+   * 设置单元格值
    */
   setCellValue(row: number, col: number | string, value: CellValue) {
     this.worksheet.getCell(row, col).value = value
   }
 
-  /** 
-   * 设置行的样式 
-   * @param rowNumber 行号 
-   * @param style 样式对象 
-   */
-  setRowStyle(
-    rowNumber: number,
-    style: {
-      font?: Partial<Font>
-      fill?: Partial<Fill>
-      border?: Partial<Border>
-    } & Partial<Row>
-  ) {
-    const row = this.worksheet.getRow(rowNumber)
-
-    if (style.font) row.font = style.font
-    if (style.fill) row.fill = style.fill
-    if (style.border) row.border = style.border
-
-    Object.keys(style).forEach(key => {
-      if (!['font', 'fill', 'border'].includes(key)) {
-        ; (row as any)[key] = (style as any)[key]
-      }
-    })
-  }
-
-  /** 
-   * 设置列宽 
-   * @param columnDefinitions 包含宽度信息的列定义 
-   */
-  setColumnWidths(columnDefinitions: Array<{ key: string; width: number }>) {
-    columnDefinitions.forEach(def => {
-      const col = this.worksheet.getColumn(def.key)
-      col.width = def.width
-    })
-  }
-
-  /** 
-   * 设置标题行样式 
-   * @param style 样式配置
+  /**
+   * 设置标题行样式
    */
   setTitleRowStyle(
     style: {
@@ -320,154 +244,114 @@ export class ExcelWriter {
     titleRow.font = { ...(titleRow.font || {}), bold: true }
   }
 
-  /** 
-   * 自动调整列宽 
-  */
-  autoFitColumns() {
-    this.worksheet.columns.forEach(column => {
-      let maxLength = 10
-
-      column.eachCell?.({ includeEmpty: true }, cell => {
-        const len = cell.value ? String(cell.value).length : 10
-        if (len > maxLength) maxLength = len
-      })
-
-      column.width = Math.min(Math.max(maxLength, 10), 50)
-    })
-  }
-
-  /** 
-   * 保存Excel文件到磁盘 
-   * @returns Promise<void> 异步操作完成的Promise 
-  */
-  async save(): Promise<string> {
-    try {
-      // 确保目录存在
-      const dir = dirname(this.filePath);
-
-      try {
-        await fsPromises.access(dir);
-        console.log(`Created directory: ${dir}`);
-
-      } catch {
-        // 目录不存在，创建它（包括父目录）
-        await fsPromises.mkdir(dir, { recursive: true });
-        console.log(`Created directory: ${dir}`);
-
-      }
-      await this.workbook.xlsx.writeFile(this.filePath)
-      return this.filePath
-    } catch (error) {
-      console.error(`Failed to save Excel file: ${error}`)
-      throw error
-    }
-  }
-
-  /** 
-   * 将Excel内容写入缓冲区并返回 
-   * @returns Promise<Buffer> Excel文件的Buffer
+  /**
+   * 设置行的样式
+   * @param rowNumber 行号
+   * @param style 样式对象
    */
-  async writeBuffer(): Promise<any> {
-    return this.workbook.xlsx.writeBuffer()
-  }
-
-  /** 
-   * 添加新的工作表 
-   * @param sheetName 新工作表名称 
-   * @returns 返回新创建的ExcelWriter实例，便于链式调用 
-   */
-  addWorksheet(sheetName: string): ExcelWriter {
-    const worksheet = this.workbook.addWorksheet(sheetName)
-
-    const writer = Object.create(ExcelWriter.prototype) as ExcelWriter
-    writer.workbook = this.workbook
-    writer.worksheet = worksheet
-    writer.filePath = this.filePath
-
-    return writer
-  }
-
-  /** 
-   * 切换到指定的工作表 
-   * @param sheetName 目标工作表名称 
-   */
-  switchWorksheet(sheetName: string) {
-    const worksheet = this.workbook.getWorksheet(sheetName)
-    if (!worksheet) throw new Error(`工作表 "${sheetName}" 不存在`)
-    this.worksheet = worksheet
-  }
-
-  /** 
-   * 获取当前工作表名称 
-   * @returns 当前工作表名称 
-   */
-  getCurrentSheetName(): string {
-    return this.worksheet.name
-  }
-
-  /** 
-   * 获取所有工作表名称 
-   * @returns 所有工作表名称数组 
-   */
-  getSheetNames(): string[] {
-    return this.workbook.worksheets.map(ws => ws.name)
-  }
-
-  /** 
-   * 添加数据并自动设置标题行样式 
-   * @param columns 列定义 * @param data 数据行 
-   * @param titleStyle 标题行样式 
-   */
-  addDataWithHeaders(
-    columns: Array<{ header: string; key: string; width?: number }>,
-    data: Array<Record<string, any>>,
-    titleStyle: {
+  setRowStyle(
+    rowNumber: number,
+    style: {
       font?: Partial<Font>
       fill?: Partial<Fill>
       border?: Partial<Border>
-    } & Partial<Row> = {}
+    } & Partial<Row>
   ) {
-    this.setColumns(columns)
-    this.addRows(data)
-    this.setTitleRowStyle(titleStyle)
+    const row = this.worksheet.getRow(rowNumber)
+
+    if (style.font) {
+      row.font = style.font
+    }
+    if (style.fill) {
+      row.fill = style.fill
+    }
+    if (style.border) {
+      row.border = style.border
+    }
+
+    Object.keys(style).forEach(key => {
+      if (!['font', 'fill', 'border'].includes(key)) {
+        ; (row as any)[key] = (style as any)[key]
+      }
+    })
   }
 
-  /** 
-   * 获取工作簿实例（用于高级操作） 
+  /**
+   * 自动调整列宽
    */
-  getWorkbook(): Workbook {
-    return this.workbook
+  autoFitColumns() {
+    this.worksheet.columns.forEach((column: any) => {
+      let max = 10
+
+      column.eachCell({ includeEmpty: true }, (cell: any) => {
+        const len = cell.value ? String(cell.value).length : 10
+        if (len > max) max = len
+      })
+
+      column.width = Math.min(Math.max(max, 10), 50)
+    })
   }
 
-  /** 
-   * 获取当前工作表实例（用于高级操作） 
-   */
-  getWorksheet(): Worksheet {
-    return this.worksheet
-  }
-
-  /** 
-   * 合并单元格 
-   * @param range 合并范围，例如 'A1:B2' 
+  /**
+   * 合并单元格
+   * @param range 合并范围，例如 'A1:B2'
    */
   mergeCells(range: string) {
     this.worksheet.mergeCells(range)
   }
 
-  /** 
-   * 冻结窗格 
-   * @param rows 冻结的行数 
-   * @param cols 冻结的列数 
+  /**
+   * 获取工作簿实例
    */
-  freezePanes(rows = 1, cols = 0) {
-    this.worksheet.views = [{ state: 'frozen', ySplit: rows, xSplit: cols }]
+  getWorkbook(): Workbook {
+    return this.workbook
   }
 
-  /** * 设置行高 
-   * @param rowNumber 行号 
-   * @param height 行高 
+  /**
+   * 获取工作表实例
    */
-  setRowHeight(rowNumber: number, height: number) {
-    this.worksheet.getRow(rowNumber).height = height
+  getWorksheet(): Worksheet {
+    return this.worksheet
+  }
+
+  /**
+   * 应用退出前调用，确保数据安全落盘
+   */
+  async dispose(): Promise<void> {
+    log.info(`应用退出，执行最终 Excel 落盘`)
+    await this.flushToDisk()
+  }
+
+  /**
+   * 设置特定单元格的样式
+   * @param row 行号
+   * @param col 列号或列名
+   * @param style 样式对象
+   */
+  setCellStyle(row: number, col: number | string, style: {
+    font?: Partial<Font>
+    fill?: Partial<Fill>
+    border?: Partial<Border>
+  }) {
+    const cell = this.worksheet.getCell(row, col);
+
+    if (style.font) cell.font = style.font;
+    if (style.fill) cell.fill = style.fill as any;
+    if (style.border) cell.border = style.border as any;
+  }
+
+  /**
+   * 清空工作表内容（保留列定义）
+   */
+  clearContent() {
+    log.info(`清空工作表内容`);
+    // 清空除了列定义以外的所有内容
+    const rows = this.worksheet.rowCount;
+    if (rows > 0) {
+      for (let i = 1; i <= rows; i++) {
+        const row = this.worksheet.getRow(i);
+        row.values = [];
+      }
+    }
   }
 }

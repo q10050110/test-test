@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { Task } from '@/types/selectGoods';
+import type { LogisticsSimpleList, Task } from '@/types/selectGoods';
 import type { TableColumnsType, TableProps } from 'ant-design-vue';
 import { h } from 'vue'
 import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined, ExclamationCircleTwoTone } from '@ant-design/icons-vue';
 import TaskDialog from './components/taskDialog.vue';
 import feedback from '@/utils/feedback';
 import Tabs from './components/tabs.vue';
-
+import { getLogisticsSimpleAPI } from '@/api/collection'
 // 表单参数
 const initParams = ref({
   pageNo: 1,
@@ -91,7 +91,6 @@ const pagination = ref({
   }
 })
 const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
-  console.log(reset, resetPage, params.value)
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
   console.log(params.value)
@@ -146,6 +145,39 @@ const getProgress = async (data?: any) => {
   tabsRef.value?.writeLog(collectionTask._id, log)
 }
 
+// 获取物流信息
+const logisticsSimpleList = ref<LogisticsSimpleList>([])
+const getLogisticsSimpleList = async () => {
+  const { data } = await getLogisticsSimpleAPI()
+  logisticsSimpleList.value = data
+}
+getLogisticsSimpleList()
+
+// 导出表格
+const exportHandle = async (filePath: string, name: string) => {
+  try {
+    // 使用 fetch 读取文件内容
+    console.log(filePath, 'filePath')
+    const response = await fetch(`file://${filePath}`);
+    const blob = await response.blob();
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = name; // 使用文件名
+
+    document.body.appendChild(a);
+    a.click();
+
+    // 清理
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error('下载文件失败:', error);
+  }
+}
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
 })
@@ -206,7 +238,7 @@ onUnmounted(() => {
             <template v-if="column.key === 'progress'">
               <p>正在处理中商品 <span style="color:#2753ed;">{{ record?.progress?.current || 0 }}</span> 个</p>
               <p>累计已爬取商品 <span style="color: #2753ed;">{{ record?.progress?.total || 0 }}</span> 个</p>
-              <p>符合条件商品 <span style="color: #17bd3e;">30</span> 个</p>
+              <p>符合条件商品 <span style="color: #17bd3e;">{{ record?.progress?.totalCount || 0 }}</span> 个</p>
             </template>
             <template v-if="column.key === 'action'">
               <a-button type="link" :icon="h(CaretRightOutlined)" v-if="record.taskStatus !== 'running'"
@@ -216,7 +248,8 @@ onUnmounted(() => {
               <a-button type="link" :icon="h(EditOutlined)" @click="openTaskDialogHandle(record as Task)"
                 :disabled="record.taskStatus === 'running'">编辑</a-button>
               <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)">复制</a-button>
-              <a-button type="link" :icon="h(DownloadOutlined)">导出</a-button>
+              <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
+                @click="exportHandle(record?.tableFilePath, record?.taskName)">导出</a-button>
             </template>
           </template>
         </a-table>
@@ -228,7 +261,7 @@ onUnmounted(() => {
       </a-col>
     </a-row>
   </div>
-  <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" />
+  <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" :logisticsSimpleList="logisticsSimpleList" />
 </template>
 
 <style lang="scss" scoped>

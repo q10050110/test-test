@@ -12,7 +12,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AAlert: typeof import('ant-design-vue/es')['Alert']
     AButton: typeof import('ant-design-vue/es')['Button']
     ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
     ACol: typeof import('ant-design-vue/es')['Col']
@@ -40,7 +39,6 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
-  const AAlert: typeof import('ant-design-vue/es')['Alert']
   const AButton: typeof import('ant-design-vue/es')['Button']
   const ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
   const ACol: typeof import('ant-design-vue/es')['Col']

@@ -8,7 +8,7 @@ export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
   private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 1;
+  private maxConcurrentTasks = 5;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
 
@@ -261,7 +261,7 @@ export class TaskManager {
         if (this.activeTasks.size < this.maxConcurrentTasks) {
           this.executeTask(taskId);
         } else {
-          task.updateStatus('pending', '已加入任务队列');
+          task!.updateStatus('pending', '已加入任务队列');
           this.taskQueue.push(taskId);
         }
         resolve(true);

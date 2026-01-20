@@ -11,7 +11,6 @@ const getTaskStackList = (data?: any) => {
   if (!task || !status) return
 
   if (status === 'running') {
-    console.log('进来了吗！')
     if (!taskStackList.value.map(item => item._id).includes(task._id)) {
       taskStackList.value.unshift(task)
       activeKey.value = task._id

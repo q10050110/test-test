@@ -2,13 +2,14 @@ import axios from "axios"
 import feedback from "./feedback"
 import { useUserStore } from "@/stores"
 const request = axios.create({
-  baseURL: import.meta.env.VITE_APP_BASE_URL,
+  baseURL: '/api', // https://test-plus.shopbang.cn
   timeout: 5000
 })
 
 request.interceptors.request.use(async config => {
   const store = useUserStore()
   const token = await store.getToken()
+  if (!config.data) config.data = {}
   if (token) config.data.token = token
   return config
 }, error => {

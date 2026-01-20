@@ -1,6 +1,6 @@
-import type { Params, Response } from "@/types";
+import type { Params, Response } from "@/types/index";
 import request from "@/utils/request";
-import type { TaskList, Task } from '@/types/selectGoods'
+import type { TaskList, Task, LogisticsSimpleList } from '@/types/selectGoods'
 export const getTaskListAPI = (data: Params) => request<Response<TaskList>, Response<TaskList>>({
   url: '/auto/autoTask/getTaskList',
   method: 'post',
@@ -29,4 +29,9 @@ export const deleteTaskAPI = (data: string[]) => request<Response<null>, Respons
   url: '/auto/autoTask/deleteBatchTask',
   method: 'post',
   data
+})
+
+export const getLogisticsSimpleAPI = () => request<Response<LogisticsSimpleList>, Response<LogisticsSimpleList>>({
+  url: '/auto/other/getLogisticsSimple',
+  method: 'post'
 })

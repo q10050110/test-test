@@ -1,13 +1,13 @@
 import request from '../utils/request.js';
 import dayjs from 'dayjs';
-import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-
+import os from 'os'
 import { BrowserWindow } from 'electron';
 import * as cheerio from 'cheerio';
 import log from '../log/index.js';
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 import { ExcelWriter } from '../utils/excel.js';
+import { SysTemUtils } from '../utils/system.js'
 
 export interface Task {
   _id: string;
@@ -58,29 +58,59 @@ export interface Task {
   followMax?: number;
   token?: string;
   log?: { date: string; log: string }[];
+  tableFilePath?: string
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
+const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
 export class Collection {
   private collectionTask: Task;
   private browserWindow: BrowserWindow | null = null;
   private mainWindow: BrowserWindow;
   private excel: ExcelWriter | null = null;
-  private extractedLinks: string[] = []; // 提取的链接
-  private collectedLinks: string[] = []; // 累计爬取
-  private processed: number = 0
+  private collectedLinks: any[] = []; // 累计爬取
+  private processed: number = 0;
+  private totalCount: number = 0;
   private timers: NodeJS.Timeout[] = [];
   // 用于避免重复状态更新
   private lastServerStatus: TaskStatus | null = null;
-  private tableFilePath: string | null = null
+  private tableFilePath: string = '';
+
+  // 用于跟踪异步任务
+  private pendingTasks: Promise<any>[] = [];
+  private isProcessingComplete: boolean = false;
 
   constructor(task: Task, mainWindow: BrowserWindow) {
-    this.collectionTask = { ...task }; // 深拷贝任务对象
+    this.collectionTask = { ...task };
     this.mainWindow = mainWindow;
-    this.excel = new ExcelWriter(join(__dirname, '../public/excel/', `${this.collectionTask.taskName}.xlsx`));
+    this.excel = new ExcelWriter(join(excelDir, `${this.collectionTask.taskName}.xlsx`));
+    this.tableFilePath = join(excelDir, `${this.collectionTask.taskName}.xlsx`);
     this.lastServerStatus = task.taskStatus;
+  }
+
+  // 清除所有挂起的任务
+  private clearPendingTasks() {
+    this.pendingTasks = [];
+  }
+
+  // 添加挂起任务
+  private addPendingTask<T>(task: Promise<T>): Promise<T> {
+    const wrappedTask = task.finally(() => {
+      // 从挂起任务列表中移除已完成的任务
+      const index = this.pendingTasks.indexOf(wrappedTask);
+      if (index > -1) {
+        this.pendingTasks.splice(index, 1);
+      }
+    });
+
+    this.pendingTasks.push(wrappedTask);
+    return wrappedTask;
+  }
+
+  // 等待所有挂起的任务完成
+  private async waitForAllPendingTasks(): Promise<void> {
+    if (this.pendingTasks.length > 0) {
+      await Promise.all(this.pendingTasks);
+    }
   }
 
   // 补全任务信息
@@ -118,6 +148,7 @@ export class Collection {
       this.collectionTask.progress = {
         current: Math.min(this.processed, +this.collectionTask.targetCount),
         total: Math.min(this.collectedLinks.length, +this.collectionTask.targetCount),
+        totalCount: Math.min(this.totalCount, +this.collectionTask.targetCount)
       };
 
 
@@ -166,8 +197,9 @@ export class Collection {
   // 重置任务状态（用于重新执行）
   async resetTask() {
     this.collectionTask.progress = {};
+    this.processed = 0
+    this.totalCount = 0
     this.collectionTask.updateTime = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
-    this.extractedLinks = [];
     this.collectedLinks = [];
   }
 
@@ -183,11 +215,11 @@ export class Collection {
 
   // 创建采集窗口
   async createCollectionWindow() {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>(async (resolve, reject) => {
       this.browserWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        show: true,
+        show: false,
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
@@ -259,6 +291,10 @@ export class Collection {
   private async collectLinksByTargetCount(targetCount: number) {
     if (!this.browserWindow) return [];
 
+    // 清除之前的挂起任务
+    this.pendingTasks = [];
+    this.isProcessingComplete = false;
+
     let scrollAttempts = 0;
     const maxScrollAttempts = 30; // 增加最大尝试次数
 
@@ -270,18 +306,21 @@ export class Collection {
     // 获取初始链接
     const initialLinks = await this.extractLinks();
     this.collectedLinks = [...initialLinks];
-    if (initialLinks.length) this.handleLink(initialLinks)
+
+    if (initialLinks.length) {
+      this.handleLink(initialLinks); // 不等待，继续执行
+    }
+
     await this.updateStatus('running', `初始加载 ${this.collectedLinks.length} 个链接`);
 
     // 如果还没达到目标数量，继续滚动加载
     while (this.collectedLinks.length < targetCount && scrollAttempts < maxScrollAttempts) {
-
       const previousLength = this.collectedLinks.length;
-      console.log(this.collectionTask.taskStatus, '任务状态')
       if (this.collectionTask.taskStatus === 'cancelled') {
-        console.log('退出函数！')
-        return
-      };
+        console.log('退出函数！');
+        return;
+      }
+
       // 随机延迟，模拟人类行为
       const randomDelay = this.getRandomDelay(1000, 2000);
       this.updateStatus('running', `滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${this.collectedLinks.length}/${targetCount}`);
@@ -301,11 +340,11 @@ export class Collection {
 
       // 提取新链接 - 从指定容器提取
       const newLinks = await this.extractLinks();
-      const uniqueNewLinks = newLinks.filter(link => !this.collectedLinks.includes(link));
+      const uniqueNewLinks = newLinks.filter(item => !this.collectedLinks.map(obj => obj.id).includes(item.id));
 
       if (uniqueNewLinks.length > 0) {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
-        this.handleLink(uniqueNewLinks)
+        this.handleLink(uniqueNewLinks); // 不等待，继续执行
       }
 
       this.updateStatus('running', `已收集 ${this.collectedLinks.length} / ${targetCount} 个链接`);
@@ -324,38 +363,10 @@ export class Collection {
       }
     }
 
-    this.updateStatus('running', `任务完成，共收集到 ${this.collectedLinks.length} 个链接`);
-
+    this.updateStatus('running', `收集完成，共收集到 ${this.collectedLinks.length} 个链接`);
     return this.collectedLinks.slice(0, targetCount);
   }
 
-  // 处理链接
-  private async handleLink(links: string[]) {
-    const ids: any[] = []
-    this.processed = ids.length
-    for (const link of links) {
-      const id = link.match(/-(\d+)(?=\/|\?)/)?.[1] || null
-      ids.push(id)
-    }
-    try {
-      const res = await request({
-        url: '/api/goods/hotSales/getOzonSaleDataByIds',
-        method: 'post',
-        data: {
-          type: 1,
-          cellectUrl: this.collectionTask.targetUrl,
-          goodsIds: ids,
-          saleFilterForm: {}
-        }
-      })
-      this.processed = 0
-      log.info('获取商品数据成功', res.data)
-      const data = res.data.map((item: any) => ({ productId: item.goods_id, ...item, ...item.data }))
-      this.excel?.appendAndSave(data)
-    } catch (error) {
-      log.error('获取商品数据失败', error)
-    }
-  }
 
   // 执行滚动操作 - 滚动整个页面窗口
   private async performScroll(): Promise<boolean> {
@@ -390,7 +401,7 @@ export class Collection {
           // 执行滚动
           window.scrollTo({
             top: targetScrollY,
-            behavior: 'smooth' // 立即滚动，不使用平滑效果
+            behavior: 'smooth'
           });
           
           // 确保滚动发生（有时 scrollTo 可能不执行）
@@ -417,7 +428,7 @@ export class Collection {
   }
 
   // 提取链接
-  private async extractLinks(): Promise<string[]> {
+  private async extractLinks(): Promise<any[]> {
     if (!this.browserWindow) return [];
 
     try {
@@ -427,141 +438,331 @@ export class Collection {
 
       const $ = cheerio.load(html);
       const links = $('#contentScrollPaginator a');
-
+      const linksParent: any[] = []
+      const domain = new URL(this.browserWindow!.webContents.getURL()).origin
       links.each((index, element) => {
         const href = $(element).attr('href');
-        if (href) {
-          const absoluteHref = this.ensureAbsoluteUrl(href, this.collectionTask.targetUrl);
-          if (!this.extractedLinks.includes(absoluteHref)) {
-            this.extractedLinks.push(absoluteHref);
-          }
-        }
+        const cover = $(element).find('img')?.attr('src')
+        const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
+        const queryUrl = encodeURIComponent(
+          `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`
+        )
+        const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
+        const link = `https://www.ozon.ru/product/${id}`
+        const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '')
+        const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '')
+        const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0]
+        const name = $(element).parent().find('a').children('div').children('span').text()
+        const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1)
+        const reviewCount = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/(\d+)\s*отзывов/)?.[1]) || 0
+        if (!linksParent.map(item => item.id).includes(id)) linksParent.push({ href, price, oPrice, discount, link, cover, name, id, rating, sku: id, requestUrl, reviewCount })
       });
 
-      return this.extractedLinks;
+      await Promise.all(linksParent.map(async item => {
+        try {
+          // 执行浏览器内的 fetch 请求并获取响应
+          const response = await this.browserWindow!.webContents.executeJavaScript(`
+          fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
+          .then(response => response.json())
+          .then(data => ({ success: true, data: data }))
+      `);
+
+          if (response.success) {
+            // 例如，您可以将 API 响应数据存储到 item 中
+            item.sellerNumber = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || "{}")?.sellers?.length || 0;
+          } else {
+            log.error('获取跟卖人数失败');
+          }
+        } catch (error) {
+          console.error('Error processing item:', error);
+        }
+      }));
+      return linksParent;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}提取链接时出错:`, error);
       return [];
     }
   }
 
-  // 导出表格
-  async initTable() {
-    if (!this.excel) log.error('表格实例初始化失败')
-    // 定义所有列
-    const columns = [
-      // 基础信息
-      { header: '商品ID', key: 'productId' },
-      { header: '商品链接', key: 'productLink' },
-      { header: '商品主图', key: 'productImage' },
-      { header: '商品名称', key: 'productName' },
-      { header: '商品名称（中文）', key: 'productNameZh' },
-      { header: '商品类目', key: 'category' },
-      { header: '类目佣金（RFBS）', key: 'commissionRfbs' },
-      { header: '类目佣金（FBP）', key: 'commissionFbp' },
-      { header: '品牌', key: 'brand' },
+  // 处理链接
+  private handleLink(links: any[]): void {
+    if (!links || links.length === 0) return;
 
-      // 价格信息
-      { header: '销售价格（卢布）', key: 'salePriceRub' },
-      { header: '原价（卢布）', key: 'originalPriceRub' },
-      { header: '商品评分', key: 'rating' },
-      { header: '评价次数', key: 'reviewCount' },
-      { header: '跟卖人数', key: 'competitorCount' },
-      { header: '商品创建日期', key: 'creationDate' },
-      { header: '上架时间（天）', key: 'daysOnShelf' },
-      { header: '发货模式', key: 'shippingMode' },
+    const ids = links.map(item => item.id).filter(item => item);
+    if (ids.length === 0) return;
 
-      // 销售数据
-      { header: '月销售额(卢布)', key: 'monthlyRevenueRub' },
-      { header: '月销售动态(%)', key: 'monthlyDynamicsPercent' },
-      { header: '月销量(件)', key: 'monthlySalesUnits' },
-      { header: '平均日销售额(卢布)', key: 'avgDailyRevenueRub' },
-      { header: '平均日销量(件)', key: 'avgDailySalesUnits' },
-      { header: '搜索和目录浏览量', key: 'searchViews' },
-      { header: '商品卡片浏览量', key: 'cardViews' },
-      { header: '搜索和目录加购率(%)', key: 'searchAddToCartRate' },
-      { header: '商品卡片加购率(%)', key: 'cardAddToCartRate' },
-      { header: '广告份额（%）', key: 'adSharePercent' },
-      { header: '参与促销天数', key: 'promotionDays' },
-      { header: '参与促销折扣(%)', key: 'promotionDiscount' },
-      { header: '促销活动的转化率(%)', key: 'promotionConversionRate' },
-      { header: '付费推广天数', key: 'paidAdDays' },
-      { header: '平均价格(卢布)', key: 'avgPriceRub' },
-      { header: '已错过销售(卢布)', key: 'missedSalesRub' },
-      { header: '商品可用性(%)', key: 'availabilityPercent' },
+    // 创建一个异步任务，但不等待它完成
+    const task = (async () => {
+      this.processed = ids.length;
+      this.updateStatus('running', '处理商品中...');
 
-      // 物流信息
-      { header: '配送时间（天）', key: 'deliveryTimeDays' },
-      { header: '商品体积（升）', key: 'volumeLiters' },
-      { header: '包装长(mm)', key: 'packageLengthMm' },
-      { header: '包装宽(mm)', key: 'packageWidthMm' },
-      { header: '包装高(mm)', key: 'packageHeightMm' },
-      { header: '包装重量(g)', key: 'packageWeightG' },
+      try {
+        const [res] = await Promise.all([
+          request({
+            url: '/api/goods/hotSales/getOzonSaleDataByIds',
+            method: 'post',
+            data: {
+              goodsIds: ids,
+              v: 5
+            }
+          }),
+          /*          request({
+                     url: '/api/auto/filterGoods/goodsFilter',
+                     method: 'post',
+                     data: {
+                       taskId: this.collectionTask._id,
+                       reqDatas: links
+                     }
+                   }) */
+        ]);
 
-      // 成本和利润
-      { header: 'RFBS佣金(元)', key: 'rfbsCommissionYuan' },
-      { header: '国际物流', key: 'internationalLogistics' },
-      { header: '国际物流费用（元）', key: 'internationalLogisticsCostYuan' },
-      { header: '国内运费（元）', key: 'domesticShippingCostYuan' },
-      { header: '其他费用（提醒、货损）（元）', key: 'otherCostsYuan' },
-      { header: '1688货源地址', key: 'sourceUrl1688' },
-      { header: '货源图片', key: 'sourceImage' },
-      { header: '货源价格（元）', key: 'sourcePriceYuan' },
-      { header: '对方利润率（%）', key: 'competitorProfitMargin' },
-      { header: '对方利润（元）', key: 'competitorProfitYuan' },
-      { header: '我的售价（元）', key: 'mySellingPriceYuan' },
-      { header: '我的利润率（%）', key: 'myProfitMargin' },
-      { header: '我的利润（元）', key: 'myProfitYuan' }
-    ];
+        const dataSource = new Map();
 
-    if (this.excel) {
-      // 首先设置列定义
-      this.excel.setColumns(columns);
-
-      // 然后插入第一行作为主类别标题行
-      // 插入空的第一行
-      const mainCategoryRowValues = Array(columns.length).fill('');
-      const worksheet = this.excel.getWorksheet(); // 使用公共方法获取worksheet
-
-      // 在第一行插入主类别标题
-      worksheet.spliceRows(1, 0, mainCategoryRowValues);
-
-      // 设置主类别标题
-      worksheet.getCell('A1').value = '基础信息';
-      worksheet.getCell('R1').value = '销售数据';
-      worksheet.getCell('BJ1').value = '尺寸重量';
-      worksheet.getCell('BO1').value = '我的定价';
-
-      // 合并单元格
-      this.excel.mergeCells('A1:Q1');    // 基础信息 (A1-Q1, 17列)
-      this.excel.mergeCells('R1:BG1');   // 销售数据 (R1-BG1, 从第18列到第55列，共38列)
-      this.excel.mergeCells('BJ1:BN1');  // 尺寸重量 (BJ1-BN1, 从第52列到第56列，共5列)
-      this.excel.mergeCells('BO1:BZ1');  // 我的定价 (BO1-BZ1, 从第57列到第78列，共22列)
-
-      // 设置表头样式
-      this.excel.setRowStyle(1, {
-        font: { bold: true, size: 12 },
-        alignment: { vertical: 'middle', horizontal: 'center' },
-        fill: {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'E0E0E0' }
+        if (res && res.data) {
+          res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
+            dataSource.set(item.productId, item);
+          });
         }
-      });
 
-      this.excel.setRowStyle(2, {
-        font: { bold: true, size: 10 },
-        alignment: { vertical: 'middle', horizontal: 'center' },
-        fill: {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'F0F0F0' }
-        }
-      });
+        /*         if (res2 && res2.data) {
+                  res2.data.forEach((item: any) => {
+                    if (dataSource.has(item.id)) {
+                      const data = dataSource.get(item.id);
+                      dataSource.set(item.id, { ...data, ...item });
+                    } else {
+                      dataSource.set(item.id, item);
+                    }
+                  });
+                } */
+
+        const tabledData = links.map(item => ({
+          ...dataSource.get(item.id),
+          ...item
+        })).filter(item => item.id);
+
+        this.updateStatus('running', '完成部分商品的处理...');
+        await this.excel?.appendAndSave(tabledData.slice(0, +this.collectionTask.targetCount));
+        this.processed = 0;
+        this.totalCount += tabledData.length;
+        log.info(tabledData.length, '符合商品的数据');
+        this.updateStatus('running', '表格写入中...');
+
+        this.collectionTask.tableFilePath = this.tableFilePath
+      } catch (error) {
+        this.processed = 0;
+        this.updateStatus('running', '部分商品处理失败...');
+        log.error(error);
+      }
+    })();
+
+    // 将任务添加到挂起任务列表中，但不等待它完成
+    this.addPendingTask(task);
+  }
+
+  // 过滤数据
+  async filterData(data: any[]) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return [];
     }
 
-    this.tableFilePath = await this.excel!.save()
-    log.info('创建表格：', this.tableFilePath)
+    const task = this.collectionTask;
+
+    // 定义过滤条件映射
+    const filters = [
+      // 品牌类型过滤
+      (item: any) => {
+        if (task?.brandType === undefined || task?.brandType === null || +task?.brandType === 2) return true;
+        if (+task?.brandType === 0) return item.brand && item.brand.trim();
+        if (+task?.brandType === 1) return !(item.brand && item.brand.trim());
+        return true;
+      },
+
+      // 数值范围过滤 - 抽象成通用方法
+      (item: any) => this.checkRange(item.soldCount, task.soldCountMin, task.soldCountMax),
+      (item: any) => this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax),
+      (item: any) => this.checkRange(item.price, task.salePriceMin, task.salePriceMax),
+      (item: any) => this.checkRange(item.weight, task.weightMin, task.weightMax),
+      (item: any) => this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax),
+      (item: any) => this.checkRange(item.salesDynamics, task.monthDynamicsMin, task.monthDynamicsMax),
+      (item: any) => this.checkRange(item.drr, task.adFeeMin, task.adFeeMax),
+      (item: any) => this.checkRange(item.daysInPromo, task.promotionDayMin, task.promotionDayMax),
+      (item: any) => this.checkRange(item.discount, task.promotionDiscountMin, task.promotionDiscountMax),
+      (item: any) => this.checkRange(item.promoRevenueShare, task.promotionDynamicsMin, task.promotionDynamicsMax),
+      (item: any) => this.checkRange(item.daysWithTrafarets, task.promoteDayMin, task.promoteDayMax),
+      (item: any) => this.checkRange(item.sessionCount, task.viewsMin, task.viewsMax),
+      (item: any) => this.checkRange(item.convToCartPdp, task.cardRateMin, task.cardRateMax),
+      (item: any) => this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax),
+      (item: any) => this.checkRange(item.sellerNumber, task.followMin, task.followMax),
+      (item: any) => this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined), // 最小利润率
+
+      // 发货模式过滤
+      (item: any) => {
+        if (!task.salesSchema) return true;
+        const requiredModes = task.salesSchema.split(',');
+        return !!(item.shippingMode && requiredModes.some((mode: string) => item.shippingMode.includes(mode)));
+      }
+    ];
+
+    // 应用所有过滤条件
+    return data.filter(item => filters.every(filterFn => filterFn(item)));
+  }
+
+  /**
+   * 检查数值是否在范围内
+   * @param value 待检查的值
+   * @param min 最小值
+   * @param max 最大值
+   * @returns 是否符合范围
+   */
+  private checkRange(value: number | undefined, min?: number, max?: number): boolean {
+    if (value === undefined || value === null) return true; // 空值视为通过
+
+    // 检查最小值
+    if (min !== undefined && min !== null && min > 0 && value < min) {
+      return false;
+    }
+
+    // 检查最大值
+    if (max !== undefined && max !== null && max > 0 && value > max) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // 初始化表格
+  async initTable() {
+    if (!this.excel) {
+      log.error('表格实例初始化失败');
+      return;
+    }
+
+    try {
+      // 定义所有列
+      const columns = [
+        // 基础信息
+        { header: '商品ID', key: 'id', width: 15 },
+        { header: '商品链接', key: 'link', width: 30 },
+        { header: '商品主图', key: 'cover', width: 20 },
+        { header: '商品名称', key: 'name', width: 30 },
+        { header: '商品名称（中文）', key: 'cnName', width: 30 },
+        { header: '商品类目', key: 'category3', width: 20 },
+        { header: '类目佣金（RFBS）', key: 'commissionRfbs', width: 15 },
+        { header: '类目佣金（FBP）', key: 'commissionFbp', width: 15 },
+        { header: '品牌', key: 'brand', width: 20 },
+        { header: '销售价格（卢布）', key: 'price', width: 15 },
+        { header: '原价（卢布）', key: 'oPrice', width: 15 },
+        { header: '商品评分', key: 'rating', width: 10 },
+        { header: '评价次数', key: 'reviewCount', width: 10 },
+        { header: '跟卖人数', key: 'sellerNumber', width: 10 },
+        { header: '商品创建日期', key: 'createDate', width: 15 },
+        { header: '上架时间（天）', key: 'upTimeDays', width: 15 },
+        { header: '发货模式', key: 'shippingMode', width: 15 },
+
+        // 销售数据
+        { header: '月销售额(卢布)', key: 'gmvSum', width: 15 },
+        { header: '月销售动态(%)', key: 'salesDynamics', width: 15 },
+        { header: '月销量(件)', key: 'soldCount', width: 10 },
+        { header: '平均日销售额(卢布)', key: 'avgPrice', width: 15 },
+        { header: '平均日销量(件)', key: 'avgDailySalesUnits', width: 10 },
+        { header: '搜索和目录浏览量', key: 'sessionCountSearch', width: 15 },
+        { header: '商品卡片浏览量', key: 'sessionCount', width: 15 },
+        { header: '搜索和目录加购率(%)', key: 'convToCartSearch', width: 15 },
+        { header: '商品卡片加购率(%)', key: 'convToCartPdp', width: 15 },
+        { header: '广告份额（%）', key: 'drr', width: 10 },
+        { header: '参与促销天数', key: 'daysInPromo', width: 12 },
+        { header: '参与促销折扣(%)', key: 'discount', width: 15 },
+        { header: '促销活动的转化率(%)', key: 'promoRevenueShare', width: 15 },
+        { header: '付费推广天数', key: 'daysWithTrafarets', width: 12 },
+        { header: '平均价格(卢布)', key: 'avgPrice', width: 15 },
+        { header: '已错过销售(卢布)', key: 'sumMissedGmv', width: 15 },
+        { header: '商品可用性(%)', key: 'accessibility', width: 15 },
+
+        // 物流信息
+        { header: '配送时间（天）', key: 'deliveryTimeDays', width: 12 },
+        { header: '商品体积（升）', key: 'volume', width: 12 },
+        { header: '包装长(mm)', key: 'length', width: 12 },
+        { header: '包装宽(mm)', key: 'width', width: 12 },
+        { header: '包装高(mm)', key: 'height', width: 12 },
+        { header: '包装重量(g)', key: 'weight', width: 12 },
+
+        // 成本和利润
+        { header: 'RFBS佣金(元)', key: 'fbsPrice', width: 15 },
+        { header: '国际物流', key: 'expressName', width: 15 },
+        { header: '国际物流费用（元）', key: 'logisticsMoney', width: 15 },
+        { header: '国内运费（元）', key: 'domesticShippingCostYuan', width: 15 },
+        { header: '其他费用（提醒、货损）（元）', key: 'elsePrice', width: 20 },
+        { header: '1688货源地址', key: 'sourceUrl1688', width: 30 },
+        { header: '货源图片', key: 'sourceImage', width: 20 },
+        { header: '货源价格（元）', key: 'sourcePriceYuan', width: 15 },
+        { header: '对方利润率（%）', key: 'otherProfitPercent', width: 15 },
+        { header: '对方利润（元）', key: 'otherProfit', width: 15 },
+        { header: '我的售价（元）', key: 'resMoney', width: 15 },
+        { header: '我的利润率（%）', key: 'myProfitMargin', width: 15 },
+        { header: '我的利润（元）', key: 'myProfit', width: 15 }
+      ];
+
+      // 首先设置列定义
+      await this.excel.init(); // 确保初始化完成
+
+      // 检查是否已有列定义（即是否已有表头）
+      const worksheet = this.excel.getWorksheet();
+      const hasHeaders = worksheet.getRow(1).values && worksheet.getRow(1).values.length;
+
+      if (!hasHeaders) {
+        // 没有表头，设置列定义和表头
+        this.excel.setColumns(columns);
+
+        // 在第一行插入主类别标题
+        const mainCategoryRowValues = Array(columns.length).fill('');
+        worksheet.spliceRows(1, 0, mainCategoryRowValues);
+
+        // 设置主类别标题
+        worksheet.getCell('A1').value = '基础信息';
+        worksheet.getCell('R1').value = '销售数据';
+        worksheet.getCell('AJ1').value = '尺寸重量';
+        worksheet.getCell('AO1').value = '我的定价';
+
+        // 合并单元格
+        this.excel.mergeCells('A1:Q1');    // 基础信息 (A1-Q1, 17列)
+        this.excel.mergeCells('R1:AI1');   // 销售数据 (R1-BG1, 从第18列到第55列，共38列)
+        this.excel.mergeCells('AJ1:AN1');  // 尺寸重量 (BJ1-BN1, 从第52列到第56列，共5列)
+        this.excel.mergeCells('AO1:BA1');  // 我的定价 (BO1-BZ1, 从第57列到第78列，共22列)
+
+        // 设置表头样式 - 只设置第1行（主类别标题）
+        this.excel.setRowStyle(1, {
+          font: { bold: true, size: 12 },
+          alignment: { vertical: 'middle', horizontal: 'center' },
+          fill: {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'fff3ca' }
+          }
+        });
+
+        // 设置第2行作为具体列标题行
+        const headerRow = worksheet.getRow(2);
+        columns.forEach((col, index) => {
+          headerRow.getCell(index + 1).value = col.header;
+        });
+
+        this.excel.setRowStyle(2, {
+          font: { bold: true, size: 10 },
+          alignment: { vertical: 'middle', horizontal: 'center' },
+          fill: {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'd9d9d9' }
+          }
+        });
+
+        log.info('Excel 表头初始化完成');
+      } else {
+        log.info('Excel 表头已存在，跳过初始化');
+      }
+    } catch (error) {
+      log.error('初始化 Excel 表头失败:', error);
+    }
   }
 
   // 终止任务
@@ -569,34 +770,58 @@ export class Collection {
     if (this.browserWindow) {
       this.browserWindow.close();
       this.browserWindow = null;
-      this.timers.forEach(item => clearTimeout(item))
+      this.timers.forEach(item => clearTimeout(item));
     }
+
+    // 确保 Excel 数据已保存
+    if (this.excel) {
+      await this.excel.flushToDisk();
+    }
+
+    // 取消所有挂起的任务
+    this.pendingTasks.forEach(task => {
+      // 对于普通的 Promise，我们无法直接取消，但可以标记状态
+    });
+
     this.updateStatus('cancelled', '任务已取消');
   }
 
+
   async run(): Promise<Task> {
     try {
-      await this.initTable()
+      await this.initTable();
       this.updateStatus('running', '任务开始执行...');
 
       await this.createCollectionWindow();
 
+      // 等待所有挂起的数据处理任务完成
+      await this.waitForAllPendingTasks();
 
       // 任务执行完成后关闭窗口
       if (this.browserWindow) {
         this.browserWindow.close();
         this.browserWindow = null;
-        this.updateStatus('completed', '任务完成...')
+        this.processed = 0;
+        this.updateStatus('completed', '任务完成...');
       }
 
       return this.collectionTask;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}任务执行失败`, error);
+
       // 关闭窗口
       if (this.browserWindow) {
         this.browserWindow.close();
         this.browserWindow = null;
       }
+
+      // 等待所有挂起的数据处理任务完成，即使出现错误
+      try {
+        await this.waitForAllPendingTasks();
+      } catch (taskError) {
+        log.error('等待数据处理任务完成时出错', taskError);
+      }
+
       this.updateStatus('failed', `任务执行失败: ${error instanceof Error ? error.message : '未知错误'}`);
       return this.collectionTask;
     }
