@@ -1,6 +1,6 @@
 import request from '../utils/request.js';
 import dayjs from 'dayjs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { BrowserWindow } from 'electron';
 import * as cheerio from 'cheerio';
 import log from '../log/index.js';
@@ -70,20 +70,14 @@ export class Collection {
   private processed: number = 0;
   private totalCount: number = 0;
   private timers: NodeJS.Timeout[] = [];
-  // 用于避免重复状态更新
-  private lastServerStatus: TaskStatus | null = null;
   tableFilePath: string = '';
-
-  // 用于跟踪异步任务
   private pendingTasks: Promise<any>[] = [];
-  private isProcessingComplete: boolean = false;
 
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task };
     this.mainWindow = mainWindow;
     this.excel = new ExcelWriter(join(excelDir, `${this.collectionTask.taskName}.xlsx`));
     this.tableFilePath = join(excelDir, `${this.collectionTask.taskName}.xlsx`);
-    this.lastServerStatus = task.taskStatus;
   }
 
   // 添加挂起任务
@@ -111,11 +105,8 @@ export class Collection {
   complementTaskInfo() {
     const status = 'noExecuted';
     const createTime = dayjs(this.collectionTask.createTime || Date.now()).format('YYYY-MM-DD HH:mm:ss');
-    const updateTime = dayjs(this.collectionTask.updateTime || Date.now()).format('YYYY-MM-DD HH:mm:ss');
     this.collectionTask.taskStatus = status;
     this.collectionTask.createTime = createTime;
-    this.collectionTask.updateTime = updateTime;
-    this.lastServerStatus = status;
   }
 
   // 更新任务数据
@@ -126,48 +117,33 @@ export class Collection {
       _id: this.collectionTask._id, // 确保 id 不被覆盖
       createTime: this.collectionTask.createTime, // 确保创建时间不被覆盖
       taskStatus: this.collectionTask.taskStatus, // 保持当前状态
-      updateTime: dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss'), // 更新时间戳
     });
   }
 
+  // 输出日志
+  outputLog(taskLog: string) {
+    this.collectionTask.progress = {
+      current: Math.min(this.processed, +this.collectionTask.targetCount),
+      total: Math.min(this.collectedLinks.length, +this.collectionTask.targetCount),
+      totalCount: Math.min(this.totalCount, +this.collectionTask.targetCount)
+    };
+
+
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send('task-progress', {
+        collectionTask: this.collectionTask,
+        log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },
+      });
+    }
+  }
+
   // 更新任务状态
-  async updateStatus(status: TaskStatus, taskLog?: string) {
-    if (this.lastServerStatus === 'cancelled' && status === 'completed') return
+  async updateStatus(status: TaskStatus) {
     try {
-
-      const previousStatus = this.collectionTask.taskStatus;
       this.collectionTask.taskStatus = status;
-      this.collectionTask.updateTime = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
-
-      this.collectionTask.progress = {
-        current: Math.min(this.processed, +this.collectionTask.targetCount),
-        total: Math.min(this.collectedLinks.length, +this.collectionTask.targetCount),
-        totalCount: Math.min(this.totalCount, +this.collectionTask.targetCount)
-      };
-
-
-      if (this.mainWindow) {
-        this.mainWindow.webContents.send('task-progress', {
-          collectionTask: this.collectionTask,
-          log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },
-        });
-      }
-
-      if (status !== previousStatus) {
-        await this.syncStatusToServer(status);
-      }
+      await this.syncStatusToServer(status);
     } catch (error) {
       log.error('更新任务状态失败', error);
-
-      if (this.mainWindow) {
-        this.mainWindow.webContents.send('task-progress', {
-          collectionTask: this.collectionTask,
-          log: {
-            date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`,
-            taskLog: `状态更新失败: ${error instanceof Error ? error.message : error}`
-          },
-        });
-      }
     }
   }
 
@@ -181,8 +157,7 @@ export class Collection {
           taskId: this.collectionTask._id,
           taskStatus: status,
         },
-      });
-      this.lastServerStatus = status; // 记录最后成功更新到服务器的状态
+      })
     } catch (error) {
 
     }
@@ -193,7 +168,6 @@ export class Collection {
     this.collectionTask.progress = {};
     this.processed = 0
     this.totalCount = 0
-    this.collectionTask.updateTime = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
     this.collectedLinks = [];
   }
 
@@ -220,24 +194,23 @@ export class Collection {
           nodeIntegration: false,
         },
       });
-
       // 监听页面加载完成事件
       this.browserWindow.webContents.once('dom-ready', async () => {
         log.info('页面 DOM 已准备就绪');
         await this.parsePageData();
         resolve();
       });
-
       // 监听窗口关闭事件
       this.browserWindow.on('closed', () => {
         if (this.collectionTask.taskStatus !== 'completed') {
-          this.updateStatus('failed', '采集窗口被关闭！')
+          this.updateStatus('failed')
+          this.outputLog('窗口异常关闭')
           this.pendingTasks = []
+          reject(new Error('窗口异常关闭'))
         }
         this.browserWindow = null;
-        // 可能需要取消任务或进行清理工作
+        resolve()
       });
-
       this.browserWindow.loadURL(this.collectionTask.targetUrl);
     });
   }
@@ -260,11 +233,9 @@ export class Collection {
 
   // 解析页面数据
   private async parsePageData() {
-    this.updateStatus('running', '正在解析页面数据');
-
+    this.outputLog('正在解析页面数据')
     // 等待页面完全加载
     await this.delay(2000);
-
     // 开始滚动采集过程
     await this.simulateScrollAndCollect();
   }
@@ -285,29 +256,20 @@ export class Collection {
   // 根据目标数量收集链接
   private async collectLinksByTargetCount(targetCount: number) {
     if (!this.browserWindow) return [];
-
     // 清除之前的挂起任务
     this.pendingTasks = [];
-    this.isProcessingComplete = false;
-
     let scrollAttempts = 0;
-    const maxScrollAttempts = 30; // 增加最大尝试次数
-
-    this.updateStatus('running', `开始采集链接，目标数量: ${targetCount}`);
-
+    const maxScrollAttempts = 30; // 最大尝试次数
+    this.outputLog(`开始采集链接，目标数量: ${targetCount}`);
     // 等待页面加载 
     await this.delay(2000);
-
     // 获取初始链接
     const initialLinks = (await this.extractLinks())?.slice(0, targetCount) || [];
     this.collectedLinks = [...initialLinks];
-
     if (initialLinks.length) {
-      this.handleLink(initialLinks); // 不等待，继续执行
+      this.handleLink(initialLinks);
     }
-
-    await this.updateStatus('running', `初始加载 ${this.collectedLinks.length} 个链接`);
-
+    await this.outputLog(`初始加载 ${this.collectedLinks.length} 个链接`);
     // 如果还没达到目标数量，继续滚动加载
     while (this.collectedLinks.length < targetCount && scrollAttempts < maxScrollAttempts) {
       const previousLength = this.collectedLinks.length;
@@ -315,24 +277,17 @@ export class Collection {
         console.log('退出函数！');
         return;
       }
-
-      // 随机延迟，模拟人类行为
+      // 随机延迟
       const randomDelay = this.getRandomDelay(2000, 4000);
-      this.updateStatus('running', `滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${Math.min(previousLength, +targetCount)}/${targetCount}`);
-
+      this.outputLog(`滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${Math.min(previousLength, +targetCount)}/${targetCount}`);
       await this.delay(randomDelay);
-
       // 执行滚动操作 - 滚动整个页面
       const scrollSuccess = await this.performScroll();
-
       if (!scrollSuccess) {
         log.info('滚动操作未成功执行，可能已到达底部');
         break;
       }
-
-      // 等待新内容加载
       await this.delay(2000);
-
       // 提取新链接 - 从指定容器提取
       const newLinks = await this.extractLinks();
       const uniqueNewLinks = newLinks.filter(item => !this.collectedLinks.map(obj => obj.id).includes(item.id)).slice(0, targetCount - previousLength > 0 ? targetCount - previousLength : 0);
@@ -340,33 +295,28 @@ export class Collection {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
         this.handleLink(uniqueNewLinks); // 不等待，继续执行
       }
-
-      this.updateStatus('running', `已收集 ${this.collectedLinks.length} / ${targetCount} 个链接`);
-
+      this.outputLog(`已收集 ${this.collectedLinks.length} / ${targetCount} 个链接`);
       // 判断是否需要继续滚动
       if (this.collectedLinks.length === previousLength) {
         log.info('本次滚动未发现新链接');
+        this.outputLog('本次滚动未发现新链接')
         scrollAttempts++;
       } else {
         scrollAttempts = 0; // 有新链接，重置尝试次数
       }
-
       // 如果已达到目标数量，停止滚动
       if (this.collectedLinks.length >= targetCount) {
         break;
       }
     }
-
-    this.updateStatus('running', `收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
+    this.outputLog(`收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
     this.collectedLinks = this.collectedLinks.slice(0, targetCount)
     return this.collectedLinks
   }
 
-
   // 执行滚动操作 - 滚动整个页面窗口
   private async performScroll(): Promise<boolean> {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return false;
-
     try {
       const result = await this.browserWindow.webContents.executeJavaScript(`
   (function () {
@@ -408,27 +358,24 @@ export class Collection {
     });
   })();
 `);
-
       return result === true;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}执行滚动时出错:`, error);
       return false;
     }
   }
-
   // 提取链接
   private async extractLinks(): Promise<any[]> {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return [];
-
     try {
       const html = await this.browserWindow.webContents.executeJavaScript(
         'document.documentElement.outerHTML'
       );
-
       const $ = cheerio.load(html);
       const links = $('#contentScrollPaginator a');
       const linksParent: any[] = []
       const domain = new URL(this.browserWindow!.webContents.getURL()).origin
+      // 解析DOM，获取商品数据
       links.each((index, element) => {
         const href = $(element).attr('href');
         const cover = $(element).find('img')?.attr('src')
@@ -453,34 +400,22 @@ export class Collection {
       return [];
     }
   }
-
   // 处理链接，生成表格
   private async handleLink(links: any[]): Promise<void> {
     if (!links || links.length === 0) return;
-
     // 检查窗口是否存在且未被销毁
-    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
-      log.warn('浏览器窗口已被销毁，跳过链接处理');
-      return;
-    }
-
+    if (this.checkBrowserAlice()) return
     const ids = links.map(item => item.id).filter(item => item);
     if (ids.length === 0) return
-    // 创建一个异步任务，但不等待它完成
     const task = (async () => {
       this.processed += ids.length;
-      this.updateStatus('running', '处理商品中...');
-
+      this.outputLog('获取商品数据中...');
       try {
         await Promise.all(links.map(async item => {
-          // 检查窗口是否存在且未被销毁
-          if (!this.browserWindow || this.browserWindow.isDestroyed()) {
-            log.warn('浏览器窗口已被销毁，跳过链接处理');
-            return;
-          }
+          if (this.checkBrowserAlice()) return
           try {
-            // 执行浏览器内的 fetch 请求并获取响应
-            const response = await this.browserWindow.webContents.executeJavaScript(`
+            // 获取跟卖数据
+            const response = await this.browserWindow!.webContents.executeJavaScript(`
           fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
           .then(response => response.json())
           .then(data => ({ success: true, data: data }))
@@ -495,7 +430,7 @@ export class Collection {
             console.error('获取跟卖人数失败:', error);
           }
         }));
-
+        // 获取商品的数据后合并
         const res = await request({
           url: '/api/goods/hotSales/getOzonSaleDataByIds',
           method: 'post',
@@ -504,7 +439,6 @@ export class Collection {
             v: 5
           }
         })
-
         const dataSource = new Map();
         const filterData = await this.filterData(res.data.map((item: any) => ({ ...item, ...item.data })) || [])
         filterData.forEach((item: any) => {
@@ -512,7 +446,6 @@ export class Collection {
           if (obj) item = { ...obj, ...item }
           dataSource.set(item.productId, item);
         });
-
         const res2 = await request({
           url: '/api/auto/filterGoods/goodsFilter',
           method: 'post',
@@ -521,7 +454,6 @@ export class Collection {
             reqDatas: filterData
           }
         })
-
         if (res2 && res2.data) {
           res2.data.forEach((item: any) => {
             if (dataSource.has(item.id)) {
@@ -532,27 +464,26 @@ export class Collection {
             }
           });
         }
+        // 过滤出符合条件的数据
         const tabledData = filterData.map(item => ({
           ...dataSource.get(item.id),
           ...item,
           createDate: dayjs(item.createDate).format('YYYY-MM-DD HH:mm:ss')
         }))
         log.info(tabledData, `${this.collectionTask.taskName}的表格数据`)
-        this.updateStatus('running', `完成${ids.length}商品的处理...`);
-        this.updateStatus('running', '表格写入中...');
+        this.outputLog(`完成${ids.length}个商品的处理...`);
+        this.outputLog('表格写入中...');
         this.excel?.appendAndSave(tabledData);
         this.processed -= ids.length;
         this.totalCount += tabledData.length;
         this.collectionTask.tableFilePath = this.tableFilePath
-        this.updateStatus('running', '表格写入完成，已生成下载链接');
+        this.outputLog('表格写入完成，已生成下载链接');
       } catch (error) {
         this.processed -= ids.length;
-        this.updateStatus('running', `${ids.length}个商品处理失败...`);
+        this.outputLog(`${ids.length}个商品处理失败...`);
         log.error(error);
       }
     })();
-
-    // 将任务添加到挂起任务列表中，但不等待它完成
     this.addPendingTask(task);
   }
 
@@ -756,7 +687,9 @@ export class Collection {
 
     return true;
   }
-
+  setFilePath() {
+    this.collectionTask.tableFilePath = this.tableFilePath
+  }
   // 初始化表格
   async initTable() {
     if (!this.excel) {
@@ -900,67 +833,52 @@ export class Collection {
       }
     });
     this.timers = [];
-
     if (this.browserWindow) {
       this.browserWindow.close();
       this.browserWindow = null;
     }
-
     // 确保 Excel 数据已保存
     if (this.excel) {
       await this.excel.flushToDisk();
     }
-
     // 取消所有挂起的任务
     this.pendingTasks.forEach(task => {
-      // 对于普通的 Promise，我们无法直接取消，但可以标记状态
     });
-
-    this.updateStatus('cancelled', '任务已取消');
+    this.updateStatus('cancelled');
+    this.outputLog('任务已取消')
   }
 
-
+  // 检查浏览器是否存活
+  checkBrowserAlice() {
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+      this.updateStatus('failed')
+      this.outputLog('浏览器窗口已被销毁，跳过链接处理')
+      log.warn('浏览器窗口已被销毁，跳过链接处理');
+      return true
+    }
+    return false
+  }
   async run(): Promise<Task> {
     try {
       await this.initTable();
-      this.updateStatus('running', '任务开始执行...');
-
+      this.updateStatus('running')
+      this.outputLog('开始执行任务...')
       await this.createCollectionWindow();
-
-      // 在等待任务完成前检查窗口状态
-      if (!this.browserWindow || this.browserWindow.isDestroyed()) {
-        log.error('浏览器窗口已被销毁，无法继续执行任务')
-        throw new Error('浏览器窗口已被销毁');
-      }
       // 等待所有挂起的数据处理任务完成
       await this.waitForAllPendingTasks();
-
       // 任务执行完成后关闭窗口
       if (this.browserWindow) {
         this.browserWindow.close();
         this.browserWindow = null;
         this.processed = 0;
-        this.updateStatus('completed', '任务完成...');
+        this.updateStatus('completed')
+        this.outputLog('任务执行完成')
       }
-
       return this.collectionTask;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}任务执行失败`, error);
-
-      // 关闭窗口
-      if (this.browserWindow) {
-        this.browserWindow.close();
-        this.browserWindow = null;
-      }
-
-      // 等待所有挂起的数据处理任务完成，即使出现错误
-      try {
-        await this.waitForAllPendingTasks();
-      } catch (taskError) {
-        log.error('等待数据处理任务完成时出错', taskError);
-      }
-
-      this.updateStatus('failed', `任务执行失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      this.updateStatus('failed');
+      this.outputLog(`任务执行失败:${error}`)
       return this.collectionTask;
     }
   }

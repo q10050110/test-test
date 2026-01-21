@@ -9,10 +9,8 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 创建任务
   ipcMain.handle('collection-create', async (event, data: any) => {
     try {
-      console.log(data, 'data');
       const taskId = await taskManager.addTask(data.data);
       const task = taskManager.getTask(taskId)!;
-
       return {
         code: 200,
         message: '任务创建成功',
@@ -61,12 +59,9 @@ export const collectionIpc = (win: BrowserWindow) => {
     try {
       // 创建任务
       const taskId = await taskManager.addTask(data);
-      console.log(taskId)
       // 立即启动任务
-      await setTimeout(() => 500)
+      if (!taskId) throw new Error('任务创建失败')
       const started = await taskManager.startTaskById(taskId);
-
-
       if (started) {
         return { code: 200, message: '任务创建并启动成功', data: { id: taskId } };
       } else {

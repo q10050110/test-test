@@ -11,7 +11,6 @@ export class TaskManager {
   private maxConcurrentTasks = 1;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
-
   private constructor() { }
 
   public static getInstance(): TaskManager {
@@ -65,11 +64,7 @@ export class TaskManager {
             method: 'post',
             data: taskData,
           });
-
-          // 假设服务器返回了新的任务ID
-          const taskId = response.data?.taskId || response.data?._id || taskData._id;
-          const newTaskData = { ...taskData, _id: taskId };
-
+          const newTaskData = { ...taskData, _id: response.data };
           collection = new Collection(newTaskData, this.mainWindow!);
           collection.complementTaskInfo();
           this.tasks.set(collection.getTaskInfo()._id, collection);
@@ -93,23 +88,13 @@ export class TaskManager {
    * 开始执行任务
    */
   startTaskById(taskId: string): Promise<boolean> {
-    if (this.activeTasks.size) {
-      for (const taskId of this.activeTasks) {
-        const task = this.tasks.get(taskId)
-
-        if (task && task.getStatus() !== 'running') {
-          this.activeTasks.delete(taskId)
-        }
-      }
-    }
+    this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId);
-
       if (!task) {
         reject('任务不存在');
         return;
       }
-
       // 检查任务是否允许重新执行
       const taskInfo = task.getTaskInfo();
       if (taskInfo.taskStatus === 'running') {
@@ -117,15 +102,11 @@ export class TaskManager {
         return;
       }
 
-      // 立即更新状态并通知UI
-      task.updateStatus('pending', '等待执行...');
-
       if (this.activeTasks.size < this.maxConcurrentTasks) {
         this.executeTask(taskId);
       } else {
         this.taskQueue.push(taskId);
       }
-
       resolve(true);
     });
   }
@@ -195,15 +176,17 @@ export class TaskManager {
         data: params,
       });
 
-      // 清空现有的任务缓存，重新构建
-      this.tasks.clear();
-
       data.list.forEach((task: Task) => {
         task.createTime = dayjs(task.createTime).format('YYYY-MM-DD HH:mm:ss');
         task.updateTime = dayjs(task.updateTime).format('YYYY-MM-DD HH:mm:ss');
-        const collection = new Collection(task, this.mainWindow!);
-        this.tasks.set(task._id, collection);
-        if (task?.taskStatus === 'pending') this.executeTask(task._id)
+        if (!this.tasks.has(task._id)) {
+          const collection = new Collection(task, this.mainWindow!);
+          this.tasks.set(task._id, collection)
+        }
+        if (task?.taskStatus !== 'noExecuted') {
+          task.tableFilePath = this.tasks.get(task._id)?.tableFilePath
+        }
+        if (task?.taskStatus === 'pending') this.startTaskById(task._id)
       });
 
       return data;
@@ -237,7 +220,8 @@ export class TaskManager {
           this.activeTasks.delete(taskId);
         } else {
           // 如果任务不在执行中，直接更新状态
-          task.updateStatus('cancelled', '任务已取消');
+          task.updateStatus('cancelled');
+          task.outputLog('取消任务')
         }
 
         // 通知状态更新
@@ -258,20 +242,23 @@ export class TaskManager {
    * 重新执行已完成或失败的任务
    */
   reExecuteTask(taskId: string): Promise<boolean> {
+    this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId);
-      if (!task) reject('任务不存在');
+      if (!task) return reject('任务不存在');
 
       const taskInfo = task!.getTaskInfo();
       // 只有已完成、失败或已取消的任务才能重新执行
-      if (['noExecuted', 'pending', 'completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
-        task!.resetTask(); // 重置任务状态
+      if (['completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
+        task.resetTask(); // 重置任务状态
 
         // 立即更新状态并通知
         if (this.activeTasks.size < this.maxConcurrentTasks) {
           this.executeTask(taskId);
         } else {
-          task!.updateStatus('pending', '已加入任务队列');
+          if (this.taskQueue.includes(taskId)) return
+          task.updateStatus('pending');
+          task.outputLog('pending')
           this.taskQueue.push(taskId);
         }
         resolve(true);
@@ -388,5 +375,19 @@ export class TaskManager {
     const task = this.tasks.get(taskId)
     if (!task) log.error('找不到该任务')
     this.mainWindow?.webContents.downloadURL(`file://${task!.tableFilePath}`)
+  }
+
+  // 刷新队列
+  refreshTaskQueue() {
+    if (this.activeTasks.size) {
+      for (const taskId of this.activeTasks) {
+        const task = this.tasks.get(taskId)
+        console.log(task?.getTaskInfo())
+        if (task && task.getStatus() !== 'running') {
+          this.activeTasks.delete(taskId)
+        }
+      }
+      this.processNextTask()
+    }
   }
 }

@@ -10,13 +10,18 @@ import { getLogisticsSimpleAPI } from '@/api/collection'
 // 表单参数
 const initParams = ref({
   pageNo: 1,
-  pageSize: 10,
+  pageSize: 1,
   taskName: '',
   taskStatus: undefined
 })
 const params = ref({ ...initParams.value })
 
 const taskStatusList = ref([
+  {
+    label: '全部',
+    value: undefined,
+    color: ''
+  },
   {
     label: '未执行',
     value: 'noExecuted',
@@ -84,6 +89,7 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
   total.value = data.total
+  console.log(data.list)
 }
 getTaskList()
 
@@ -215,10 +221,11 @@ onUnmounted(() => {
               <div>符合条件商品 <span style="color: #17bd3e;">{{ record?.progress?.totalCount || 0 }}</span> 个</div>
             </template>
             <template v-if="column.key === 'action'">
-              <a-button type="link" :icon="h(CaretRightOutlined)" v-if="record.taskStatus !== 'running'"
+              <a-button type="link" :icon="h(CaretRightOutlined)"
+                v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
                 @click="startTask(record as Task)">开始</a-button>
-              <a-button type="link" v-if="record.taskStatus === 'running'" :icon="h(PauseCircleFilled)"
-                @click="cancelTask(record._id)">终止</a-button>
+              <a-button type="link" v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
+                :icon="h(PauseCircleFilled)" @click="cancelTask(record._id)">终止</a-button>
               <a-button type="link" :icon="h(EditOutlined)" @click="openTaskDialogHandle(record as Task)"
                 :disabled="record.taskStatus === 'running'">编辑</a-button>
               <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)">复制</a-button>
@@ -230,8 +237,8 @@ onUnmounted(() => {
       </a-col>
     </a-row>
     <a-row style="justify-content: flex-end;margin-bottom: 10px;">
-      <a-pagination v-model:current="params.pageNo" :total="total" show-less-items
-        :show-total="total => `每页10条 共${total}条记录`" @change="pageChange" />
+      <a-pagination v-model:current="params.pageNo" :defaultPageSize="params.pageSize" :total="total" show-less-items
+        :show-total="total => `每页1条 共${total}条记录`" :showSizeChanger="false" @change="pageChange" />
     </a-row>
     <a-row class="tabs">
       <a-col :span="24">
