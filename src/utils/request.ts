@@ -2,7 +2,7 @@ import axios from "axios"
 import feedback from "./feedback"
 import { useUserStore } from "@/stores"
 const request = axios.create({
-  baseURL: '/api', // https://test-plus.shopbang.cn
+  baseURL: 'https://test-plus.shopbang.cn/api', // https://test-plus.shopbang.cn
   timeout: 5000
 })
 

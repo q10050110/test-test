@@ -4,13 +4,17 @@ import { storeIpc } from './store.ipc.js'
 import { windowIpc } from './system.ipc.js'
 import { collectionIpc } from './collection.ipc.js'
 import { registerLogIpc } from './log.ipc.js'
-
+import { globalBroadcast } from './broadcast.js'
 export const resisterAllIpc = (win: BrowserWindow) => {
   accountIpc(win)
   storeIpc()
   windowIpc(win)
   collectionIpc(win)
   registerLogIpc()
+  globalBroadcast.registerWindow(win)
+  setTimeout(() => {
+    globalBroadcast.broadcast('connect', '广播连接状态测试')
+  }, 2000)
 }
 
 

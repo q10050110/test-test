@@ -7,9 +7,9 @@ import fs from 'node:fs'
  * 日志配置
  */
 export function initLogger() {
-  // 设置日志文件路径 - 使用安装目录下的 LOG 文件夹
+  // 设置日志文件路径 - 使用安装目录下的 logs 文件夹
   const installDir = path.dirname(process.execPath)
-  const logPath = path.join(installDir, 'LOG')
+  const logPath = path.join(installDir, 'logs')
 
   // 确保日志目录存在
   if (!fs.existsSync(logPath)) {

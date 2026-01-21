@@ -86,11 +86,6 @@ export class Collection {
     this.lastServerStatus = task.taskStatus;
   }
 
-  // 清除所有挂起的任务
-  private clearPendingTasks() {
-    this.pendingTasks = [];
-  }
-
   // 添加挂起任务
   private addPendingTask<T>(task: Promise<T>): Promise<T> {
     const wrappedTask = task.finally(() => {
@@ -189,7 +184,7 @@ export class Collection {
       });
       this.lastServerStatus = status; // 记录最后成功更新到服务器的状态
     } catch (error) {
-      log.error(`同步任务状态到服务器失败 (ID: ${this.collectionTask._id})`, error);
+
     }
   }
 
@@ -218,7 +213,7 @@ export class Collection {
       this.browserWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        show: false,
+        show: true,
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
@@ -231,6 +226,16 @@ export class Collection {
         log.info('页面 DOM 已准备就绪');
         await this.parsePageData();
         resolve();
+      });
+
+      // 监听窗口关闭事件
+      this.browserWindow.on('closed', () => {
+        if (this.collectionTask.taskStatus !== 'completed') {
+          this.updateStatus('failed', '采集窗口被关闭！')
+          this.pendingTasks = []
+        }
+        this.browserWindow = null;
+        // 可能需要取消任务或进行清理工作
       });
 
       this.browserWindow.loadURL(this.collectionTask.targetUrl);
@@ -277,15 +282,6 @@ export class Collection {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // 辅助方法：确保 URL 是绝对路径
-  private ensureAbsoluteUrl(url: string, baseUrl: string): string {
-    try {
-      return new URL(url, baseUrl).href;
-    } catch (e) {
-      return url; // 如果 URL 构造失败，返回原始 URL
-    }
-  }
-
   // 根据目标数量收集链接
   private async collectLinksByTargetCount(targetCount: number) {
     if (!this.browserWindow) return [];
@@ -303,7 +299,7 @@ export class Collection {
     await this.delay(2000);
 
     // 获取初始链接
-    const initialLinks = await this.extractLinks();
+    const initialLinks = (await this.extractLinks())?.slice(0, targetCount) || [];
     this.collectedLinks = [...initialLinks];
 
     if (initialLinks.length) {
@@ -369,55 +365,49 @@ export class Collection {
 
   // 执行滚动操作 - 滚动整个页面窗口
   private async performScroll(): Promise<boolean> {
-    if (!this.browserWindow) return false;
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) return false;
 
     try {
       const result = await this.browserWindow.webContents.executeJavaScript(`
-        (function() {
-          // 获取当前页面滚动位置和文档高度
-          const currentScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-          const documentHeight = Math.max(
-            document.body.scrollHeight, 
-            document.body.offsetHeight, 
-            document.documentElement.clientHeight, 
-            document.documentElement.scrollHeight, 
-            document.documentElement.offsetHeight
-          );
-          const windowHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
-          
-          console.log(\`当前滚动位置: \${currentScrollY}, 文档总高度: \${documentHeight}, 窗口高度: \${windowHeight}\`);
-          
-          // 计算滚动目标位置（滚动窗口高度的80%）
-          const scrollAmount = Math.floor(windowHeight * 0.8);
-          const targetScrollY = Math.min(currentScrollY + scrollAmount, documentHeight - windowHeight);
-          
-          // 检查是否已到达页面底部
-          if (currentScrollY >= (documentHeight - windowHeight - 10)) { // 10像素容差
-            console.log('已到达页面底部，无法继续滚动');
-            return false;
-          }
-          
-          // 执行滚动
-          window.scrollTo({
-            top: targetScrollY,
-            behavior: 'smooth'
-          });
-          
-          // 确保滚动发生（有时 scrollTo 可能不执行）
-          if (window.scrollY !== targetScrollY) {
-            window.scroll(0, targetScrollY);
-          }
-          
-          // 检查滚动是否成功
-          const actualScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-          const scrollChanged = actualScrollY > currentScrollY;
-          const hasReachedBottom = actualScrollY >= (documentHeight - windowHeight - 10);
-          
-          console.log(\`滚动后位置: \${actualScrollY}, 滚动是否生效: \${scrollChanged}, 是否到达底部: \${hasReachedBottom}\`);
-          
-          return scrollChanged;
-        })();
-      `);
+  (function () {
+    return new Promise(resolve => {
+      const startY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+
+      const scrollAmount = Math.floor(windowHeight * 0.8);
+      const targetY = Math.min(
+        startY + scrollAmount,
+        documentHeight - windowHeight
+      );
+
+      if (startY >= documentHeight - windowHeight - 10) {
+        resolve(false);
+        return;
+      }
+
+      const duration = 600; // 滚动时长 ms
+      const startTime = performance.now();
+
+      function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const ease = progress < 0.5
+          ? 2 * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+        window.scrollTo(0, startY + (targetY - startY) * ease);
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          resolve(true);
+        }
+      }
+
+      requestAnimationFrame(step);
+    });
+  })();
+`);
 
       return result === true;
     } catch (error) {
@@ -428,7 +418,7 @@ export class Collection {
 
   // 提取链接
   private async extractLinks(): Promise<any[]> {
-    if (!this.browserWindow) return [];
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) return [];
 
     try {
       const html = await this.browserWindow.webContents.executeJavaScript(
@@ -449,12 +439,13 @@ export class Collection {
         const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
         const link = `https://www.ozon.ru/product/${id}`
         const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '')
-        const sourcePrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '')
+        const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '')
+        const sourcePrice = 0
         const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0]
         const name = $(element).parent().find('a').children('div').children('span').text()
         const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1)
         const reviewCount = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/(\d+)\s*отзывов/)?.[1]) || 0
-        if (!linksParent.map(item => item.id).includes(id)) linksParent.push({ href, price, sourcePrice, discount, link, cover, name, id, rating, sku: id, requestUrl, reviewCount })
+        if (!linksParent.map(item => item.id).includes(id)) linksParent.push({ href, price: Number(price), sourcePrice: Number(sourcePrice), oPrice, discount, link, cover, name, id, rating, sku: id, requestUrl, reviewCount })
       });
       return linksParent;
     } catch (error) {
@@ -467,8 +458,14 @@ export class Collection {
   private async handleLink(links: any[]): Promise<void> {
     if (!links || links.length === 0) return;
 
+    // 检查窗口是否存在且未被销毁
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+      log.warn('浏览器窗口已被销毁，跳过链接处理');
+      return;
+    }
+
     const ids = links.map(item => item.id).filter(item => item);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return
     // 创建一个异步任务，但不等待它完成
     const task = (async () => {
       this.processed += ids.length;
@@ -476,9 +473,14 @@ export class Collection {
 
       try {
         await Promise.all(links.map(async item => {
+          // 检查窗口是否存在且未被销毁
+          if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+            log.warn('浏览器窗口已被销毁，跳过链接处理');
+            return;
+          }
           try {
             // 执行浏览器内的 fetch 请求并获取响应
-            const response = await this.browserWindow!.webContents.executeJavaScript(`
+            const response = await this.browserWindow.webContents.executeJavaScript(`
           fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
           .then(response => response.json())
           .then(data => ({ success: true, data: data }))
@@ -493,32 +495,33 @@ export class Collection {
             console.error('获取跟卖人数失败:', error);
           }
         }));
-        const [res, res2] = await Promise.all([
-          request({
-            url: '/api/goods/hotSales/getOzonSaleDataByIds',
-            method: 'post',
-            data: {
-              goodsIds: ids,
-              v: 5
-            }
-          }),
-          request({
-            url: '/api/auto/filterGoods/goodsFilter',
-            method: 'post',
-            data: {
-              taskId: this.collectionTask._id,
-              reqDatas: links
-            }
-          })
-        ]);
+
+        const res = await request({
+          url: '/api/goods/hotSales/getOzonSaleDataByIds',
+          method: 'post',
+          data: {
+            goodsIds: ids,
+            v: 5
+          }
+        })
 
         const dataSource = new Map();
+        const filterData = await this.filterData(res.data.map((item: any) => ({ ...item, ...item.data })) || [])
+        filterData.forEach((item: any) => {
+          const obj = links.find(link => link.id === item.goods_id)
+          if (obj) item = { ...obj, ...item }
+          dataSource.set(item.productId, item);
+        });
 
-        if (res && res.data) {
-          res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
-            dataSource.set(item.productId, item);
-          });
-        }
+        const res2 = await request({
+          url: '/api/auto/filterGoods/goodsFilter',
+          method: 'post',
+          data: {
+            taskId: this.collectionTask._id,
+            reqDatas: filterData
+          }
+        })
+
         if (res2 && res2.data) {
           res2.data.forEach((item: any) => {
             if (dataSource.has(item.id)) {
@@ -529,10 +532,12 @@ export class Collection {
             }
           });
         }
-        const tabledData = links.map(item => ({
+        const tabledData = filterData.map(item => ({
           ...dataSource.get(item.id),
-          ...item
+          ...item,
+          createDate: dayjs(item.createDate).format('YYYY-MM-DD HH:mm:ss')
         }))
+        log.info(tabledData, `${this.collectionTask.taskName}的表格数据`)
         this.updateStatus('running', `完成${ids.length}商品的处理...`);
         this.updateStatus('running', '表格写入中...');
         this.excel?.appendAndSave(tabledData);
@@ -569,34 +574,148 @@ export class Collection {
         return true;
       },
 
-      // 数值范围过滤 - 抽象成通用方法
-      (item: any) => this.checkRange(item.soldCount, task.soldCountMin, task.soldCountMax),
-      (item: any) => this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax),
-      (item: any) => this.checkRange(item.price, task.salePriceMin, task.salePriceMax),
-      (item: any) => this.checkRange(item.weight, task.weightMin, task.weightMax),
-      (item: any) => this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax),
-      (item: any) => this.checkRange(item.salesDynamics, task.monthDynamicsMin, task.monthDynamicsMax),
-      (item: any) => this.checkRange(item.drr, task.adFeeMin, task.adFeeMax),
-      (item: any) => this.checkRange(item.daysInPromo, task.promotionDayMin, task.promotionDayMax),
-      (item: any) => this.checkRange(item.discount, task.promotionDiscountMin, task.promotionDiscountMax),
-      (item: any) => this.checkRange(item.promoRevenueShare, task.promotionDynamicsMin, task.promotionDynamicsMax),
-      (item: any) => this.checkRange(item.daysWithTrafarets, task.promoteDayMin, task.promoteDayMax),
-      (item: any) => this.checkRange(item.sessionCount, task.viewsMin, task.viewsMax),
-      (item: any) => this.checkRange(item.convToCartPdp, task.cardRateMin, task.cardRateMax),
-      (item: any) => this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax),
-      (item: any) => this.checkRange(item.sellerNumber, task.followMin, task.followMax),
-      (item: any) => this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined), // 最小利润率
+      // 销量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.soldCount, task.soldCountMin, task.soldCountMax);
+        log.info(`销量范围校验 - 商品ID: ${item._id}, 实际销量: ${item.soldCount}, 范围: [${task.soldCountMin}, ${task.soldCountMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 月销售额范围校验
+      (item: any) => {
+        const result = this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax);
+        log.info(`月销售额范围校验 - 商品ID: ${item._id}, 实际销售额: ${item.gmvSum}, 范围: [${task.gmvSumMin}, ${task.gmvSumMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 销售价格范围校验
+      (item: any) => {
+        const result = this.checkRange(item.price, task.salePriceMin, task.salePriceMax);
+        log.info(`销售价格范围校验 - 商品ID: ${item._id}, 实际价格: ${item.price}, 范围: [${task.salePriceMin}, ${task.salePriceMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 重量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.weight, task.weightMin, task.weightMax);
+        log.info(`重量范围校验 - 商品ID: ${item._id}, 实际重量: ${item.weight}, 范围: [${task.weightMin}, ${task.weightMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 上架时间范围校验
+      (item: any) => {
+        const result = this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax);
+        log.info(`上架时间范围校验 - 商品ID: ${item._id}, 实际天数: ${item.upTimeDays}, 范围: [${task.upGoodsTimeMin}, ${task.upGoodsTimeMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 月销售动态范围校验
+      (item: any) => {
+        const result = this.checkRange(item.salesDynamics, task.monthDynamicsMin, task.monthDynamicsMax);
+        log.info(`月销售动态范围校验 - 商品ID: ${item._id}, 实际动态: ${item.salesDynamics}, 范围: [${task.monthDynamicsMin}, ${task.monthDynamicsMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 广告份额范围校验
+      (item: any) => {
+        const result = this.checkRange(item.drr, task.adFeeMin, task.adFeeMax);
+        log.info(`广告份额范围校验 - 商品ID: ${item._id}, 实际份额: ${item.drr}, 范围: [${task.adFeeMin}, ${task.adFeeMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 参与促销天数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.daysInPromo, task.promotionDayMin, task.promotionDayMax);
+        log.info(`参与促销天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysInPromo}, 范围: [${task.promotionDayMin}, ${task.promotionDayMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 参与促销折扣范围校验
+      (item: any) => {
+        const result = this.checkRange(item.discount, task.promotionDiscountMin, task.promotionDiscountMax);
+        log.info(`参与促销折扣范围校验 - 商品ID: ${item._id}, 实际折扣: ${item.discount}, 范围: [${task.promotionDiscountMin}, ${task.promotionDiscountMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 促销活动转化率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.promoRevenueShare, task.promotionDynamicsMin, task.promotionDynamicsMax);
+        log.info(`促销活动转化率范围校验 - 商品ID: ${item._id}, 实际转化率: ${item.promoRevenueShare}, 范围: [${task.promotionDynamicsMin}, ${task.promotionDynamicsMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 付费推广天数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.daysWithTrafarets, task.promoteDayMin, task.promoteDayMax);
+        log.info(`付费推广天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysWithTrafarets}, 范围: [${task.promoteDayMin}, ${task.promoteDayMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 浏览量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sessionCount, task.viewsMin, task.viewsMax);
+        log.info(`浏览量范围校验 - 商品ID: ${item._id}, 实际浏览量: ${item.sessionCount}, 范围: [${task.viewsMin}, ${task.viewsMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 商品卡片加购率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.convToCartPdp, task.cardRateMin, task.cardRateMax);
+        log.info(`商品卡片加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartPdp}, 范围: [${task.cardRateMin}, ${task.cardRateMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 搜索和目录加购率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax);
+        log.info(`搜索和目录加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartSearch}, 范围: [${task.showRateMin}, ${task.showRateMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 跟卖人数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax);
+        log.info(`跟卖人数范围校验 - 商品ID: ${item._id}, 实际人数: ${item.sellerNumber}, 范围: [${task.followMin}, ${task.followMax}], 结果: ${result}`);
+        return result;
+      },
+
+      // 最小利润率校验
+      (item: any) => {
+        const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
+        log.info(`最小利润率校验 - 商品ID: ${item.goods}, 实际利润率: ${item.myProfitMargin}, 最低要求: ${task.targetProfitPercent}, 结果: ${result}`);
+        return result;
+      },
 
       // 发货模式过滤
-      (item: any) => {
-        if (!task.salesSchema) return true;
-        const requiredModes = task.salesSchema.split(',');
-        return !!(item.shippingMode && requiredModes.some((mode: string) => item.shippingMode.includes(mode)));
-      }
+      /*       (item: any) => {
+              if (!task.salesSchema) {
+                log.info(`发货模式校验 - 任务未设置发货模式要求，商品ID: ${item._id}, 结果: true`);
+                return true;
+              }
+              const requiredModes = task.salesSchema.split(',');
+              const result = !!(item.shippingMode && requiredModes.some((mode: string) => item.shippingMode.includes(mode)));
+              log.info(`发货模式校验 - 商品ID: ${item._id}, 实际模式: ${item.shippingMode}, 要求模式: ${requiredModes.join(',')}, 结果: ${result}`);
+              return result;
+            } */
     ];
 
+    log.info(`开始过滤数据，共 ${data.length} 条商品记录`);
+
     // 应用所有过滤条件
-    return data.filter(item => filters.every(filterFn => filterFn(item)));
+    const filteredData = data.filter(item => {
+      const results = filters.map(filterFn => filterFn(item));
+      const overallResult = results.every(r => r);
+
+      if (!overallResult) {
+        log.info(`商品ID ${item._id} 未通过过滤，各规则结果: [${results.join(', ')}]`);
+      }
+
+      return overallResult;
+    });
+
+    log.info(`数据过滤完成，原始数量: ${data.length}, 过滤后数量: ${filteredData.length}`);
+
+    return filteredData;
   }
 
   /**
@@ -606,16 +725,32 @@ export class Collection {
    * @param max 最大值
    * @returns 是否符合范围
    */
-  private checkRange(value: number | undefined, min?: number, max?: number): boolean {
-    if (value === undefined || value === null) return true; // 空值视为通过
+  private checkRange(value: number | string | undefined | null, min?: number, max?: number): boolean {
+    // 将值转换为数字类型
+    let numValue: number | null = null;
+    if (min === 0 && max === 0) return true
+    if (typeof value === 'string') {
+      numValue = Number(value);
+    } else if (typeof value === 'number') {
+      numValue = value;
+    } else if (typeof value === 'undefined') {
+      numValue = 0
+    } else {
+      numValue = Number(value);
+    }
+
+    // 如果转换后不是有效数字，返回 false
+    if (isNaN(numValue)) {
+      return false;
+    }
 
     // 检查最小值
-    if (min !== undefined && min !== null && min > 0 && value < min) {
+    if (min !== undefined && min !== null && min > 0 && numValue < min) {
       return false;
     }
 
     // 检查最大值
-    if (max !== undefined && max !== null && max > 0 && value > max) {
+    if (max !== undefined && max !== null && max > 0 && numValue > max) {
       return false;
     }
 
@@ -643,7 +778,7 @@ export class Collection {
         { header: '类目佣金（FBP）', key: 'commissionFbp', width: 15 },
         { header: '品牌', key: 'brand', width: 20 },
         { header: '销售价格（卢布）', key: 'price', width: 15 },
-        { header: '原价（卢布）', key: 'sourcePrice', width: 15 },
+        { header: '原价（卢布）', key: 'oPrice', width: 15 },
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCount', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },
@@ -686,7 +821,7 @@ export class Collection {
         { header: '其他费用（提醒、货损）（元）', key: 'elsePrice', width: 20 },
         { header: '1688货源地址', key: 'sourceUrl1688', width: 30 },
         { header: '货源图片', key: 'sourceImage', width: 20 },
-        { header: '货源价格（元）', key: 'sourcePriceYuan', width: 15 },
+        { header: '货源价格（元）', key: 'sourcePrice', width: 15 },
         { header: '对方利润率（%）', key: 'otherProfitPercent', width: 15 },
         { header: '对方利润（元）', key: 'otherProfit', width: 15 },
         { header: '我的售价（元）', key: 'resMoney', width: 15 },
@@ -695,8 +830,8 @@ export class Collection {
       ];
 
       // 首先设置列定义
-      await this.excel.init(); // 确保初始化完成
-      this.excel.clearContent()
+      await this.excel.init();
+      await this.excel.clearContent()
       // 检查是否已有列定义（即是否已有表头）
       const worksheet = this.excel.getWorksheet();
       const hasHeaders = worksheet.getRow(1).values && worksheet.getRow(1).values.length;
@@ -759,10 +894,16 @@ export class Collection {
 
   // 终止任务
   async cancel() {
+    this.timers.forEach(timer => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    });
+    this.timers = [];
+
     if (this.browserWindow) {
       this.browserWindow.close();
       this.browserWindow = null;
-      this.timers.forEach(item => clearTimeout(item));
     }
 
     // 确保 Excel 数据已保存
@@ -786,6 +927,11 @@ export class Collection {
 
       await this.createCollectionWindow();
 
+      // 在等待任务完成前检查窗口状态
+      if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+        log.error('浏览器窗口已被销毁，无法继续执行任务')
+        throw new Error('浏览器窗口已被销毁');
+      }
       // 等待所有挂起的数据处理任务完成
       await this.waitForAllPendingTasks();
 

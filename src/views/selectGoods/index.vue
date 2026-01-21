@@ -78,33 +78,26 @@ const rowSelection: TableProps['rowSelection'] = {
     selectData.value = selectedRowKeys as string[]
   }
 }
-const pagination = ref({
-  current: params.value.pageNo,
-  pageSize: params.value.pageSize,
-  total: total.value,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  showTotal: (total: number) => (`共 ${total} 条`),
-  onChange: (page: number, pageSize: number) => {
-    params.value.pageNo = page;
-    params.value.pageSize = pageSize;
-  }
-})
 const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  console.log(params.value)
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
   total.value = data.total
 }
 getTaskList()
 
+const pageChange = (page: number, pageSize: number) => {
+  params.value.pageNo = page;
+  params.value.pageSize = pageSize;
+  getTaskList()
+}
+
 // 新建任务
 const dialogRef = ref<InstanceType<typeof TaskDialog>>()
 const openTaskDialogHandle = async (data?: Task) => {
   await nextTick()
-  if (data?._id && dialogRef.value) dialogRef.value.formData = data
+  if (data?._id && dialogRef.value) dialogRef.value.formData = { ...data }
   dialogRef.value?.openDialog()
 }
 
@@ -197,19 +190,19 @@ onUnmounted(() => {
     </a-form>
     <a-row class="table-wrapper">
       <a-col :span="24">
-        <a-table :dataSource="tableData" :columns="columns" :row-selection="rowSelection" :pagination="pagination"
-          rowKey="_id">
+        <a-table style="max-height: 600px; overflow-y: auto;" :dataSource="tableData" :columns="columns"
+          :row-selection="rowSelection" :pagination="false" rowKey="_id">
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
-              <p style="font-weight: bold; color: #000">
+              <div style="font-weight: bold; color: #000">
                 {{ record.taskName }}
-              </p>
-              <p>
+              </div>
+              <div>
                 创建时间：{{ record.createTime }}
-              </p>
-              <p>
+              </div>
+              <div>
                 最近执行：{{ record.updateTime || '-' }}
-              </p>
+              </div>
             </template>
             <template v-if="column.key === 'status'">
               <a-tag :color="taskStatusList.find(item => item.value === record.taskStatus)?.color">
@@ -217,9 +210,9 @@ onUnmounted(() => {
               </a-tag>
             </template>
             <template v-if="column.key === 'progress'">
-              <p>正在处理中商品 <span style="color:#2753ed;">{{ record?.progress?.current || 0 }}</span> 个</p>
-              <p>累计已爬取商品 <span style="color: #2753ed;">{{ record?.progress?.total || 0 }}</span> 个</p>
-              <p>符合条件商品 <span style="color: #17bd3e;">{{ record?.progress?.totalCount || 0 }}</span> 个</p>
+              <div>正在处理中商品 <span style="color:#2753ed;">{{ record?.progress?.current || 0 }}</span> 个</div>
+              <div>累计已爬取商品 <span style="color: #2753ed;">{{ record?.progress?.total || 0 }}</span> 个</div>
+              <div>符合条件商品 <span style="color: #17bd3e;">{{ record?.progress?.totalCount || 0 }}</span> 个</div>
             </template>
             <template v-if="column.key === 'action'">
               <a-button type="link" :icon="h(CaretRightOutlined)" v-if="record.taskStatus !== 'running'"
@@ -235,6 +228,10 @@ onUnmounted(() => {
           </template>
         </a-table>
       </a-col>
+    </a-row>
+    <a-row style="justify-content: flex-end;margin-bottom: 10px;">
+      <a-pagination v-model:current="params.pageNo" :total="total" show-less-items
+        :show-total="total => `每页10条 共${total}条记录`" @change="pageChange" />
     </a-row>
     <a-row class="tabs">
       <a-col :span="24">

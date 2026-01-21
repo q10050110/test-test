@@ -1,8 +1,8 @@
 {
   // 应用的基本信息
-  "appId": "com.example.myapp",       // 应用的唯一标识，一般是反向域名
-  "productName": "MyElectronApp",     // 应用名称，会用于生成安装包和桌面快捷方式
-  "copyright": "Copyright © 2026 YourName", // 版权信息
+  "appId": "com.shangpingbang.app",       // 应用的唯一标识，一般是反向域名
+  "productName": "上品帮-自动化助手",     // 应用名称，会用于生成安装包和桌面快捷方式
+  "copyright": "Copyright © 2026 shangpingbang", // 版权信息
 
   // 构建目录相关
   "directories": {
@@ -13,8 +13,7 @@
   // Electron打包平台配置
   "win": {
     "target": [
-      "nsis",      // Windows安装包类型，nsis: 可安装，zip: 压缩包
-      "zip"        // 可选，发布zip压缩包
+      "nsis"      // Windows安装包类型，nsis: 可安装，zip: 压缩包
     ],
     "icon": "build/icons/win/icon.ico",  // Windows应用图标路径
     "requestedExecutionLevel": "requireAdministrator", // 安装时权限要求
@@ -26,12 +25,12 @@
     "oneClick": false,       // 是否一键安装，false表示可自定义安装路径
     "allowElevation": true,  // 允许管理员权限提升
     "allowToChangeInstallationDirectory": true, // 安装路径可修改
-    "installerIcon": "build/icons/win/installerIcon.ico", // 安装程序图标
-    "uninstallerIcon": "build/icons/win/uninstallerIcon.ico", // 卸载程序图标
-    "installerHeaderIcon": "build/icons/win/installerHeader.ico", // 安装程序顶部图标
+    "installerIcon": "build/icons/win/icon.ico", // 安装程序图标
+    "uninstallerIcon": "build/icons/win/icon.ico", // 卸载程序图标
+    "installerHeaderIcon": "build/icons/win/icon.ico", // 安装程序顶部图标
     "createDesktopShortcut": true,  // 是否创建桌面快捷方式
     "createStartMenuShortcut": true, // 是否创建开始菜单快捷方式
-    "shortcutName": "MyElectronApp"  // 快捷方式名称
+    "shortcutName": "上品帮-自动化助手"  // 快捷方式名称
   },
 
   "mac": {
@@ -78,14 +77,14 @@
   "asar": true, // 打包成asar归档文件，提升加载速度并隐藏源码
 
   // 发布配置
-  "publish": [
+/*   "publish": [
     {
       "provider": "github",          // 发布到GitHub
       "owner": "your-github-user",   // 仓库拥有者
       "repo": "my-electron-app",     // 仓库名称
       "token": "YOUR_GITHUB_TOKEN"   // GitHub访问Token
     }
-  ],
+  ], */
 
   // 高级配置
   "compression": "maximum",      // 压缩等级

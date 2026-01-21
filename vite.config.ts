@@ -7,6 +7,9 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers';
+// @ts-ignore
+import postcssPxToRem from 'postcss-pxtorem'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -22,7 +25,7 @@ export default defineConfig({
         importStyle: false
       })],
       dts: 'src/components.d.ts'
-    }),
+    })
   ],
   resolve: {
     alias: {
@@ -37,6 +40,19 @@ export default defineConfig({
         changeOrigin: true,
         target: 'https://test-plus.shopbang.cn'
       }
+    }
+  },
+  css: {
+    postcss: {
+      plugins: [postcssPxToRem({
+        rootValue: 16,
+        propList: ['*'],
+        unitPrecision: 5,
+        minPixelValue: 0,
+        selectorBlackList: [],
+        replace: true,
+        mediaQuery: false
+      })]
     }
   }
 })

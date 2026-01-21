@@ -24,6 +24,9 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
       <div class="customer-service">
         <img src="@/assets/window/lianxikefu.png" alt="">
         联系客服
+        <div class="qrcode">
+          <img src="@/assets/window/qrcode.png" alt="">
+        </div>
       </div>
       <div class="operations">
         <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')">
@@ -72,6 +75,31 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
 
     .customer-service {
       margin-right: 20px;
+      position: relative;
+
+      &:hover {
+        .qrcode {
+          display: block;
+        }
+      }
+
+      .qrcode {
+        display: none;
+        position: absolute;
+        top: 20px;
+        right: -50px;
+        width: 200px;
+        height: 200px;
+        background: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        z-index: 999;
+
+        img {
+          height: 100%;
+          width: 100%;
+        }
+      }
     }
 
     .operations {

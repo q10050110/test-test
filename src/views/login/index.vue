@@ -48,14 +48,19 @@ initHandle()
 // 登录
 const router = useRouter()
 const store = useUserStore()
+const loading = ref(false)
 const loginHandle = async () => {
   await formRef.value?.validate()
+  loading.value = true
   const { data, code, message } = await loginAPI(formData.value)
   if (code === 0) {
+    changeHandle()
     store.setToken(data.token)
     feedback.success('登录成功！')
     router.push('/')
+    return
   }
+  loading.value = false
 }
 // 跳转上品帮注册&忘记密码外链
 const accountHandle = (type: 'register' | 'resetPassword') => {
@@ -102,7 +107,7 @@ const operationHandle = (type: 'hide' | 'close') => {
             <a-checkbox v-model:checked="rememberPassword" @change="changeHandle">记住密码</a-checkbox>
           </a-form-item>
           <a-form-item>
-            <a-button type="primary" block style="height:40px" @click="loginHandle">立即登录</a-button>
+            <a-button type="primary" block style="height:40px" @click="loginHandle" :loading="loading">立即登录</a-button>
           </a-form-item>
         </a-form>
 

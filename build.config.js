@@ -12,7 +12,7 @@ export default {
   appId: "com.example.myapp",
 
   // 应用名称（安装包和桌面图标显示）
-  productName: "上品帮自动化助手",
+  productName: "上品帮-自动化助手",
 
   // 输出目录
   directories: {
@@ -47,7 +47,7 @@ export default {
     allowToChangeInstallationDirectory: true, // 可修改安装目录
     createDesktopShortcut: true,  // 创建桌面快捷方式
     createStartMenuShortcut: true, // 创建开始菜单快捷方式
-    shortcutName: "上品帮自动化助手"  // 快捷方式名称
+    shortcutName: "上品帮-自动化助手"  // 快捷方式名称
   },
 
   // macOS 配置

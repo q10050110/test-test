@@ -3,12 +3,12 @@ import { Collection, Task } from './collection.services.js';
 import log from '../log/index.js';
 import request from '../utils/request.js';
 import dayjs from 'dayjs';
-
+import fs from 'fs/promises'
 export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
   private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 5;
+  private maxConcurrentTasks = 1;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
 
@@ -93,6 +93,15 @@ export class TaskManager {
    * 开始执行任务
    */
   startTaskById(taskId: string): Promise<boolean> {
+    if (this.activeTasks.size) {
+      for (const taskId of this.activeTasks) {
+        const task = this.tasks.get(taskId)
+
+        if (task && task.getStatus() !== 'running') {
+          this.activeTasks.delete(taskId)
+        }
+      }
+    }
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId);
 
@@ -194,6 +203,7 @@ export class TaskManager {
         task.updateTime = dayjs(task.updateTime).format('YYYY-MM-DD HH:mm:ss');
         const collection = new Collection(task, this.mainWindow!);
         this.tasks.set(task._id, collection);
+        if (task?.taskStatus === 'pending') this.executeTask(task._id)
       });
 
       return data;
@@ -266,6 +276,7 @@ export class TaskManager {
         }
         resolve(true);
       } else {
+        console.log(taskInfo.taskStatus)
         reject('任务状态不允许重新执行');
       }
       resolve(true)
@@ -299,6 +310,12 @@ export class TaskManager {
         // 从本地缓存删除
         if (this.tasks.delete(id)) {
           successCount++;
+        }
+
+        try {
+          await fs.unlink(task.tableFilePath)
+        } catch (error) {
+          log.error('删除任务文件失败', error)
         }
       } catch (error) {
         log.error(`删除任务 ${id} 失败`, error);
@@ -350,6 +367,12 @@ export class TaskManager {
 
         if (this.tasks.delete(id)) {
           successCount++;
+        }
+
+        try {
+          await fs.unlink(task.tableFilePath)
+        } catch (error) {
+          log.error('删除任务文件失败', error)
         }
       }
 

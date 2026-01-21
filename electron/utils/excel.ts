@@ -344,14 +344,15 @@ export class ExcelWriter {
    * 清空工作表内容（保留列定义）
    */
   clearContent() {
-    log.info(`清空工作表内容`);
-    // 清空除了列定义以外的所有内容
-    const rows = this.worksheet.rowCount;
-    if (rows > 0) {
-      for (let i = 1; i <= rows; i++) {
-        const row = this.worksheet.getRow(i);
-        row.values = [];
-      }
-    }
+    log.info(`清空工作表内容（重建工作表）`);
+
+    const sheetName = this.worksheet.name;
+    const workbook = this.workbook;
+
+    // 删除旧工作表
+    workbook.removeWorksheet(this.worksheet.id);
+
+    // 新建同名工作表
+    this.worksheet = workbook.addWorksheet(sheetName);
   }
 }

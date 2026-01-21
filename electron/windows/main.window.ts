@@ -9,6 +9,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export let mainWindow: BrowserWindow | null
 
 /**
+ * 重新创建窗口的函数
+ */
+export const recreateMainWindow = () => {
+  log.info('正在尝试重新创建主窗口...')
+  if (mainWindow) {
+    mainWindow.destroy() // 销毁旧窗口
+    mainWindow = null
+  }
+  createWindow()
+}
+
+/**
  * 创建主窗口
  */
 export const createWindow = () => {
@@ -21,12 +33,14 @@ export const createWindow = () => {
     width: 1200,
     height: 800,
     autoHideMenuBar: true,
-    title: '上品帮自动化助手',
+    title: '上品帮-自动化助手',
     frame: false,
+    icon: path.join(__dirname, '../assets/icon.png'),
     webPreferences: {
       nodeIntegration: false, // 禁止网页使用nodejs的API
       contextIsolation: true, // 启用上下文隔离
-      preload: preloadPath
+      preload: preloadPath,
+      webSecurity: false
     }
   })
 
@@ -63,6 +77,17 @@ export const createWindow = () => {
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     log.error('渲染进程消失:', details)
+    // 如果是崩溃或被杀死的情况，尝试重启
+    if (details.reason === 'crashed' || details.reason === 'killed') {
+      log.info('检测到渲染进程崩溃，尝试重启窗口...')
+
+      // 延迟一段时间后重新创建窗口
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          recreateMainWindow()
+        }
+      }, 1000)
+    }
   })
 
   // 捕获控制台消息
