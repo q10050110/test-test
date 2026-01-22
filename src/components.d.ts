@@ -22,8 +22,6 @@ declare module 'vue' {
     AInput: typeof import('ant-design-vue/es')['Input']
     ALayout: typeof import('ant-design-vue/es')['Layout']
     ALayoutContent: typeof import('ant-design-vue/es')['LayoutContent']
-    ALayoutFooter: typeof import('ant-design-vue/es')['LayoutFooter']
-    ALayoutHeader: typeof import('ant-design-vue/es')['LayoutHeader']
     AMenu: typeof import('ant-design-vue/es')['Menu']
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
@@ -41,7 +39,6 @@ declare module 'vue' {
     ATag: typeof import('ant-design-vue/es')['Tag']
     ATooltip: typeof import('ant-design-vue/es')['Tooltip']
     CLoading: typeof import('./components/c-loading.vue')['default']
-    Loading: typeof import('./components/loading.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -59,8 +56,6 @@ declare global {
   const AInput: typeof import('ant-design-vue/es')['Input']
   const ALayout: typeof import('ant-design-vue/es')['Layout']
   const ALayoutContent: typeof import('ant-design-vue/es')['LayoutContent']
-  const ALayoutFooter: typeof import('ant-design-vue/es')['LayoutFooter']
-  const ALayoutHeader: typeof import('ant-design-vue/es')['LayoutHeader']
   const AMenu: typeof import('ant-design-vue/es')['Menu']
   const AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
   const AModal: typeof import('ant-design-vue/es')['Modal']
@@ -78,7 +73,6 @@ declare global {
   const ATag: typeof import('ant-design-vue/es')['Tag']
   const ATooltip: typeof import('ant-design-vue/es')['Tooltip']
   const CLoading: typeof import('./components/c-loading.vue')['default']
-  const Loading: typeof import('./components/loading.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

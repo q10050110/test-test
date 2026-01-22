@@ -377,7 +377,11 @@ export class TaskManager {
   downloadExcel(taskId: string) {
     const task = this.tasks.get(taskId)
     if (!task) log.error('找不到该任务')
-    this.mainWindow?.webContents.downloadURL(`file://${task!.tableFilePath}`)
+    try {
+      this.mainWindow?.webContents.downloadURL(`file://${task!.tableFilePath}`)
+    } catch (error) {
+      log.error('下载表格失败', error)
+    }
   }
 
   // 刷新队列
