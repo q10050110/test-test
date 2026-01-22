@@ -10,7 +10,7 @@ import { getLogisticsSimpleAPI } from '@/api/collection'
 // 表单参数
 const initParams = ref({
   pageNo: 1,
-  pageSize: 1,
+  pageSize: 10,
   taskName: '',
   taskStatus: undefined
 })
@@ -132,6 +132,11 @@ const cancelTask = async (taskId: string) => {
 }
 // 批量删除任务
 const deleteTask = async () => {
+  if (!selectData.value?.length || !tableData.value?.length) return feedback.error('请选择要删除的任务！')
+  const isAlive = tableData.value.filter(item => selectData.value?.includes(item._id!)).some(task => task.taskStatus === 'running')
+  if (isAlive) return feedback.error('请将执行的任务终止后，在删除！')
+  const res = await feedback.confirm('确定要删除吗,删除以后数据不可在恢复？')
+  if (!res) return
   const { code, message } = await window.electronAPI.invoke('collection-delete-task', toRaw(selectData.value))
   await getTaskList(undefined, true)
   if (code === 200) return feedback.success('删除成功')

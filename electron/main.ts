@@ -7,6 +7,9 @@ import { CloseProcessService } from './services/closeProcess.services.js'
 const RESTART_COUNT_KEY = 'restart-count'
 const MAX_RESTART_COUNT = 3
 
+// 应用级别的崩溃标识
+let isAppCrashed = false;
+
 // 初始化日志系统
 initLogger()
 
@@ -71,6 +74,35 @@ function shouldAllowRestart(): boolean {
 }
 
 /**
+ * 判断错误是否属于致命崩溃
+ */
+function isFatalError(error: Error | any): boolean {
+  // 检查错误类型是否为致命错误
+  if (!error) return false;
+
+  const errorMessage = error.message || String(error);
+  const errorStack = error.stack || '';
+
+  // 检查特定的致命错误类型
+  const fatalPatterns = [
+    /object has been destroyed/i,           // Electron对象被销毁
+    /context is isolated/i,                 // 上下文隔离相关错误
+    /cannot read property/i,                // 属性读取错误
+    /destroyed|disposed/i,                  // 对象已销毁
+    /renderer process gone/i,               // 渲染进程崩溃
+    /segmentation fault/i,                  // 段错误
+    /access violation/i,                    // 访问违规
+    /stack overflow/i,                      // 栈溢出
+    /out of memory/i,                       // 内存不足
+    /fatal error in v8/i,                   // V8致命错误
+  ];
+
+  return fatalPatterns.some(pattern =>
+    pattern.test(errorMessage) || pattern.test(errorStack)
+  );
+}
+
+/**
  * 应用准备就绪
  */
 app.whenReady().then(() => {
@@ -125,6 +157,7 @@ app.on('render-process-gone', (event, webContents, details) => {
   log.error('渲染进程崩溃详情:', details);
 
   if (details.reason === 'crashed') {
+    isAppCrashed = true; // 标记应用崩溃
     log.info('检测到渲染进程崩溃，执行重启策略...');
 
     if (shouldAllowRestart()) {
@@ -138,13 +171,15 @@ app.on('render-process-gone', (event, webContents, details) => {
 });
 
 /**
- * 未捕获异常处理
+ * 未捕获异常处理 - 只有在致命错误时才重启
  */
 process.on('uncaughtException', (error) => {
   log.error('未捕获的异常:', error);
 
-  if (app.isReady()) {
-    log.info('检测到未捕获异常，执行重启策略...');
+  // 只有在致命错误时才重启
+  if (isFatalError(error) && app.isReady()) {
+    isAppCrashed = true; // 标记应用崩溃
+    log.info('检测到致命异常，执行重启策略...');
 
     if (shouldAllowRestart()) {
       log.info('符合重启条件，正在重启应用...');
@@ -153,17 +188,22 @@ process.on('uncaughtException', (error) => {
       log.info('超出重启限制，应用将退出');
       app.exit(1);
     }
+  } else {
+    // 非致命错误，记录但不重启
+    log.warn('检测到非致命异常，无需重启应用:', error.message || error);
   }
 });
 
 /**
- * 未处理的Promise拒绝处理
+ * 未处理的Promise拒绝处理 - 只有在致命错误时才重启
  */
 process.on('unhandledRejection', (reason, promise) => {
   log.error('未处理的Promise拒绝:', reason);
 
-  if (app.isReady()) {
-    log.info('检测到未处理的Promise拒绝，执行重启策略...');
+  // 检查拒绝的原因是否为致命错误
+  if (reason instanceof Error && isFatalError(reason) && app.isReady()) {
+    isAppCrashed = true; // 标记应用崩溃
+    log.info('检测到致命Promise拒绝，执行重启策略...');
 
     if (shouldAllowRestart()) {
       log.info('符合重启条件，正在重启应用...');
@@ -172,5 +212,9 @@ process.on('unhandledRejection', (reason, promise) => {
       log.info('超出重启限制，应用将退出');
       app.exit(1);
     }
+  } else {
+    // 非致命的Promise拒绝，记录但不重启
+    const errorMessage = reason instanceof Error ? reason.message : String(reason);
+    log.warn('检测到非致命Promise拒绝，无需重启应用:', errorMessage);
   }
 });

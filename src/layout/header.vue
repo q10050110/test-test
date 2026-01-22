@@ -20,6 +20,7 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
       <span class="version">V{{ store.appInfo?.version }}</span>
       <a-button type="primary">检测更新</a-button>
     </div>
+    <div class="drag"></div>
     <div class="right">
       <div class="customer-service">
         <img src="@/assets/window/lianxikefu.png" alt="">
@@ -47,7 +48,6 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   padding: 0 30px 0 20px;
 
   .left {
-    flex: 1;
     display: flex;
     align-items: center;
 
@@ -61,11 +61,17 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
     }
   }
 
+  .drag {
+    flex: 1;
+    -webkit-app-region: drag;
+    min-height: 100%;
+    min-width: 0;
+  }
+
   .right {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    flex: 1;
 
     img {
       width: 20px;
@@ -80,11 +86,13 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
       &:hover {
         .qrcode {
           display: block;
+          opacity: 1;
         }
       }
 
       .qrcode {
         display: none;
+        opacity: 0;
         position: absolute;
         top: 20px;
         right: -50px;
@@ -94,6 +102,7 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         z-index: 999;
+        transition: all 0.3s;
 
         img {
           height: 100%;

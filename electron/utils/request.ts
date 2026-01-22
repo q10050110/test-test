@@ -10,14 +10,14 @@ const request = axios.create({
 request.interceptors.request.use(async config => {
   const token = operationStore.get('token')
   if (token) config.data.token = token
-  console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
+  // console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
   return config
 }, error => {
   return Promise.reject(error)
 })
 
 request.interceptors.response.use(response => {
-  console.log(`URL：${response.config.url},请求结果:${JSON.stringify(response.data)}`)
+  // console.log(`URL：${response.config.url},请求结果:${JSON.stringify(response.data)}`)
   const { code, message } = response.data
   if (code !== 0) {
     log.error(`URL：${response.config.url},失败原因：${message}`)

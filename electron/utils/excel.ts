@@ -1,12 +1,8 @@
 import ExcelJS from 'exceljs'
-import { promises as fsPromises } from 'fs'
+import { promises as fsPromises, constants } from 'fs'
 import { dirname, join } from 'path'
 import type { Workbook, Worksheet, Row, Font, Fill, Border, CellValue } from 'exceljs'
 import log from '../log/index.js'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
 
 export class ExcelWriter {
   private workbook!: Workbook
@@ -26,6 +22,30 @@ export class ExcelWriter {
   constructor(filePath: string, sheetName = 'Sheet1') {
     this.filePath = filePath
     this.sheetName = sheetName
+  }
+
+  /**
+   * 检查文件是否被其他进程占用
+   */
+  private async isFileInUse(filePath: string): Promise<boolean> {
+    try {
+      // 尝试以写入模式打开文件
+      const fileHandle = await fsPromises.open(filePath, 'r+');
+      await fileHandle.close();
+      return false; // 能够打开说明未被占用
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // 如果是 EBUSY 或 EPERM 错误，说明文件被占用
+      if (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EBADF') {
+        return true;
+      }
+      // 文件不存在不算被占用
+      if (err.code === 'ENOENT') {
+        return false;
+      }
+      // 其他错误也视为无法访问
+      return true;
+    }
   }
 
   /**
@@ -81,26 +101,42 @@ export class ExcelWriter {
   }
 
   /**
-     * 追加数据并立即保存到磁盘
-     * @param rows 要追加的数据行
-     */
-  async appendAndSave(rows: Array<Record<string, any>>): Promise<void> {
+   * 追加数据并立即保存到磁盘
+   * @param rows 要追加的数据行
+   * @returns 返回布尔值表示是否成功保存
+   */
+  async appendAndSave(rows: Array<Record<string, any>>): Promise<boolean> {
     await this.init()
 
-    this.memoryQueue = this.memoryQueue.then(async () => {
+    // 创建一个独立的 promise 来处理保存逻辑
+    const savePromise = this.memoryQueue.then(async () => {
       log.info(`内存追加 ${rows.length} 行数据并立即保存`)
+
+      // 检查文件是否被其他进程占用
+      const isInUse = await this.isFileInUse(this.filePath);
+      if (isInUse) {
+        log.warn(`文件 ${this.filePath} 被其他进程占用，无法保存`);
+        return false;
+      }
 
       for (const row of rows) {
         this.worksheet.addRow(row)
       }
 
       // 立即保存到磁盘
-      await this.flushToDisk()
-    })
+      const saveResult = await this.flushToDisk();
+      return saveResult;
+    });
 
-    return this.memoryQueue
+    // 等待当前队列完成并返回结果
+    try {
+      const result = await savePromise;
+      return result;
+    } catch (error) {
+      log.error(`保存Excel数据失败:`, error);
+      return false;
+    }
   }
-
 
   /**
    * 获取真实有效行数（不使用 rowCount）
@@ -116,13 +152,14 @@ export class ExcelWriter {
   /**
    * 安全写入磁盘
    * 只允许串行执行，避免并发损坏文件
+   * @returns 返回布尔值表示是否成功保存
    */
-  async flushToDisk(): Promise<void> {
+  async flushToDisk(): Promise<boolean> {
     await this.init()
 
     if (this.saving) {
       log.warn(`已有写盘任务进行中，跳过本次 flush`)
-      return
+      return false;
     }
 
     this.saving = true
@@ -131,83 +168,32 @@ export class ExcelWriter {
       const dir = dirname(this.filePath)
       await fsPromises.mkdir(dir, { recursive: true })
 
-
-      // 如果写入失败，尝试关闭占用文件的 Excel 进程
-      await this.writeFileWithProcessHandling(this.filePath)
-
-      log.info(`Excel 写入完成: ${this.filePath}`)
+      // 如果写入失败，检查是否被占用
+      const writeResult = await this.writeFileWithProcessHandling(this.filePath);
+      return writeResult;
     } finally {
       this.saving = false
     }
   }
 
   /**
-   * 尝试关闭占用 Excel 文件的进程并写入文件
+   * 尝试写入文件，如果被占用则返回false
    */
-  private async writeFileWithProcessHandling(filePath: string): Promise<void> {
+  private async writeFileWithProcessHandling(filePath: string): Promise<boolean> {
     try {
       // 尝试直接写入
       await this.workbook.xlsx.writeFile(filePath)
+      log.info(`Excel 写入完成: ${this.filePath}`)
+      return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'EBUSY' || (error as NodeJS.ErrnoException).code === 'EPERM') {
-        log.warn(`文件 ${filePath} 被占用，尝试关闭相关进程...`)
-
-        // 尝试关闭 Excel 进程
-        await this.closeExcelProcesses()
-
-        // 等待片刻再尝试写入
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        try {
-          await this.workbook.xlsx.writeFile(filePath)
-          log.info(`成功在关闭 Excel 进程后写入文件`)
-        } catch (finalError) {
-          log.error(`即使关闭 Excel 进程后仍无法写入文件:`, finalError)
-          throw finalError
-        }
+        log.warn(`文件 ${filePath} 被占用，无法写入`);
+        return false;
       } else {
-        // 其他错误直接抛出
-        throw error
+        // 其他错误记录并抛出
+        log.error(`写入Excel文件时发生错误:`, error);
+        throw error;
       }
-    }
-  }
-
-  /**
-   * 关闭与 Excel 相关的进程（Windows）
-   */
-  private async closeExcelProcesses(): Promise<void> {
-    try {
-      // 检测操作系统
-      if (process.platform === 'win32') {
-        // Windows 系统 - 结束 Excel 相关进程
-        const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq EXCEL.EXE"')
-        if (stdout.includes('EXCEL.EXE')) {
-          log.info('检测到 Excel 进程，正在关闭...')
-          await execAsync('taskkill /F /IM EXCEL.EXE')
-          log.info('Excel 进程已关闭')
-        } else {
-          log.info('未检测到 Excel 进程')
-        }
-      } else if (process.platform === 'darwin') {
-        // macOS 系统
-        const { stdout } = await execAsync('ps aux | grep -i excel | grep -v grep')
-        if (stdout.trim()) {
-          log.info('检测到 Excel 进程，正在关闭...')
-          await execAsync('pkill -f "Microsoft Excel"')
-          log.info('Excel 进程已关闭')
-        }
-      } else {
-        // Linux 系统
-        const { stdout } = await execAsync('ps aux | grep -i libreoffice | grep -v grep')
-        if (stdout.trim()) {
-          log.info('检测到 LibreOffice 进程，正在关闭...')
-          await execAsync('pkill -f libreoffice')
-          log.info('LibreOffice 进程已关闭')
-        }
-      }
-    } catch (error) {
-      log.warn(`关闭 Excel 进程时出错:`, error)
-      // 不抛出错误，因为这只是一个辅助功能
     }
   }
 
@@ -354,5 +340,22 @@ export class ExcelWriter {
 
     // 新建同名工作表
     this.worksheet = workbook.addWorksheet(sheetName);
+  }
+
+  /**
+   * 检查文件是否可写入
+   */
+  async checkFileStatus(): Promise<{ writable: boolean; inUse: boolean }> {
+    let inUse = false;
+    try {
+      inUse = await this.isFileInUse(this.filePath);
+    } catch (error) {
+      log.warn(`检查文件状态失败:`, error);
+    }
+
+    return {
+      writable: !inUse,
+      inUse
+    };
   }
 }

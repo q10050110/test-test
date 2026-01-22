@@ -12,7 +12,7 @@ export default {
   appId: "com.example.myapp",
 
   // 应用名称（安装包和桌面图标显示）
-  productName: "上品帮-自动化助手",
+  productName: "bang",
 
   // 输出目录
   directories: {
@@ -33,7 +33,6 @@ export default {
   win: {
     target: [
       "nsis",  // 使用 NSIS 制作安装程序
-      "zip"    // 生成 ZIP 压缩包
     ],
     icon: "build/icons/win/icon.ico", // Windows 图标
     legalTrademarks: "MyCompany",

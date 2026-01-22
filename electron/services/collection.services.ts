@@ -72,7 +72,7 @@ export class Collection {
   private timers: NodeJS.Timeout[] = [];
   tableFilePath: string = '';
   private pendingTasks: Promise<any>[] = [];
-
+  private processedIds: Set<string> = new Set();
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task };
     this.mainWindow = mainWindow;
@@ -291,6 +291,7 @@ export class Collection {
       // 提取新链接 - 从指定容器提取
       const newLinks = await this.extractLinks();
       const uniqueNewLinks = newLinks.filter(item => !this.collectedLinks.map(obj => obj.id).includes(item.id)).slice(0, targetCount - previousLength > 0 ? targetCount - previousLength : 0);
+
       if (uniqueNewLinks.length > 0) {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
         this.handleLink(uniqueNewLinks); // 不等待，继续执行
@@ -404,33 +405,39 @@ export class Collection {
   private async handleLink(links: any[]): Promise<void> {
     if (!links || links.length === 0) return;
     // 检查窗口是否存在且未被销毁
-    if (this.checkBrowserAlice()) return
-    const ids = links.map(item => item.id).filter(item => item);
-    if (ids.length === 0) return
+    if (this.checkBrowserAlice()) return;
+    // 过滤出未处理的链接
+    const unprocessedLinks = links.filter(item => item.id && !this.processedIds.has(item.id));
+
+    if (unprocessedLinks.length === 0) {
+      this.outputLog(`跳过 ${links.length} 个已处理的商品`);
+      return;
+    }
+
+    const ids = unprocessedLinks.map(item => item.id);
     const task = (async () => {
       this.processed += ids.length;
-      this.outputLog('获取商品数据中...');
+      this.outputLog(`获取 ${ids.length} 个商品数据中...`);
       try {
-        await Promise.all(links.map(async item => {
-          if (this.checkBrowserAlice()) return
+        await Promise.all(unprocessedLinks.map(async item => {
+          if (this.checkBrowserAlice()) return;
           try {
-            // 获取跟卖数据
             const response = await this.browserWindow!.webContents.executeJavaScript(`
-          fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
-          .then(response => response.json())
-          .then(data => ({ success: true, data: data }))
-      `);
-
+              fetch(${JSON.stringify(item.requestUrl)}, { credentials: 'include' })
+              .then(response => response.json())
+              .then(data => ({ success: true, data: data }))
+            `);
             if (response.success) {
               item.sellerNumber = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || "{}")?.sellers?.length || 0;
             } else {
               log.error('获取跟卖人数失败');
             }
           } catch (error) {
-            console.error('获取跟卖人数失败:', error);
+            log.error(`获取商品 ${item.id} 的跟卖人数失败:`, error);
           }
         }));
-        // 获取商品的数据后合并
+
+        // 获取商品详细数据
         const res = await request({
           url: '/api/goods/hotSales/getOzonSaleDataByIds',
           method: 'post',
@@ -438,53 +445,112 @@ export class Collection {
             goodsIds: ids,
             v: 5
           }
-        })
-        const dataSource = new Map();
-        const filterData = await this.filterData(res.data.map((item: any) => ({ ...item, ...item.data })) || [])
-        filterData.forEach((item: any) => {
-          const obj = links.find(link => link.id === item.goods_id)
-          if (obj) item = { ...obj, ...item }
-          dataSource.set(item.productId, item);
         });
-        const res2 = await request({
-          url: '/api/auto/filterGoods/goodsFilter',
-          method: 'post',
-          data: {
-            taskId: this.collectionTask._id,
-            reqDatas: filterData
-          }
-        })
-        if (res2 && res2.data) {
-          res2.data.forEach((item: any) => {
-            if (dataSource.has(item.id)) {
-              const data = dataSource.get(item.id);
-              dataSource.set(item.id, { ...data, ...item });
-            } else {
-              dataSource.set(item.id, item);
-            }
+
+        // 整合数据并应用过滤
+        const integratedData = await this.integrateAndFilterData(unprocessedLinks, res.data || []);
+
+        if (integratedData.length > 0) {
+          this.outputLog(`完成${integratedData.length}个商品的处理...`);
+          this.outputLog('表格写入中...');
+
+          // 标记这些ID为已处理
+          integratedData.forEach(item => {
+            this.processedIds.add(item.id);
           });
+
+          // 写入Excel
+          const res = await this.excel?.appendAndSave(integratedData);
+          console.log(res, '表格写入状态')
+          this.totalCount += integratedData.length;
+          this.collectionTask.tableFilePath = this.tableFilePath;
+          if (!res) return this.outputLog(`输出表格文件处于编辑状态中，写入失败...`)
+          this.outputLog(`表格写入完成，新增 ${integratedData.length} 条记录`);
+        } else {
+          this.outputLog(`经过过滤后无符合条件的商品`);
         }
-        // 过滤出符合条件的数据
-        const tabledData = filterData.map(item => ({
-          ...dataSource.get(item.id),
-          ...item,
-          createDate: dayjs(item.createDate).format('YYYY-MM-DD HH:mm:ss')
-        }))
-        log.info(tabledData, `${this.collectionTask.taskName}的表格数据`)
-        this.outputLog(`完成${ids.length}个商品的处理...`);
-        this.outputLog('表格写入中...');
-        this.excel?.appendAndSave(tabledData);
-        this.processed -= ids.length;
-        this.totalCount += tabledData.length;
-        this.collectionTask.tableFilePath = this.tableFilePath
-        this.outputLog('表格写入完成，已生成下载链接');
+
       } catch (error) {
+        log.error(`${this.collectionTask.taskName} 处理商品数据时出错:`, error);
+        this.outputLog(`部分商品处理失败: ${error || '未知错误'}`);
+      } finally {
         this.processed -= ids.length;
-        this.outputLog(`${ids.length}个商品处理失败...`);
-        log.error(error);
       }
     })();
+
     this.addPendingTask(task);
+  }
+
+  // 新增：整合和过滤数据的方法
+  private async integrateAndFilterData(links: any[], apiData: any[]): Promise<any[]> {
+    try {
+      // 将API数据转换为Map以便快速查找
+      const apiDataMap = new Map();
+      (apiData.map((item: any) => ({ ...item, ...item.data })) || []).forEach(item => {
+        if (item.goods_id) {
+          apiDataMap.set(item.goods_id, item);
+        }
+      });
+
+      // 整合链接数据和API数据
+      const integratedData = links.map(link => {
+        const apiItem = apiDataMap.get(link.id);
+        if (apiItem) {
+          return { ...link, ...apiItem, productId: link.id };
+        }
+        return { ...link, productId: link.id };
+      });
+
+      // 应用过滤条件
+      const filteredData = await this.filterData(integratedData);
+
+      // 进一步整合来自第二个API的数据
+      const finalIntegratedData = await this.integrateAdditionalData(filteredData);
+
+      // 格式化日期
+      return finalIntegratedData.map(item => ({
+        ...item,
+        createDate: dayjs(item.createDate).format('YYYY-MM-DD HH:mm:ss')
+      }));
+    } catch (error) {
+      log.error('整合数据时出错:', error);
+      return [];
+    }
+  }
+
+  // 新增：整合额外数据的方法
+  private async integrateAdditionalData(filteredData: any[]): Promise<any[]> {
+    try {
+      const res2 = await request({
+        url: '/api/auto/filterGoods/goodsFilter',
+        method: 'post',
+        data: {
+          taskId: this.collectionTask._id,
+          reqDatas: filteredData
+        }
+      });
+
+      if (res2 && res2.data) {
+        const additionalDataMap = new Map();
+        res2.data.forEach((item: any) => {
+          additionalDataMap.set(item.id, item);
+        });
+
+        // 合并数据
+        return filteredData.map(item => {
+          const additionalData = additionalDataMap.get(item.id);
+          if (additionalData) {
+            return { ...item, ...additionalData };
+          }
+          return item;
+        });
+      }
+
+      return filteredData;
+    } catch (error) {
+      log.error('获取额外数据时出错:', error);
+      return filteredData;
+    }
   }
 
   // 过滤数据
@@ -508,112 +574,112 @@ export class Collection {
       // 销量范围校验
       (item: any) => {
         const result = this.checkRange(item.soldCount, task.soldCountMin, task.soldCountMax);
-        log.info(`销量范围校验 - 商品ID: ${item._id}, 实际销量: ${item.soldCount}, 范围: [${task.soldCountMin}, ${task.soldCountMax}], 结果: ${result}`);
+        //log.info(`销量范围校验 - 商品ID: ${item._id}, 实际销量: ${item.soldCount}, 范围: [${task.soldCountMin}, ${task.soldCountMax}], 结果: ${result}`);
         return result;
       },
 
       // 月销售额范围校验
       (item: any) => {
         const result = this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax);
-        log.info(`月销售额范围校验 - 商品ID: ${item._id}, 实际销售额: ${item.gmvSum}, 范围: [${task.gmvSumMin}, ${task.gmvSumMax}], 结果: ${result}`);
+        //log.info(`月销售额范围校验 - 商品ID: ${item._id}, 实际销售额: ${item.gmvSum}, 范围: [${task.gmvSumMin}, ${task.gmvSumMax}], 结果: ${result}`);
         return result;
       },
 
       // 销售价格范围校验
       (item: any) => {
         const result = this.checkRange(item.price, task.salePriceMin, task.salePriceMax);
-        log.info(`销售价格范围校验 - 商品ID: ${item._id}, 实际价格: ${item.price}, 范围: [${task.salePriceMin}, ${task.salePriceMax}], 结果: ${result}`);
+        //log.info(`销售价格范围校验 - 商品ID: ${item._id}, 实际价格: ${item.price}, 范围: [${task.salePriceMin}, ${task.salePriceMax}], 结果: ${result}`);
         return result;
       },
 
       // 重量范围校验
       (item: any) => {
         const result = this.checkRange(item.weight, task.weightMin, task.weightMax);
-        log.info(`重量范围校验 - 商品ID: ${item._id}, 实际重量: ${item.weight}, 范围: [${task.weightMin}, ${task.weightMax}], 结果: ${result}`);
+        //log.info(`重量范围校验 - 商品ID: ${item._id}, 实际重量: ${item.weight}, 范围: [${task.weightMin}, ${task.weightMax}], 结果: ${result}`);
         return result;
       },
 
       // 上架时间范围校验
       (item: any) => {
         const result = this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax);
-        log.info(`上架时间范围校验 - 商品ID: ${item._id}, 实际天数: ${item.upTimeDays}, 范围: [${task.upGoodsTimeMin}, ${task.upGoodsTimeMax}], 结果: ${result}`);
+        // log.info(`上架时间范围校验 - 商品ID: ${item._id}, 实际天数: ${item.upTimeDays}, 范围: [${task.upGoodsTimeMin}, ${task.upGoodsTimeMax}], 结果: ${result}`);
         return result;
       },
 
       // 月销售动态范围校验
       (item: any) => {
         const result = this.checkRange(item.salesDynamics, task.monthDynamicsMin, task.monthDynamicsMax);
-        log.info(`月销售动态范围校验 - 商品ID: ${item._id}, 实际动态: ${item.salesDynamics}, 范围: [${task.monthDynamicsMin}, ${task.monthDynamicsMax}], 结果: ${result}`);
+        // log.info(`月销售动态范围校验 - 商品ID: ${item._id}, 实际动态: ${item.salesDynamics}, 范围: [${task.monthDynamicsMin}, ${task.monthDynamicsMax}], 结果: ${result}`);
         return result;
       },
 
       // 广告份额范围校验
       (item: any) => {
         const result = this.checkRange(item.drr, task.adFeeMin, task.adFeeMax);
-        log.info(`广告份额范围校验 - 商品ID: ${item._id}, 实际份额: ${item.drr}, 范围: [${task.adFeeMin}, ${task.adFeeMax}], 结果: ${result}`);
+        // log.info(`广告份额范围校验 - 商品ID: ${item._id}, 实际份额: ${item.drr}, 范围: [${task.adFeeMin}, ${task.adFeeMax}], 结果: ${result}`);
         return result;
       },
 
       // 参与促销天数范围校验
       (item: any) => {
         const result = this.checkRange(item.daysInPromo, task.promotionDayMin, task.promotionDayMax);
-        log.info(`参与促销天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysInPromo}, 范围: [${task.promotionDayMin}, ${task.promotionDayMax}], 结果: ${result}`);
+        // log.info(`参与促销天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysInPromo}, 范围: [${task.promotionDayMin}, ${task.promotionDayMax}], 结果: ${result}`);
         return result;
       },
 
       // 参与促销折扣范围校验
       (item: any) => {
         const result = this.checkRange(item.discount, task.promotionDiscountMin, task.promotionDiscountMax);
-        log.info(`参与促销折扣范围校验 - 商品ID: ${item._id}, 实际折扣: ${item.discount}, 范围: [${task.promotionDiscountMin}, ${task.promotionDiscountMax}], 结果: ${result}`);
+        // log.info(`参与促销折扣范围校验 - 商品ID: ${item._id}, 实际折扣: ${item.discount}, 范围: [${task.promotionDiscountMin}, ${task.promotionDiscountMax}], 结果: ${result}`);
         return result;
       },
 
       // 促销活动转化率范围校验
       (item: any) => {
         const result = this.checkRange(item.promoRevenueShare, task.promotionDynamicsMin, task.promotionDynamicsMax);
-        log.info(`促销活动转化率范围校验 - 商品ID: ${item._id}, 实际转化率: ${item.promoRevenueShare}, 范围: [${task.promotionDynamicsMin}, ${task.promotionDynamicsMax}], 结果: ${result}`);
+        // log.info(`促销活动转化率范围校验 - 商品ID: ${item._id}, 实际转化率: ${item.promoRevenueShare}, 范围: [${task.promotionDynamicsMin}, ${task.promotionDynamicsMax}], 结果: ${result}`);
         return result;
       },
 
       // 付费推广天数范围校验
       (item: any) => {
         const result = this.checkRange(item.daysWithTrafarets, task.promoteDayMin, task.promoteDayMax);
-        log.info(`付费推广天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysWithTrafarets}, 范围: [${task.promoteDayMin}, ${task.promoteDayMax}], 结果: ${result}`);
+        // log.info(`付费推广天数范围校验 - 商品ID: ${item._id}, 实际天数: ${item.daysWithTrafarets}, 范围: [${task.promoteDayMin}, ${task.promoteDayMax}], 结果: ${result}`);
         return result;
       },
 
       // 浏览量范围校验
       (item: any) => {
         const result = this.checkRange(item.sessionCount, task.viewsMin, task.viewsMax);
-        log.info(`浏览量范围校验 - 商品ID: ${item._id}, 实际浏览量: ${item.sessionCount}, 范围: [${task.viewsMin}, ${task.viewsMax}], 结果: ${result}`);
+        // log.info(`浏览量范围校验 - 商品ID: ${item._id}, 实际浏览量: ${item.sessionCount}, 范围: [${task.viewsMin}, ${task.viewsMax}], 结果: ${result}`);
         return result;
       },
 
       // 商品卡片加购率范围校验
       (item: any) => {
         const result = this.checkRange(item.convToCartPdp, task.cardRateMin, task.cardRateMax);
-        log.info(`商品卡片加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartPdp}, 范围: [${task.cardRateMin}, ${task.cardRateMax}], 结果: ${result}`);
+        // log.info(`商品卡片加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartPdp}, 范围: [${task.cardRateMin}, ${task.cardRateMax}], 结果: ${result}`);
         return result;
       },
 
       // 搜索和目录加购率范围校验
       (item: any) => {
         const result = this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax);
-        log.info(`搜索和目录加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartSearch}, 范围: [${task.showRateMin}, ${task.showRateMax}], 结果: ${result}`);
+        // log.info(`搜索和目录加购率范围校验 - 商品ID: ${item._id}, 实际加购率: ${item.convToCartSearch}, 范围: [${task.showRateMin}, ${task.showRateMax}], 结果: ${result}`);
         return result;
       },
 
       // 跟卖人数范围校验
       (item: any) => {
         const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax);
-        log.info(`跟卖人数范围校验 - 商品ID: ${item._id}, 实际人数: ${item.sellerNumber}, 范围: [${task.followMin}, ${task.followMax}], 结果: ${result}`);
+        // log.info(`跟卖人数范围校验 - 商品ID: ${item._id}, 实际人数: ${item.sellerNumber}, 范围: [${task.followMin}, ${task.followMax}], 结果: ${result}`);
         return result;
       },
 
       // 最小利润率校验
       (item: any) => {
         const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
-        log.info(`最小利润率校验 - 商品ID: ${item.goods}, 实际利润率: ${item.myProfitMargin}, 最低要求: ${task.targetProfitPercent}, 结果: ${result}`);
+        // log.info(`最小利润率校验 - 商品ID: ${item.goods}, 实际利润率: ${item.myProfitMargin}, 最低要求: ${task.targetProfitPercent}, 结果: ${result}`);
         return result;
       },
 
@@ -630,7 +696,7 @@ export class Collection {
             } */
     ];
 
-    log.info(`开始过滤数据，共 ${data.length} 条商品记录`);
+    // log.info(`开始过滤数据，共 ${data.length} 条商品记录`);
 
     // 应用所有过滤条件
     const filteredData = data.filter(item => {
@@ -638,13 +704,13 @@ export class Collection {
       const overallResult = results.every(r => r);
 
       if (!overallResult) {
-        log.info(`商品ID ${item._id} 未通过过滤，各规则结果: [${results.join(', ')}]`);
+        // log.info(`商品ID ${item._id} 未通过过滤，各规则结果: [${results.join(', ')}]`);
       }
 
       return overallResult;
     });
 
-    log.info(`数据过滤完成，原始数量: ${data.length}, 过滤后数量: ${filteredData.length}`);
+    // log.info(`数据过滤完成，原始数量: ${data.length}, 过滤后数量: ${filteredData.length}`);
 
     return filteredData;
   }

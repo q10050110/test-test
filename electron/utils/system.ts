@@ -114,11 +114,14 @@ export class SysTemUtils {
         type: 'question',
         title,
         message,
-        buttons: ['确定', '取消']
+        buttons: ['确定', '取消'],
+        defaultId: 0, // 默认选中第一个按钮
+        cancelId: 1   // 点击 ESC 或关闭按钮时，相当于点击第二个按钮
       })
+
+      // 返回 true 表示点击了"确定"，false 表示点击了"取消"或关闭按钮
       return result.response === 0
     },
-
     /**
      * 选择文件
      */

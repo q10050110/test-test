@@ -8,7 +8,7 @@ export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
   private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 1;
+  private maxConcurrentTasks = 5;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
   private constructor() { }
@@ -105,6 +105,8 @@ export class TaskManager {
       if (this.activeTasks.size < this.maxConcurrentTasks) {
         this.executeTask(taskId);
       } else {
+        task.updateStatus('pending')
+        task.outputLog('pending')
         this.taskQueue.push(taskId);
       }
       resolve(true);
@@ -257,13 +259,12 @@ export class TaskManager {
           this.executeTask(taskId);
         } else {
           if (this.taskQueue.includes(taskId)) return
-          task.updateStatus('pending');
+          task.updateStatus('pending')
           task.outputLog('pending')
           this.taskQueue.push(taskId);
         }
         resolve(true);
       } else {
-        console.log(taskInfo.taskStatus)
         reject('任务状态不允许重新执行');
       }
       resolve(true)
@@ -300,6 +301,7 @@ export class TaskManager {
         }
 
         try {
+          await fs.access(task.tableFilePath)
           await fs.unlink(task.tableFilePath)
         } catch (error) {
           log.error('删除任务文件失败', error)
@@ -357,6 +359,7 @@ export class TaskManager {
         }
 
         try {
+          await fs.access(task.tableFilePath)
           await fs.unlink(task.tableFilePath)
         } catch (error) {
           log.error('删除任务文件失败', error)

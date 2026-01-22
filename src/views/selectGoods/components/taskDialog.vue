@@ -67,7 +67,15 @@ const rules: Record<string, Rule[]> = {
   taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
   targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
   sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
-  targetCount: [{ required: true, message: '请输入目标数量', trigger: ['change', 'blur'] }],
+  targetCount: [{ required: true, message: '请输入目标数量', trigger: ['change', 'blur'] }, {
+    validator: (_, value) => {
+      if (value <= 0) {
+        return Promise.reject('请输入大于0的数字');
+      }
+      return Promise.resolve();
+    },
+    trigger: ['change', 'blur']
+  }],
   targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
 }
 const openDialog = () => open.value = true
