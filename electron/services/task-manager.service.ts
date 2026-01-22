@@ -218,7 +218,7 @@ export class TaskManager {
 
         // 如果任务在执行中，调用取消方法
         if (this.activeTasks.has(taskId)) {
-          task.cancel();
+          await task.cancel();
           this.activeTasks.delete(taskId);
         } else {
           // 如果任务不在执行中，直接更新状态
