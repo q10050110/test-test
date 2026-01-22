@@ -1,6 +1,6 @@
 import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
-import { join, dirname } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'fs'
+import { join, dirname, basename } from 'path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
 
 /**
  * Electron 系统级能力封装
@@ -28,6 +28,243 @@ export class SysTemUtils {
       platform: process.platform,
       arch: process.arch,
       versions: process.versions
+    }
+  }
+
+  /**
+   * 获取日志目录路径
+   */
+  static getLogDirectory(): string {
+    try {
+      const installDir = dirname(process.execPath);
+      return join(installDir, 'logs');
+    } catch (error) {
+      console.error('获取日志目录失败:', error);
+      return '';
+    }
+  }
+
+  /**
+   * 导出日志功能
+   */
+  static logOperations = {
+    /**
+     * 获取所有日志文件列表
+     */
+    getLogFiles: (): string[] => {
+      try {
+        const logDir = SysTemUtils.getLogDirectory();
+        if (!logDir || !existsSync(logDir)) {
+          return [];
+        }
+
+        const files = readdirSync(logDir);
+        // 过滤出日志文件（匹配 YYYY-MM-DD.log 格式）
+        return files
+          .filter(file => /^\d{4}-\d{2}-\d{2}\.log$/.test(file))
+          .map(file => join(logDir, file))
+          .sort((a, b) => basename(b).localeCompare(basename(a))); // 按日期降序排列
+      } catch (error) {
+        console.error('获取日志文件列表失败:', error);
+        return [];
+      }
+    },
+
+    /**
+     * 获取日志文件大小
+     */
+    getLogFileSizes: (): { filePath: string; size: number; sizeFormatted: string }[] => {
+      const logFiles = SysTemUtils.logOperations.getLogFiles();
+      return logFiles.map(filePath => {
+        try {
+          const stats = statSync(filePath);
+          const size = stats.size;
+          const sizeFormatted = SysTemUtils.logOperations.formatFileSize(size);
+          return { filePath, size, sizeFormatted };
+        } catch (error) {
+          return { filePath, size: 0, sizeFormatted: '0 B' };
+        }
+      });
+    },
+
+    /**
+     * 格式化文件大小
+     */
+    formatFileSize: (bytes: number): string => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+
+    /**
+     * 导出单个日志文件
+     */
+    exportSingleLog: async (sourcePath: string, targetPath?: string): Promise<boolean> => {
+      try {
+        if (!existsSync(sourcePath)) {
+          console.error('源日志文件不存在:', sourcePath);
+          return false;
+        }
+
+        // 如果没有指定目标路径，则让用户选择
+        if (!targetPath) {
+          const fileName = basename(sourcePath);
+          targetPath = await SysTemUtils.dialogOperations.selectSavePath({
+            title: '导出日志文件',
+            defaultPath: fileName,
+            filters: [
+              { name: '日志文件', extensions: ['log'] },
+              { name: '所有文件', extensions: ['*'] }
+            ]
+          });
+
+          if (!targetPath) {
+            console.log('用户取消了日志导出');
+            return false;
+          }
+        }
+
+        // 复制文件
+        copyFileSync(sourcePath, targetPath);
+        console.log(`日志文件已导出至: ${targetPath}`);
+        return true;
+      } catch (error) {
+        console.error('导出单个日志文件失败:', error);
+        return false;
+      }
+    },
+
+    /**
+     * 导出所有日志文件
+     */
+    exportAllLogs: async (targetDir?: string): Promise<boolean> => {
+      try {
+        const logFiles = SysTemUtils.logOperations.getLogFiles();
+        if (logFiles.length === 0) {
+          console.log('没有找到日志文件');
+          return false;
+        }
+
+        // 如果没有指定目标目录，则让用户选择
+        if (!targetDir) {
+          const selectedDir = await dialog.showOpenDialog({
+            properties: ['openDirectory'],
+            title: '选择导出目录'
+          });
+
+          if (selectedDir.canceled || !selectedDir.filePaths[0]) {
+            console.log('用户取消了日志导出');
+            return false;
+          }
+
+          targetDir = selectedDir.filePaths[0];
+        }
+
+        // 创建日志导出子目录
+        const exportDir = join(targetDir, `logs_export_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`);
+        if (!existsSync(exportDir)) {
+          mkdirSync(exportDir, { recursive: true });
+        }
+
+        // 复制所有日志文件
+        let successCount = 0;
+        for (const logFile of logFiles) {
+          try {
+            const fileName = basename(logFile);
+            const targetPath = join(exportDir, fileName);
+            copyFileSync(logFile, targetPath);
+            successCount++;
+          } catch (error) {
+            console.error(`复制日志文件失败 ${logFile}:`, error);
+          }
+        }
+
+        console.log(`成功导出 ${successCount}/${logFiles.length} 个日志文件到: ${exportDir}`);
+        return successCount > 0;
+      } catch (error) {
+        console.error('导出所有日志文件失败:', error);
+        return false;
+      }
+    },
+
+    /**
+     * 导出最近N天的日志
+     */
+    exportRecentLogs: async (days: number, targetDir?: string): Promise<boolean> => {
+      try {
+        const allLogFiles = SysTemUtils.logOperations.getLogFiles();
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+
+        const recentLogFiles = allLogFiles.filter(filePath => {
+          const fileName = basename(filePath);
+          const dateStr = fileName.split('.')[0]; // 移除 .log 后缀
+          const fileDate = new Date(dateStr);
+          return fileDate >= cutoffDate;
+        });
+
+        if (recentLogFiles.length === 0) {
+          console.log(`最近 ${days} 天内没有找到日志文件`);
+          return false;
+        }
+
+        // 如果没有指定目标目录，则让用户选择
+        if (!targetDir) {
+          const selectedDir = await dialog.showOpenDialog({
+            properties: ['openDirectory'],
+            title: `导出最近 ${days} 天的日志`
+          });
+
+          if (selectedDir.canceled || !selectedDir.filePaths[0]) {
+            console.log('用户取消了日志导出');
+            return false;
+          }
+
+          targetDir = selectedDir.filePaths[0];
+        }
+
+        // 创建日志导出子目录
+        const exportDir = join(targetDir, `recent_logs_export_${days}_days_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`);
+        if (!existsSync(exportDir)) {
+          mkdirSync(exportDir, { recursive: true });
+        }
+
+        // 复制最近的日志文件
+        let successCount = 0;
+        for (const logFile of recentLogFiles) {
+          try {
+            const fileName = basename(logFile);
+            const targetPath = join(exportDir, fileName);
+            copyFileSync(logFile, targetPath);
+            successCount++;
+          } catch (error) {
+            console.error(`复制日志文件失败 ${logFile}:`, error);
+          }
+        }
+
+        console.log(`成功导出最近 ${days} 天的 ${successCount}/${recentLogFiles.length} 个日志文件到: ${exportDir}`);
+        return successCount > 0;
+      } catch (error) {
+        console.error(`导出最近 ${days} 天的日志失败:`, error);
+        return false;
+      }
+    },
+
+    /**
+     * 读取日志文件内容
+     */
+    readLogContent: (filePath: string): string | null => {
+      try {
+        if (!existsSync(filePath)) {
+          return null;
+        }
+        return readFileSync(filePath, 'utf-8');
+      } catch (error) {
+        console.error('读取日志文件失败:', error);
+        return null;
+      }
     }
   }
 
@@ -381,5 +618,5 @@ export class SysTemUtils {
     unmaximize: (win: BrowserWindow) => {
       win.unmaximize()
     },
-  };
+  }
 }

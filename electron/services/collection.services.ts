@@ -199,17 +199,25 @@ export class Collection {
       this.browserWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        show: false, // 先隐藏，避免界面闪烁
+        show: true, // 先隐藏，避免界面闪烁
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
         },
       });
+      const timeoutId = setTimeout(() => {
+        reject(new Error('页面加载超时'));
+        if (this.browserWindow) {
+          this.browserWindow.close();
+          this.browserWindow = null
+        }
+      }, 100000);
 
       // 监听页面加载完成事件
       this.browserWindow.webContents.once('dom-ready', async () => {
         log.info('页面 DOM 已准备就绪');
+        clearTimeout(timeoutId)
         try {
           await this.parsePageData();
           resolve();

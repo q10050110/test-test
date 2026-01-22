@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { createWindow } from './windows/main.window.js'
 import log, { initLogger } from './log/index.js'
 import { CloseProcessService } from './services/closeProcess.services.js'
-
+import { globalBroadcast } from './ipc/broadcast.js'
 // 重启相关常量
 const RESTART_COUNT_KEY = 'restart-count'
 const MAX_RESTART_COUNT = 3
@@ -145,8 +145,13 @@ app.on('window-all-closed', () => {
 /**
  * 应用退出前的清理工作
  */
-app.on('before-quit', () => {
-  new CloseProcessService().run();
+app.on('before-quit', async () => {
+  try {
+    globalBroadcast.broadcast('app-ready-quit', '退出清理等待')
+    await new CloseProcessService().run();
+  } finally {
+    app.exit(0)
+  }
   log.info('应用即将退出');
 });
 

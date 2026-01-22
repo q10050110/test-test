@@ -231,11 +231,21 @@ onUnmounted(() => {
                 @click="startTask(record as Task)">开始</a-button>
               <a-button type="link" v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
                 :icon="h(PauseCircleFilled)" @click="cancelTask(record._id)">终止</a-button>
-              <a-button type="link" :icon="h(EditOutlined)" @click="openTaskDialogHandle(record as Task)"
-                :disabled="record.taskStatus === 'running'">编辑</a-button>
+              <a-tooltip placement="topRight">
+                <template #title>
+                  <span>任务执行中不允许编辑</span>
+                </template>
+                <a-button type="link" :icon="h(EditOutlined)" @click="openTaskDialogHandle(record as Task)"
+                  :disabled="record.taskStatus === 'running'">编辑</a-button>
+              </a-tooltip>
               <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)">复制</a-button>
-              <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
-                @click="exportHandle(record?._id)">导出</a-button>
+              <a-tooltip placement="topRight">
+                <template #title>
+                  <span>导出符合条件的商品表格</span>
+                </template>
+                <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
+                  @click="exportHandle(record?._id)">导出</a-button>
+              </a-tooltip>
             </template>
           </template>
         </a-table>

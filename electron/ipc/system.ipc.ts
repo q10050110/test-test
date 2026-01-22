@@ -23,4 +23,8 @@ export const windowIpc = (win: BrowserWindow) => {
   ipcMain.handle('app', (event, data: any) => {
     return SysTemUtils.getAppInfo()
   })
+
+  ipcMain.handle('export-all-logs', async () => {
+    return await SysTemUtils.logOperations.exportAllLogs();
+  });
 }

@@ -3,21 +3,25 @@ import request from '../utils/request.js'
 export class CloseProcessService {
 
   // 关闭应用时将所有在执行等待执行的任务状态变更为取消
-  private closeTask() {
-    const taskList = TaskManager.getInstance().getAllTasksList()
-    taskList.filter(item => item.taskStatus === 'running' || item.taskStatus === 'pending').forEach(item => {
-      request({
-        url: '/api/auto/autoTask/updateStatus',
-        method: 'post',
-        data: {
-          taskId: item._id,
-          taskStatus: 'cancelled',
-        },
-      });
+  private async closeTask() {
+    const { list } = await TaskManager.getInstance().getAllTasks({ pageNo: 1, pageSize: 10000000 })
+    list.filter((item: any) => item.taskStatus !== 'noExecuted').forEach(async (item: any) => {
+      try {
+        await request({
+          url: '/api/auto/autoTask/updateStatus',
+          method: 'post',
+          data: {
+            taskId: item._id,
+            taskStatus: 'noExecuted',
+          },
+        });
+      } catch (error) {
+
+      }
     })
   }
 
-  run() {
-    this.closeTask()
+  async run() {
+    await this.closeTask()
   }
 }

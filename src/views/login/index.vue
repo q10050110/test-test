@@ -87,33 +87,35 @@ const operationHandle = (type: 'hide' | 'close') => {
 
       <!-- 右侧登录表单 -->
       <div class="login-right">
-        <div class="logo-container">
-          <img src="@/assets/login/logo.png" alt="Logo" class="logo" />
-        </div>
+        <div class="no-darg">
+          <div class="logo-container">
+            <img src="@/assets/login/logo.png" alt="Logo" class="logo" />
+          </div>
 
-        <div class="welcome-text">
-          欢迎使用<span class="link">上品帮自动化助手</span>
-        </div>
+          <div class="welcome-text">
+            欢迎使用<span class="link">上品帮自动化助手</span>
+          </div>
 
-        <a-form :model="formData" ref="formRef" :rules="rules">
-          <a-form-item name="phone">
-            <a-input v-model:value="formData.phone" @pressEnter="loginHandle" placeholder="请输入手机号"></a-input>
-          </a-form-item>
-          <a-form-item name="pwd">
-            <a-input v-model:value="formData.pwd" @pressEnter="loginHandle" placeholder="请输入密码"
-              type="password"></a-input>
-          </a-form-item>
-          <a-form-item>
-            <a-checkbox v-model:checked="rememberPassword" @change="changeHandle">记住密码</a-checkbox>
-          </a-form-item>
-          <a-form-item>
-            <a-button type="primary" block style="height:40px" @click="loginHandle" :loading="loading">立即登录</a-button>
-          </a-form-item>
-        </a-form>
+          <a-form :model="formData" ref="formRef" :rules="rules">
+            <a-form-item name="phone">
+              <a-input v-model:value="formData.phone" @pressEnter="loginHandle" placeholder="请输入手机号"></a-input>
+            </a-form-item>
+            <a-form-item name="pwd">
+              <a-input v-model:value="formData.pwd" @pressEnter="loginHandle" placeholder="请输入密码"
+                type="password"></a-input>
+            </a-form-item>
+            <a-form-item>
+              <a-checkbox v-model:checked="rememberPassword" @change="changeHandle">记住密码</a-checkbox>
+            </a-form-item>
+            <a-form-item>
+              <a-button type="primary" block style="height:40px" @click="loginHandle" :loading="loading">立即登录</a-button>
+            </a-form-item>
+          </a-form>
 
-        <div class="other-actions">
-          <div @click.prevent="accountHandle('register')">没有帐号？去<span class="link">注册</span></div>
-          <div @click.prevent="accountHandle('resetPassword')" class="link">忘记密码？</div>
+          <div class="other-actions">
+            <div @click.prevent="accountHandle('register')">没有帐号？去<span class="link">注册</span></div>
+            <div @click.prevent="accountHandle('resetPassword')" class="link">忘记密码？</div>
+          </div>
         </div>
       </div>
     </div>
@@ -131,12 +133,14 @@ const operationHandle = (type: 'hide' | 'close') => {
   align-items: center;
   min-height: 100vh;
   position: relative;
+  -webkit-app-region: drag;
 
   .operation {
     position: absolute;
     top: 0;
     right: 0;
     padding: 20px;
+    -webkit-app-region: no-drag;
 
     img:last-child {
       margin-left: 15px;
@@ -260,5 +264,9 @@ const operationHandle = (type: 'hide' | 'close') => {
 
   }
 
+}
+
+.no-darg {
+  -webkit-app-region: no-drag;
 }
 </style>

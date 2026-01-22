@@ -54,25 +54,37 @@ const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
   }
 }
 
+// 导出日志
+const downloadLog = () => {
+  window.electronAPI.invoke('export-all-logs', '')
+}
+
 defineExpose({
   writeLog
 })
 </script>
 
 <template>
-  <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
-    <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
-      <div class="log-container" :ref="el => setLogRef(el as HTMLElement, item._id as string)">
-        <div v-for="(log, i) in item.log" :key="i" class="log-item">
-          {{ log.date }}
-          <DesktopOutlined />
-          {{ log.taskLog }}
+  <div class="container">
+    <div class="log">
+      <a-button type="link" @click="downloadLog">
+        导出任务日志
+      </a-button>
+    </div>
+    <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
+      <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
+        <div class="log-container" :ref="el => setLogRef(el as HTMLElement, item._id as string)">
+          <div v-for="(log, i) in item.log" :key="i" class="log-item">
+            {{ log.date }}
+            <DesktopOutlined />
+            {{ log.taskLog }}
+          </div>
         </div>
-      </div>
-    </a-tab-pane>
-  </a-tabs>
-  <div v-else>
-    当前没有在执行的任务
+      </a-tab-pane>
+    </a-tabs>
+    <div v-else>
+      当前没有在执行的任务
+    </div>
   </div>
 </template>
 
@@ -80,5 +92,13 @@ defineExpose({
 .log-container {
   height: 120px;
   overflow-y: auto;
+}
+
+.container {
+  .log {
+    text-align: right;
+    color: #1677ff;
+    cursor: pointer;
+  }
 }
 </style>

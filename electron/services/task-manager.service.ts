@@ -393,4 +393,43 @@ export class TaskManager {
       this.processNextTask()
     }
   }
+
+  /**
+ * 终止所有任务（切换登录时调用）
+ */
+  async stopAllTasks(): Promise<void> {
+    log.info('开始停止所有任务...');
+
+    // 收集所有需要处理的任务ID
+    const allTaskIds = Array.from(this.tasks.keys());
+
+    // 首先清空任务队列
+    this.taskQueue = [];
+
+    // 取消所有活跃任务
+    for (const taskId of [...this.activeTasks]) { // 使用副本避免迭代时修改
+      try {
+        await this.cancelTask(taskId);
+      } catch (error) {
+        log.error(`取消活跃任务 ${taskId} 失败:`, error);
+      }
+    }
+
+    // 更新所有其他任务的状态为已取消
+    for (const taskId of allTaskIds) {
+      if (!this.activeTasks.has(taskId)) { // 不是活跃任务
+        const task = this.tasks.get(taskId);
+        if (task && task.getStatus() !== 'cancelled' && task.getStatus() !== 'completed') {
+          task.updateStatus('cancelled');
+          task.outputLog('用户切换登录，任务被取消');
+
+          // 通知前端状态变更
+          this.notifyTaskUpdate(taskId, 'cancelled');
+        }
+      }
+    }
+
+
+    log.info('所有任务已停止');
+  }
 }

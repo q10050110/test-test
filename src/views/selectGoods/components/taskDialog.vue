@@ -90,7 +90,7 @@ const cancelHandle = () => {
 
 const saveHandle = async (type: 'save' | 'execute') => {
   await formRef.value?.validate()
-  if (formData.value.myProfitPercent! + formData.value.elsePercent! > 100) return feedback.error('利润率与其他费用加起来不能大于100')
+  if (+(formData.value.myProfitPercent || 0) + +(formData.value.elsePercent || 0) > 100) return feedback.error('利润率与其他费用加起来不能大于100啦啦啦啦')
   const data = toRaw(formData.value)
   if (data.progress) data.progress = toRaw(data.progress)
   const { code, message } = type === 'execute' ? await window.electronAPI.invoke('collection-create-and-start', { data, type }) : await window.electronAPI.invoke('collection-create', { data: data, type })
@@ -145,7 +145,7 @@ defineExpose({
         <a-row>
           <a-col :span="12">
             <a-form-item label="我的利润率" name="myProfitPercent">
-              <a-input placeholder="请输入利润率" v-model:value="formData.myProfitPercent" type="number" />
+              <a-input placeholder="请输入利润率" v-model:value="formData.myProfitPercent" type="number" addon-after="%" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -165,7 +165,7 @@ defineExpose({
           </a-col>
           <a-col :span="12">
             <a-form-item label="其他（提现、货损等）" name="elsePercent">
-              <a-input placeholder="请输入其他费用" v-model:value="formData.elsePercent" type="number" />
+              <a-input placeholder="请输入其他费用" v-model:value="formData.elsePercent" type="number" addon-after="%" />
             </a-form-item>
           </a-col>
         </a-row>
