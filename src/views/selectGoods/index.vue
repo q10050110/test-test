@@ -55,22 +55,23 @@ const taskStatusList = ref([
 // 表格数据&配置
 const tableData = ref<Task[]>()
 const total = ref(0)
-const columns = ref<TableColumnsType>([{
+const columns = ref<TableColumnsType<Task>>([{
   title: '任务名称',
   dataIndex: 'taskName',
   key: 'taskName',
-  width: 300
+  width: 250
 },
 {
   title: '任务状态',
   dataIndex: 'status',
   key: 'status',
-  width: 200
+  width: 150
 },
 {
   title: '进度详情',
   dataIndex: 'progress',
-  key: 'progress'
+  key: 'progress',
+  width: 240
 }, {
   title: '操作',
   dataIndex: 'action',
@@ -107,12 +108,23 @@ const openTaskDialogHandle = async (data?: Task) => {
   dialogRef.value?.openDialog()
 }
 
+
 // 开始任务
 const startTask = async (task: Task) => {
   const { code, message } = task.taskStatus === 'noExecuted' ? await window.electronAPI.invoke('collection-start-task', task._id) : await window.electronAPI.invoke('collection-re-execute-task', task._id)
   if (code === 200) return feedback.success('执行任务成功')
   feedback.error(message)
 }
+// 批量开始任务
+const batchStartHandle = async () => {
+  selectData.value?.forEach(async item => {
+    const task = tableData.value?.find(task => task._id === item)
+    if (!task) return
+    startTask(task)
+    await new Promise(resolve => { setTimeout(resolve, 1000) })
+  })
+}
+
 // 复制任务
 const copyHandle = async (task: Task) => {
   const newTask = JSON.parse(JSON.stringify(task))
@@ -191,21 +203,17 @@ onUnmounted(() => {
       <a-form-item>
         <a-button type="primary" @click="getTaskList(false, true)">查询</a-button>
         <a-button type="primary" style="margin: 0 10px;" @click="openTaskDialogHandle()">新建任务</a-button>
+        <a-button type="primary" style="margin: 0 10px;" @click="batchStartHandle">批量开始</a-button>
         <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
       </a-form-item>
-      <a-form-item>
-        <ExclamationCircleTwoTone style="margin-right: 2px;font-size: 20px;vertical-align: middle;"
-          :twoToneColor="['#ffffff', '#d9d9d9']" />
-        <span style="color:#bab6b9;">任务运行中请勿关闭内置浏览器和软件，关闭任务将全部终止</span>
-      </a-form-item>
     </a-form>
-    <a-row class="table-wrapper">
+    <a-row style="margin-top: 20px;" class="table">
       <a-col :span="24">
-        <a-table style="max-height: 600px; overflow-y: auto;" :dataSource="tableData" :columns="columns"
-          :row-selection="rowSelection" :pagination="false" rowKey="_id">
+        <a-table :dataSource="tableData" :columns="columns" :row-selection="rowSelection" :pagination="false"
+          rowKey="_id">
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
-              <div style="font-weight: bold; color: #000">
+              <div style="font-weight: bold; color: #000;width: 250px;" class="ellipsis-2">
                 {{ record.taskName }}
               </div>
               <div>
@@ -251,7 +259,7 @@ onUnmounted(() => {
         </a-table>
       </a-col>
     </a-row>
-    <a-row style="justify-content: flex-end;margin-bottom: 10px;">
+    <a-row class="pagination">
       <a-pagination v-model:current="params.pageNo" :defaultPageSize="params.pageSize" :total="total" show-less-items
         :show-total="total => `每页1条 共${total}条记录`" :showSizeChanger="false" @change="pageChange" />
     </a-row>
@@ -268,18 +276,28 @@ onUnmounted(() => {
 .select-goods-page {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 
-  .table-wrapper {
-    margin: 10px 0;
+  .table {
     flex: 1;
+    overflow: hidden;
+    overflow-y: auto;
+  }
+
+  .pagination {
+    height: 60px;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 10px;
+    z-index: 9999;
   }
 
   .tabs {
     margin-top: auto;
     padding: 10px 20px;
     background-color: #fff;
-    height: 200px;
+    height: 160px;
   }
 }
 </style>

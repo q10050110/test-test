@@ -11,6 +11,11 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value
   window.electronAPI.sendMessage('window', type)
 }
+
+// 导出日志
+const downloadLog = () => {
+  window.electronAPI.invoke('export-all-logs', '')
+}
 </script>
 
 <template>
@@ -22,6 +27,9 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
     </div>
     <div class="drag"></div>
     <div class="right">
+      <div class="log">
+        <a-button type="link" @click="downloadLog">导出日志</a-button>
+      </div>
       <div class="customer-service">
         <img src="@/assets/window/lianxikefu.png" alt="">
         联系客服

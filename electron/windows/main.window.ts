@@ -117,6 +117,25 @@ export const createWindow = () => {
     })
   }
 
+  mainWindow.webContents.session.on(
+    'will-download',
+    (event, item, webContents) => {
+      // 用户最终选择的保存路径
+      const savePath = item.getSavePath()
+
+      item.on('updated', () => {
+        const savePath = item.getSavePath()
+        if (savePath) {
+          log.info('用户保存路径：', savePath)
+        }
+      })
+
+      item.once('done', (event, state) => {
+        log.info(`下载完成：${state}`, savePath)
+      })
+    }
+  )
+
   mainWindow.on('closed', () => {
     log.info('主窗口已关闭')
     mainWindow = null

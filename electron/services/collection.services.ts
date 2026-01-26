@@ -1,13 +1,13 @@
 import request from '../utils/request.js';
 import dayjs from 'dayjs';
-import { join } from 'path';
-import { BrowserWindow } from 'electron';
+import path, { join } from 'path';
+import { BrowserWindow, session } from 'electron';
 import * as cheerio from 'cheerio';
 import log from '../log/index.js';
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 import { ExcelWriter } from '../utils/excel.js';
 import { SysTemUtils } from '../utils/system.js';
-
+import { fileURLToPath } from 'url'
 export interface Task {
   _id: string;
   taskStatus: TaskStatus;
@@ -61,6 +61,8 @@ export interface Task {
 }
 
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 export class Collection {
   private collectionTask: Task;
@@ -78,7 +80,7 @@ export class Collection {
   // 新增：任务队列和并发控制
   private taskQueue: any[] = [];
   private isProcessingQueue = false;
-  private maxConcurrentTasks = 3; // 控制并发处理数量
+  private maxConcurrentTasks = 1; // 控制并发处理数量
   private activeProcessors: number = 0;
 
   // 新增：任务状态标志
@@ -199,11 +201,17 @@ export class Collection {
       this.browserWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        show: true, // 先隐藏，避免界面闪烁
+        show: true,
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
+          session: session.fromPartition(
+            `persist:collect-${Date.now()}`, // 每次独立
+            {
+              cache: false, // 采集不需要缓存，避免脏数据
+            }
+          )
         },
       });
       const timeoutId = setTimeout(() => {
@@ -294,6 +302,7 @@ export class Collection {
     // 获取初始链接
     const initialLinks = (await this.extractLinks())?.slice(0, targetCount) || [];
     this.collectedLinks = [...initialLinks];
+    this.processed = this.processed + (this.collectedLinks.length - this.processed)
     if (initialLinks.length) {
       // 将初始链接加入队列而不是直接处理
       this.addToTaskQueue(initialLinks);
@@ -328,6 +337,7 @@ export class Collection {
 
       if (uniqueNewLinks.length > 0) {
         this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
+        this.processed = this.processed + (this.collectedLinks.length - this.processed)
         // 将新链接加入队列而不是直接处理
         this.addToTaskQueue(uniqueNewLinks);
       }
@@ -347,6 +357,7 @@ export class Collection {
     }
     // 启动队列处理器
     await this.startQueueProcessor();
+    this.processed = this.processed + (this.collectedLinks.length - this.processed)
     this.outputLog(`收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
     this.collectedLinks = this.collectedLinks.slice(0, targetCount);
     return this.collectedLinks;
@@ -367,7 +378,7 @@ export class Collection {
     this.isProcessingQueue = true;
     // 启动并发任务处理器
     const processors = [];
-    const concurrentCount = Math.min(this.maxConcurrentTasks, 5); // 最多5个并发处理器
+    const concurrentCount = Math.min(this.maxConcurrentTasks, 1); // 最多5个并发处理器
     for (let i = 0; i < concurrentCount; i++) {
       processors.push(this.processQueue());
     }
@@ -403,7 +414,7 @@ export class Collection {
         }
       }
       // 短暂延迟，避免过度占用CPU
-      await this.delay(100);
+      await this.delay(1000);
     }
   }
 
@@ -418,8 +429,8 @@ export class Collection {
       this.outputLog(`跳过已处理的商品 ${link.id}`);
       return;
     }
-    this.processed++;
     this.outputLog(`获取商品数据中... ID: ${link.id}`);
+    await this.get1688Data(link)
     try {
       // 获取跟卖人数
       if (this.browserWindow && !this.browserWindow.isDestroyed()) {
@@ -553,7 +564,6 @@ export class Collection {
         const link = `https://www.ozon.ru/product/${id}`;
         const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '');
         const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
-        const sourcePrice = 0;
         const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
         const name = $(element).parent().find('a').children('div').children('span').text();
         const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1);
@@ -563,7 +573,6 @@ export class Collection {
           linksParent.push({
             href,
             price: Number(price),
-            sourcePrice: Number(sourcePrice),
             oPrice,
             discount,
             link,
@@ -573,7 +582,7 @@ export class Collection {
             rating,
             sku: id,
             requestUrl,
-            reviewCount
+            reviewCount,
           });
         }
       });
@@ -582,6 +591,174 @@ export class Collection {
       log.error(`${this.collectionTask.taskName}提取链接时出错:`, error);
       return [];
     }
+  }
+
+  // 获取1688数据
+  private async get1688Data(link: any) {
+    let timer: NodeJS.Timeout | undefined = undefined
+    return new Promise(async (resolve, reject) => {
+      let win: BrowserWindow | null = await new BrowserWindow({
+        width: 1200,
+        height: 800,
+        show: true,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false,
+          preload: path.join(__dirname, '../preloads/1688preload.js')
+        },
+      })
+      timer = setInterval(() => {
+        if (this.isCancelled) {
+          win && win.destroy()
+          win = null
+          reject('取消任务')
+          clearInterval(timer)
+        }
+      }, 1000)
+
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      let processed = false
+      win?.webContents?.on('console-message', async (event, level, message) => {
+        console.log(`[浏览器控制台 ${level}]:`, message)
+        if (processed) return
+        if (message.includes('tab=imageSearch') || message.includes('imageId')) {
+          processed = true
+          if (this.collectionTask.sourceType === '1') {
+            await win?.webContents?.executeJavaScript(`
+                new Promise((resolve,reject)=>{
+                  try {
+                     const list = document.querySelectorAll('.sortItem--X1Plgn6V')
+                  for (const el of list) {
+                    if (el.textContent === '价格') {
+                      el.click()
+                      break
+                    }
+                  }
+                    resolve(true)
+                  } catch (error) {
+                    reject(false)
+                  }
+                })
+            `)
+          } else if (this.collectionTask.sourceType === '2') {
+            await win?.webContents?.executeJavaScript(`
+                new Promise((resolve,reject)=>{
+                try {
+                  const list = document.querySelectorAll('.sortItem--X1Plgn6V')
+                  for (const el of list) {
+                    if (el.textContent === '销量') {
+                      el.click()
+                      break
+                    }
+                  }
+                    resolve(true)
+                } catch (error) {
+                  reject(error)
+                }
+                })
+            `)
+          }
+          await new Promise(resolve => setTimeout(resolve, 10000))
+          const html = await win?.webContents?.executeJavaScript(`new Promise((resolve,reject)=>{
+            try {
+              resolve(document.documentElement.outerHTML)
+            } catch (error) {
+              reject(error)
+            }
+            })`)
+          const $ = cheerio.load(html)
+          const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
+          const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
+          const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
+          link['1688link'] = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+          const sourcePrice = `${price1}${price2}`
+          link.sourcePrice = isNaN(Number(sourcePrice)) ? 0 : sourcePrice
+          link.cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
+          win?.destroy()
+          clearInterval(timer)
+          resolve(link)
+        }
+      })
+      win?.webContents?.openDevTools()
+      win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
+      await win?.webContents?.executeJavaScript(`
+        new Promise(async (resolve, reject) => {
+          try {
+            const response = await fetch(${JSON.stringify(link.cover)});
+            imageBlob = await response.blob();
+            // 查找上传输入框
+            const uploadInput = document.querySelector('input[type="file"]') ||
+                               document.querySelector('[accept*="image"]') ||
+                               Array.from(document.querySelectorAll('input')).find(el => 
+                                 el.type === 'file' || el.accept?.includes('image')
+                               );
+            
+            if (!uploadInput) {
+              console.error('未找到文件上传输入框');
+              console.log('页面内容片段:', document.body.innerHTML.substring(0, 500));
+              reject(new Error('未找到上传输入框'));
+              return;
+            }
+            
+            console.log('✅ 找到上传输入框:', uploadInput);
+
+            // 创建File对象
+            const file = new File([imageBlob], 'search-image.jpg', { type: 'image/jpeg' });
+            
+            // 使用DataTransfer设置文件
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            uploadInput.files = dataTransfer.files;
+            
+            // 触发change事件
+            const changeEvent = new Event('change', { bubbles: true });
+            uploadInput.dispatchEvent(changeEvent);
+            
+            // 触发input事件
+            const inputEvent = new Event('input', { bubbles: true });
+            uploadInput.dispatchEvent(inputEvent);
+            
+            
+            // 等待图片预览加载
+            await new Promise(r => setTimeout(r, 2000));
+            
+            // 查找并点击"搜索图片"按钮
+            const searchButton = document.querySelector('[data-tracker="pasteImagePreview"]') ||
+                                document.querySelector('.search-btn') ||
+                                document.querySelector('[class*="search-btn"]') ||
+                                Array.from(document.querySelectorAll('div, button')).find(el => 
+                                  el.textContent?.includes('搜索图片') || 
+                                  el.textContent?.includes('搜索') ||
+                                  el.getAttribute('data-tracker') === 'pasteImagePreview'
+                                );
+            
+            if (!searchButton) {
+              console.error('未找到搜索按钮');
+              console.log('搜索按钮相关元素:', document.querySelector('[class*="search"]'));
+              reject(new Error('未找到搜索按钮'));
+              return;
+            }
+            
+            console.log('✅ 找到搜索按钮:', searchButton.textContent, searchButton.className);
+            
+            // 点击搜索按钮
+            searchButton.click();
+            
+            console.log('✅ 已点击搜索按钮，等待跳转到结果页...');
+            
+            // 等待页面跳转和结果加载
+            await new Promise(r => setTimeout(r, 3000));
+            
+            resolve({ success: true, message: '图片上传并搜索成功' });
+            
+          } catch (error) {
+            console.error('上传过程出错:', error);
+            reject(error);
+          }
+        })
+      `)
+    })
   }
   // 整合和过滤数据的方法
   private async integrateAndFilterData(links: any[], apiData: any[]): Promise<any[]> {
@@ -840,10 +1017,10 @@ export class Collection {
         { header: 'RFBS佣金(元)', key: 'fbsPrice', width: 15 },
         { header: '国际物流', key: 'expressName', width: 15 },
         { header: '国际物流费用（元）', key: 'logisticsMoney', width: 15 },
-        { header: '国内运费（元）', key: 'domesticShippingCostYuan', width: 15 },
+        { header: '国内运费（元）', key: 'endDeliveryFee', width: 15 },
         { header: '其他费用（提醒、货损）（元）', key: 'elsePrice', width: 20 },
-        { header: '1688货源地址', key: 'sourceUrl1688', width: 30 },
-        { header: '货源图片', key: 'sourceImage', width: 20 },
+        { header: '1688货源地址', key: '1688link', width: 30 },
+        { header: '货源图片', key: 'cover2', width: 20 },
         { header: '货源价格（元）', key: 'sourcePrice', width: 15 },
         { header: '对方利润率（%）', key: 'otherProfitPercent', width: 15 },
         { header: '对方利润（元）', key: 'otherProfit', width: 15 },
@@ -918,6 +1095,8 @@ export class Collection {
 
   // 终止任务
   async cancel() {
+    if (this.isCancelled) throw new Error('任务正在取消中，请勿频繁请求...')
+    this.outputLog('任务取消中...')
     this.isCancelled = true;
     this.timers.forEach(timer => {
       if (timer) {
@@ -925,6 +1104,7 @@ export class Collection {
       }
     });
     this.timers = [];
+
     if (this.browserWindow) {
       this.browserWindow.close();
       this.browserWindow = null;

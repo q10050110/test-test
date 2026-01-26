@@ -5,7 +5,8 @@ export class CloseProcessService {
   // 关闭应用时将所有在执行等待执行的任务状态变更为取消
   private async closeTask() {
     const { list } = await TaskManager.getInstance().getAllTasks({ pageNo: 1, pageSize: 10000000 })
-    list.filter((item: any) => item.taskStatus !== 'noExecuted').forEach(async (item: any) => {
+    const taskList = list.filter((item: any) => item.taskStatus !== 'noExecuted')
+    await taskList.forEach(async (item: any) => {
       try {
         await request({
           url: '/api/auto/autoTask/updateStatus',
@@ -16,7 +17,7 @@ export class CloseProcessService {
           },
         });
       } catch (error) {
-
+        console.log(error)
       }
     })
   }

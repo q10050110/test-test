@@ -1,0 +1,10 @@
+@for $i from 1 through 3 {
+  .ellipsis-#{$i} {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-clamp: #{$i};
+    -webkit-line-clamp: #{$i};
+    word-break: break-all;
+  }
+}

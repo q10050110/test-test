@@ -54,10 +54,7 @@ const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
   }
 }
 
-// 导出日志
-const downloadLog = () => {
-  window.electronAPI.invoke('export-all-logs', '')
-}
+
 
 defineExpose({
   writeLog
@@ -66,11 +63,6 @@ defineExpose({
 
 <template>
   <div class="container">
-    <div class="log">
-      <a-button type="link" @click="downloadLog">
-        导出任务日志
-      </a-button>
-    </div>
     <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
       <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
         <div class="log-container" :ref="el => setLogRef(el as HTMLElement, item._id as string)">
@@ -90,11 +82,14 @@ defineExpose({
 
 <style lang="scss" scoped>
 .log-container {
-  height: 120px;
+  height: 160px;
   overflow-y: auto;
 }
 
 .container {
+  height: 100%;
+  overflow: hidden;
+
   .log {
     text-align: right;
     color: #1677ff;

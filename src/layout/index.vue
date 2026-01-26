@@ -107,6 +107,7 @@ const store = useUserStore()
       flex: 1;
       background-color: #f5f7f9;
       overflow-y: auto;
+      height: 100%;
     }
   }
 }

@@ -53,6 +53,14 @@ export default defineConfig({
         replace: true,
         mediaQuery: false
       })]
+    },
+    preprocessorOptions: {
+      'scss': {
+        additionalData: `
+        @use "@/styles/common.scss" as *;
+        @use "@/styles/variables.scss" as *; 
+        `
+      }
     }
   }
 })
