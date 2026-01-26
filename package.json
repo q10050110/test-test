@@ -1,6 +1,6 @@
 {
   "name": "electron_template",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -26,6 +26,7 @@
     "dayjs": "^1.11.19",
     "electron-log": "^5.4.3",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.7.3",
     "exceljs": "^4.4.0",
     "lodash": "^4.17.23",
     "pinia": "^3.0.4",

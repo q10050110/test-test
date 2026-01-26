@@ -16,6 +16,11 @@ const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
 const downloadLog = () => {
   window.electronAPI.invoke('export-all-logs', '')
 }
+
+// 检测更新
+const checkUpdateHandle = () => {
+  window.electronAPI.sendMessage('check-update-app', {})
+}
 </script>
 
 <template>
@@ -23,7 +28,7 @@ const downloadLog = () => {
     <div class="left">
       <img src="@/assets/login/logo.png" alt="">
       <span class="version">V{{ store.appInfo?.version }}</span>
-      <a-button type="primary">检测更新</a-button>
+      <a-button type="primary" @click="checkUpdateHandle">检测更新</a-button>
     </div>
     <div class="drag"></div>
     <div class="right">
@@ -93,13 +98,13 @@ const downloadLog = () => {
 
       &:hover {
         .qrcode {
-          display: block;
+          visibility: visible;
           opacity: 1;
         }
       }
 
       .qrcode {
-        display: none;
+        visibility: hidden;
         opacity: 0;
         position: absolute;
         top: 20px;
@@ -110,7 +115,7 @@ const downloadLog = () => {
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         z-index: 999;
-        transition: all 0.3s;
+        transition: all 1.2s;
 
         img {
           height: 100%;

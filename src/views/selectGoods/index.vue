@@ -290,7 +290,6 @@ onUnmounted(() => {
     justify-content: flex-end;
     align-items: center;
     margin-bottom: 10px;
-    z-index: 9999;
   }
 
   .tabs {

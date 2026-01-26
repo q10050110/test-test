@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resisterAllIpc } from '../ipc/main.ipc.js'
 import log from '../log/index.js'
-
+import { UpdaterManager } from '../services/update.services.js'
 // __dirname 表示当前文件所在目录的绝对路径
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export let mainWindow: BrowserWindow | null
@@ -32,6 +32,8 @@ export const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1300,
     height: 800,
+    minWidth: 1300,
+    minHeight: 800,
     autoHideMenuBar: true,
     title: '上品帮-自动化助手',
     frame: false,
@@ -49,7 +51,10 @@ export const createWindow = () => {
   // 注册 IPC 处理器
   try {
     resisterAllIpc(mainWindow)
-    log.info('IPC 处理器注册成功')
+    const updaterManagerInstance = UpdaterManager.getInstance()
+    updaterManagerInstance.setMainWindow(mainWindow)
+    updaterManagerInstance.checkUpdate()
+    log.info('IPC处理器注册成功')
   } catch (error) {
     log.error('IPC 处理器注册失败:', error)
   }

@@ -26,6 +26,7 @@ declare module 'vue' {
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
     APagination: typeof import('ant-design-vue/es')['Pagination']
+    AProgress: typeof import('ant-design-vue/es')['Progress']
     ARadio: typeof import('ant-design-vue/es')['Radio']
     ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
     ARow: typeof import('ant-design-vue/es')['Row']
@@ -39,6 +40,7 @@ declare module 'vue' {
     ATag: typeof import('ant-design-vue/es')['Tag']
     ATooltip: typeof import('ant-design-vue/es')['Tooltip']
     CLoading: typeof import('./components/c-loading.vue')['default']
+    CModal: typeof import('./components/c-modal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -60,6 +62,7 @@ declare global {
   const AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
   const AModal: typeof import('ant-design-vue/es')['Modal']
   const APagination: typeof import('ant-design-vue/es')['Pagination']
+  const AProgress: typeof import('ant-design-vue/es')['Progress']
   const ARadio: typeof import('ant-design-vue/es')['Radio']
   const ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
   const ARow: typeof import('ant-design-vue/es')['Row']
@@ -73,6 +76,7 @@ declare global {
   const ATag: typeof import('ant-design-vue/es')['Tag']
   const ATooltip: typeof import('ant-design-vue/es')['Tooltip']
   const CLoading: typeof import('./components/c-loading.vue')['default']
+  const CModal: typeof import('./components/c-modal.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

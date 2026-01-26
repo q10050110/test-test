@@ -64,13 +64,12 @@ export default {
   },
 
   // 发布配置
-  /*   publish: [
-      {
-        provider: "github",       // 发布到 GitHub Releases
-        owner: "your-github-username",
-        repo: "your-repo-name"
-      }
-    ], */
+  publish: [
+    {
+      provider: "generic",
+      url: 'https://plus.shopbang.cn/version/'
+    }
+  ],
 
   // 打包后钩子，可执行自定义逻辑
   afterPack: async (context) => {

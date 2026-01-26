@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { SysTemUtils } from '../utils/system.js'
+import { UpdaterManager } from '../services/update.services.js'
 export const windowIpc = (win: BrowserWindow) => {
   ipcMain.on('window', async (event, data: 'hide' | 'close' | 'maximize' | 'minimize') => {
     switch (data) {
@@ -27,4 +28,12 @@ export const windowIpc = (win: BrowserWindow) => {
   ipcMain.handle('export-all-logs', async () => {
     return await SysTemUtils.logOperations.exportAllLogs();
   });
+
+  ipcMain.on('check-update-app', async () => {
+    UpdaterManager.getInstance().checkUpdate()
+  })
+
+  ipcMain.on('start-update-app', async () => {
+    UpdaterManager.getInstance().startDownload()
+  })
 }

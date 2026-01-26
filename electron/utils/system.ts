@@ -1,6 +1,7 @@
 import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
 import { join, dirname, basename } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
+import { autoUpdater } from 'electron-updater'
 
 /**
  * Electron 系统级能力封装
@@ -618,5 +619,14 @@ export class SysTemUtils {
     unmaximize: (win: BrowserWindow) => {
       win.unmaximize()
     },
+  }
+  /**
+   * 更新 
+   */
+  static update = {
+    /**
+     * 检查更新
+     */
+
   }
 }

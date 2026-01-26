@@ -202,6 +202,7 @@ export class Collection {
         width: 1200,
         height: 800,
         show: true,
+        frame: false,
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
@@ -600,7 +601,7 @@ export class Collection {
       let win: BrowserWindow | null = await new BrowserWindow({
         width: 1200,
         height: 800,
-        show: true,
+        show: false,
         webPreferences: {
           contextIsolation: true,
           nodeIntegration: false,
