@@ -203,7 +203,7 @@ onUnmounted(() => {
       <a-form-item>
         <a-button type="primary" @click="getTaskList(false, true)">查询</a-button>
         <a-button type="primary" style="margin: 0 10px;" @click="openTaskDialogHandle()">新建任务</a-button>
-        <a-button type="primary" style="margin: 0 10px;" @click="batchStartHandle">批量开始</a-button>
+        <a-button type="primary" style="margin-right:10px;" @click="batchStartHandle">批量开始</a-button>
         <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
       </a-form-item>
     </a-form>
