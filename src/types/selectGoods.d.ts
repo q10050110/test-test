@@ -3,7 +3,11 @@ export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'f
 export type Task = {
   _id?: string
   taskStatus?: TaskStatus
-  progress?: string
+  progress?: {
+    current?: number
+    total?: number
+    totalCount?: number
+  }
   createTime?: string
   updateTime?: string
   taskName: string

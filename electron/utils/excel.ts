@@ -54,9 +54,6 @@ export class ExcelWriter {
    */
   async init(): Promise<void> {
     if (this.initialized) return
-
-    log.info(`ExcelWriter 初始化: ${this.filePath}`)
-
     try {
       await fsPromises.access(this.filePath)
 
@@ -70,13 +67,9 @@ export class ExcelWriter {
       if (!this.worksheet) {
         this.worksheet = this.workbook.addWorksheet(this.sheetName)
       }
-
-      log.info(`成功加载现有文件: ${this.filePath}`)
     } catch {
       this.workbook = new ExcelJS.Workbook()
       this.worksheet = this.workbook.addWorksheet(this.sheetName)
-
-      log.info(`文件不存在，创建新工作簿: ${this.filePath}`)
     }
 
     this.initialized = true
@@ -90,8 +83,6 @@ export class ExcelWriter {
     await this.init()
 
     this.memoryQueue = this.memoryQueue.then(async () => {
-      log.info(`内存追加 ${rows.length} 行数据`)
-
       for (const row of rows) {
         this.worksheet.addRow(row)
       }
@@ -110,8 +101,6 @@ export class ExcelWriter {
 
     // 创建一个独立的 promise 来处理保存逻辑
     const savePromise = this.memoryQueue.then(async () => {
-      log.info(`内存追加 ${rows.length} 行数据并立即保存`)
-
       // 检查文件是否被其他进程占用
       const isInUse = await this.isFileInUse(this.filePath);
       if (isInUse) {

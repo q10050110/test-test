@@ -83,6 +83,7 @@ defineExpose({
 <style lang="scss" scoped>
 .log-container {
   height: 100px;
+  padding-bottom: 10px;
   overflow-y: auto;
 }
 

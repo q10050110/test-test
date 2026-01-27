@@ -182,13 +182,12 @@ export class TaskManager {
         task.createTime = dayjs(task.createTime).format('YYYY-MM-DD HH:mm:ss');
         task.updateTime = dayjs(task.updateTime).format('YYYY-MM-DD HH:mm:ss');
         if (!this.tasks.has(task._id)) {
-          const collection = new Collection(task, this.mainWindow!);
+          task.progress = task.progress || { current: 0, total: 0, totalCount: 0 };
+          const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
+        } else {
+          task.progress = this.tasks.get(task._id)?.getTaskInfo().progress
         }
-        if (task?.taskStatus !== 'noExecuted') {
-          task.tableFilePath = this.tasks.get(task._id)?.tableFilePath
-        }
-        if (task?.taskStatus === 'pending') this.startTaskById(task._id)
       });
 
       return data;
@@ -389,7 +388,6 @@ export class TaskManager {
     if (this.activeTasks.size) {
       for (const taskId of this.activeTasks) {
         const task = this.tasks.get(taskId)
-        console.log(task?.getTaskInfo())
         if (task && task.getStatus() !== 'running') {
           this.activeTasks.delete(taskId)
         }
