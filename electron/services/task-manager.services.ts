@@ -188,6 +188,7 @@ export class TaskManager {
         } else {
           task.progress = this.tasks.get(task._id)?.getTaskInfo().progress
         }
+        if (task.taskStatus !== 'noExecuted') task.tableFilePath = this.tasks.get(task._id)?.tableFilePath
       });
 
       return data;

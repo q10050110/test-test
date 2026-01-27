@@ -112,7 +112,7 @@ defineExpose({
 
 <template>
   <div class="task-page">
-    <a-modal v-model:open="open" :title="formData._id ? '编辑任务' : '新增任务'" @cancel="cancelHandle" style="width: 1000px;">
+    <a-modal v-model:open="open" :title="formData._id ? '编辑任务' : '新增任务'" @cancel="cancelHandle" style="width: 80%;">
       <div style="height: 70vh;overflow-y: auto;">
         <a-form :model="formData" layout="horizontal" :label-col="{ span: 8 }" :wrapper-col="{ span: 24 }"
           style="padding:0 60px;" :rules="rules" ref="formRef">
@@ -382,7 +382,7 @@ defineExpose({
       </div>
       <template #footer>
         <a-button @click="cancelHandle">取消</a-button>
-        <a-button style="margin: 0 10px;" type="primary" @click="saveHandle('save')">保存</a-button>
+        <a-button type="primary" @click="saveHandle('save')">保存</a-button>
         <a-button type="primary" @click="saveHandle('execute')">保存并执行</a-button>
       </template>
     </a-modal>

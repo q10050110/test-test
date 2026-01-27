@@ -7,7 +7,7 @@ defineProps<{
   }
 }>()
 
-const open = ref(true)
+const open = ref(false)
 const isUpdate = ref(false)
 const updateHandle = async () => {
   isUpdate.value = true

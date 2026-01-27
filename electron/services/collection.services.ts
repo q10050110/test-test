@@ -212,7 +212,8 @@ export class Collection {
             {
               cache: false, // 采集不需要缓存，避免脏数据
             }
-          )
+          ),
+          backgroundThrottling: false
         },
       });
       const timeoutId = setTimeout(() => {
@@ -357,7 +358,7 @@ export class Collection {
       }
     }
     // 启动队列处理器
-    await this.startQueueProcessor();
+    this.startQueueProcessor();
     this.processed = this.processed + (this.collectedLinks.length - this.processed)
     this.outputLog(`收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
     this.collectedLinks = this.collectedLinks.slice(0, targetCount);
@@ -598,35 +599,36 @@ export class Collection {
   private async get1688Data(link: any) {
     let timer: NodeJS.Timeout | undefined = undefined
     return new Promise(async (resolve, reject) => {
-      let win: BrowserWindow | null = await new BrowserWindow({
-        width: 1200,
-        height: 800,
-        show: false,
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: false,
-          preload: path.join(__dirname, '../preloads/1688preload.js')
-        },
-      })
-      timer = setInterval(() => {
-        if (this.isCancelled) {
-          win && win.destroy()
-          win = null
-          reject('取消任务')
-          clearInterval(timer)
-        }
-      }, 1000)
+      try {
+        let win: BrowserWindow | null = await new BrowserWindow({
+          width: 1200,
+          height: 800,
+          show: false,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false,
+            preload: path.join(__dirname, '../preloads/1688preload.js')
+          },
+        })
+        timer = setInterval(() => {
+          if (this.isCancelled) {
+            win && win.destroy()
+            win = null
+            reject('取消任务')
+            clearInterval(timer)
+          }
+        }, 1000)
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      let processed = false
-      win?.webContents?.on('console-message', async (event, level, message) => {
-        console.log(`[浏览器控制台 ${level}]:`, message)
-        if (processed) return
-        if (message.includes('tab=imageSearch') || message.includes('imageId')) {
-          processed = true
-          if (this.collectionTask.sourceType === '1') {
-            await win?.webContents?.executeJavaScript(`
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        let processed = false
+        win?.webContents?.on('console-message', async (event, level, message) => {
+          console.log(`[浏览器控制台 ${level}]:`, message)
+          if (processed) return
+          if (message.includes('tab=imageSearch') || message.includes('imageId')) {
+            processed = true
+            if (this.collectionTask.sourceType === '1') {
+              await win?.webContents?.executeJavaScript(`
                 new Promise((resolve,reject)=>{
                   try {
                      const list = document.querySelectorAll('.sortItem--X1Plgn6V')
@@ -642,8 +644,8 @@ export class Collection {
                   }
                 })
             `)
-          } else if (this.collectionTask.sourceType === '2') {
-            await win?.webContents?.executeJavaScript(`
+            } else if (this.collectionTask.sourceType === '2') {
+              await win?.webContents?.executeJavaScript(`
                 new Promise((resolve,reject)=>{
                 try {
                   const list = document.querySelectorAll('.sortItem--X1Plgn6V')
@@ -659,31 +661,31 @@ export class Collection {
                 }
                 })
             `)
-          }
-          await new Promise(resolve => setTimeout(resolve, 10000))
-          const html = await win?.webContents?.executeJavaScript(`new Promise((resolve,reject)=>{
+            }
+            await new Promise(resolve => setTimeout(resolve, 10000))
+            const html = await win?.webContents?.executeJavaScript(`new Promise((resolve,reject)=>{
             try {
               resolve(document.documentElement.outerHTML)
             } catch (error) {
               reject(error)
             }
             })`)
-          const $ = cheerio.load(html)
-          const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
-          const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
-          const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
-          link['1688link'] = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
-          const sourcePrice = `${price1}${price2}`
-          link.sourcePrice = isNaN(Number(sourcePrice)) ? 0 : sourcePrice
-          link.cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
-          win?.destroy()
-          clearInterval(timer)
-          resolve(link)
-        }
-      })
-      win?.webContents?.openDevTools()
-      win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
-      await win?.webContents?.executeJavaScript(`
+            const $ = cheerio.load(html)
+            const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
+            const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
+            const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
+            link['1688link'] = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+            const sourcePrice = `${price1}${price2}`
+            link.sourcePrice = isNaN(Number(sourcePrice)) ? 0 : sourcePrice
+            link.cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
+            win?.destroy()
+            clearInterval(timer)
+            resolve(link)
+          }
+        })
+        win?.webContents?.openDevTools()
+        win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
+        await win?.webContents?.executeJavaScript(`
         new Promise(async (resolve, reject) => {
           try {
             const response = await fetch(${JSON.stringify(link.cover)});
@@ -759,6 +761,9 @@ export class Collection {
           }
         })
       `)
+      } catch (error) {
+        reject(error)
+      }
     })
   }
   // 整合和过滤数据的方法
