@@ -58,24 +58,23 @@ const total = ref(0)
 const columns = ref<TableColumnsType<Task>>([{
   title: '任务名称',
   dataIndex: 'taskName',
-  key: 'taskName',
-  width: 250
+  key: 'taskName'
 },
 {
   title: '任务状态',
   dataIndex: 'status',
   key: 'status',
-  width: 150
+
 },
 {
   title: '进度详情',
   dataIndex: 'progress',
   key: 'progress',
-  width: 240
+
 }, {
   title: '操作',
   dataIndex: 'action',
-  key: 'action'
+  key: 'action',
 }
 ])
 const selectData = ref<string[]>()
@@ -90,7 +89,6 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
   total.value = data.total
-  console.log(data.list)
 }
 getTaskList()
 
@@ -213,7 +211,7 @@ onUnmounted(() => {
           rowKey="_id">
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
-              <div style="font-weight: bold; color: #000;width: 250px;" class="ellipsis-2">
+              <div style="font-weight: bold; color: #000;" class="ellipsis-1">
                 {{ record.taskName }}
               </div>
               <div>

@@ -8,6 +8,7 @@ import type CModal from './components/c-modal.vue'
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
+
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
   store.logout()
@@ -44,25 +45,17 @@ window.electronAPI.on('update-error', async (error) => {
   await nextTick()
   cModalRef.value && cModalRef.value?.closeHandle()
 })
-const setRootFontSize = () => {
-  const baseWidth = 1300
-  const baseFontSize = 16
-  const width = window.innerWidth
-  const scale = width / baseWidth
-  const fontSize = Math.max(12, Math.min(20, baseFontSize * scale))
-  console.log('font-size', fontSize)
-  document.documentElement.style.fontSize = fontSize + 'px'
-}
+
 
 const onResize = debounce(() => {
-  setRootFontSize()
+  appStore.setRootFontSize()
 }, 100)
 
 window.addEventListener('resize', onResize)
 </script>
 
 <template>
-  <a-config-provider :locale="zhCN">
+  <a-config-provider :locale="zhCN" :theme="appStore.theme">
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
     <c-modal />

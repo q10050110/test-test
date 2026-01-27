@@ -41,12 +41,12 @@ const cancelHandle = () => {
 }
 
 window.electronAPI.on('maximize', () => {
-  console.log('最大化拉')
+  store.setRootFontSize()
   isMax.value = true
 })
 
 window.electronAPI.on('unmaximize', () => {
-  console.log('没有最大化拉')
+  store.setRootFontSize()
   isMax.value = false
 })
 </script>

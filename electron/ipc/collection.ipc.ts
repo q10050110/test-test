@@ -81,7 +81,6 @@ export const collectionIpc = (win: BrowserWindow) => {
   ipcMain.handle('collection-re-execute-task', async (event, taskId: string) => {
     try {
       const success = await taskManager.reExecuteTask(taskId);
-      console.log(success, 'success')
       if (success) {
         return {
           code: 200,
