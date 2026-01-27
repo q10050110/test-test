@@ -7,7 +7,7 @@ defineProps<{
   }
 }>()
 
-const open = ref(false)
+const open = ref(true)
 const isUpdate = ref(false)
 const updateHandle = async () => {
   isUpdate.value = true
@@ -64,12 +64,23 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+:deep(.ant-modal),
+:deep(.ant-modal-content),
+:deep(.ant-modal-body),
+:deep(.ant-modal-footer),
+:deep(.ant-btn),
+:deep(.ant-progress) {
+  -webkit-app-region: no-drag;
+}
+
 .c-modal {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   margin-bottom: 20px;
+  -webkit-app-region: no-drag !important;
+  z-index: 9999999999;
 
   .icon {
     height: 130px;

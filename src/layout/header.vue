@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores';
+import type { Task } from '@/types/selectGoods'
 import suofang from '@/assets/window/suofang.png'
 import fangda from '@/assets/window/fangda.png'
+
 const store = useAppStore()
-
 const isMax = ref(false)
-
+const open = ref(false)
+const desc = ref('真的真的要退出吗T_T？')
 // 隐藏&放大&关闭
-const operationHandle = (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
+const operationHandle = async (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value
+  if (type === 'close') {
+    const data = await window.electronAPI.invoke('collection-get-all-tasks', {})
+    const isRunning = data.some((item: Task) => item.taskStatus === 'running')
+    if (isRunning) desc.value = '现在退出的话，正在进行的任务会中断哦～'
+    open.value = true
+    return
+  }
   window.electronAPI.sendMessage('window', type)
 }
-
 // 导出日志
 const downloadLog = () => {
   window.electronAPI.invoke('export-all-logs', '')
@@ -19,8 +27,28 @@ const downloadLog = () => {
 
 // 检测更新
 const checkUpdateHandle = () => {
-  window.electronAPI.sendMessage('check-update-app', {})
+  window.electronAPI.sendMessage('check-update-app', '')
 }
+
+// 退出
+const clickHandle = () => {
+  window.electronAPI.sendMessage('window', 'close')
+}
+
+const cancelHandle = () => {
+  open.value = false
+  desc.value = '真的真的要退出吗T_T？'
+}
+
+window.electronAPI.on('maximize', () => {
+  console.log('最大化拉')
+  isMax.value = true
+})
+
+window.electronAPI.on('unmaximize', () => {
+  console.log('没有最大化拉')
+  isMax.value = false
+})
 </script>
 
 <template>
@@ -50,6 +78,19 @@ const checkUpdateHandle = () => {
       </div>
     </div>
   </div>
+  <a-modal v-model:open="open" @cancel="cancelHandle" class="modal" :footer="null" style="width: 400px;">
+    <div class="container">
+      <div class="bg"></div>
+      <div class="title">要退出吗？</div>
+      <div class="desc">
+        {{ desc }}
+      </div>
+      <div class="btns">
+        <a-button type="primary" style="margin-right: 20px;" @click="clickHandle">确认退出</a-button>
+        <a-button @click="cancelHandle">取消</a-button>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <style lang="scss" scoped>
@@ -129,6 +170,36 @@ const checkUpdateHandle = () => {
         margin: 0 10px;
       }
     }
+  }
+}
+
+.modal {
+
+  .container {
+    position: relative;
+    height: 200px;
+    padding-top: 70px;
+    text-align: center;
+
+    .bg {
+      position: absolute;
+      background: url('@/assets/window/bg.png') no-repeat;
+      inset: 0;
+      background-size: contain;
+      top: -84px;
+      clip-path: inset(0 0 146px 0);
+      transform: scale(1.1);
+    }
+
+    .title {
+      font-weight: 700;
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+  }
+
+  .btns {
+    margin-top: 30px;
   }
 }
 </style>

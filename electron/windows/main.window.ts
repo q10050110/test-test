@@ -80,6 +80,14 @@ export const createWindow = () => {
     log.info('主窗口恢复响应')
   })
 
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('maximize')
+  })
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('unmaximize')
+  })
+
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     log.error('渲染进程消失:', details)
     // 如果是崩溃或被杀死的情况，尝试重启

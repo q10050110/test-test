@@ -135,7 +135,7 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 获取所有任务
   ipcMain.handle('collection-get-all-tasks', async (event, params) => {
     try {
-      const data = await taskManager.getAllTasks(params);
+      const data = params?.pageNo ? await taskManager.getAllTasks(params) : await taskManager.getAllTasksList()
       return data;
     } catch (error) {
       log.error('获取任务列表失败', error);
