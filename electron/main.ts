@@ -4,6 +4,9 @@ import log, { initLogger } from './log/index.js'
 import { CloseProcessService } from './services/closeProcess.services.js'
 import { globalBroadcast } from './ipc/broadcast.js'
 
+app.commandLine.appendSwitch('disable-logging')
+app.commandLine.appendSwitch('log-level', '3')
+
 // 重启相关常量
 const RESTART_COUNT_KEY = 'restart-count'
 const MAX_RESTART_COUNT = 3

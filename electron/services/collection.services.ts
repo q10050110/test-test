@@ -8,6 +8,7 @@ export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'f
 import { ExcelWriter } from '../utils/excel.js';
 import { SysTemUtils } from '../utils/system.js';
 import { fileURLToPath } from 'url'
+
 export interface Task {
   _id: string;
   taskStatus: TaskStatus;
@@ -77,15 +78,20 @@ export class Collection {
   private pendingTasks: Promise<any>[] = [];
   private processedIds: Set<string> = new Set();
 
-  // 新增：任务队列和并发控制
+  // 任务队列和并发控制
   private taskQueue: any[] = [];
   private isProcessingQueue = false;
-  private maxConcurrentTasks = 10; // 控制并发处理数量
+  private maxConcurrentTasks = 5; // 控制并发处理数量
   private activeProcessors: number = 0;
 
-  // 新增：任务状态标志
+  // 任务状态标志
   private isCancelled: boolean = false;
   private isInitialized: boolean = false;
+
+  // 用于控制滚动的标志
+  private isWaitingForProcessing = false;
+  private scrollIntervalId: NodeJS.Timeout | null = null;
+  private processingCheckIntervalId: NodeJS.Timeout | null = null;
 
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task };
@@ -291,7 +297,7 @@ export class Collection {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // 收集链接
+  // 收集链接 - 优化版本：使用事件驱动而非轮询
   private async collectLinksByTargetCount(targetCount: number) {
     if (!this.browserWindow) return [];
     // 清除之前的挂起任务
@@ -311,54 +317,10 @@ export class Collection {
       this.addToTaskQueue(initialLinks);
     }
     await this.outputLog(`初始加载 ${this.collectedLinks.length} 个链接`);
-    // 如果还没达到目标数量，继续滚动加载
-    while (this.totalCount < targetCount && scrollAttempts < maxScrollAttempts && !this.isCancelled) {
-      const previousLength = this.collectedLinks.length;
-      if (this.collectionTask.taskStatus === 'cancelled') {
-        this.outputLog('任务被取消');
-        return;
-      }
-      // 随机延迟
-      const randomDelay = this.getRandomDelay(2000, 4000);
-      this.outputLog(`滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${this.collectedLinks.length}`);
-      await this.delay(randomDelay);
 
-      // 执行滚动操作 - 滚动整个页面
-      const scrollSuccess = await this.performScroll();
-      if (!scrollSuccess) {
-        log.info('滚动操作未成功执行，可能已到达底部');
-        break;
-      }
+    // 使用递归方式替代while循环，避免阻塞
+    await this.processScrolling(targetCount, maxScrollAttempts, scrollAttempts);
 
-      await this.delay(2000);
-
-      // 提取新链接 - 从指定容器提取
-      const newLinks = await this.extractLinks();
-      const uniqueNewLinks = newLinks.filter(item =>
-        !this.collectedLinks.map(obj => obj.id).includes(item.id)
-      )
-
-      if (uniqueNewLinks.length > 0) {
-        this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
-        this.processed = this.collectedLinks.length - this.processedIds.size
-        this.outputLog(`处理过的商品数量：${this.processedIds.size}`)
-        // 将新链接加入队列而不是直接处理
-        this.addToTaskQueue(uniqueNewLinks);
-      }
-      this.outputLog(`已收集 ${this.collectedLinks.length}个链接`);
-      // 判断是否需要继续滚动
-      if (this.collectedLinks.length === previousLength) {
-        log.info('本次滚动未发现新链接');
-        this.outputLog('本次滚动未发现新链接');
-        scrollAttempts++;
-      } else {
-        scrollAttempts = 0; // 有新链接，重置尝试次数
-      }
-      // 如果已达到目标数量，停止滚动
-      if (this.totalCount >= targetCount) {
-        break;
-      }
-    }
     // 启动队列处理器
     this.startQueueProcessor();
     this.processed = this.collectedLinks.length - this.processedIds.size
@@ -366,6 +328,66 @@ export class Collection {
     this.collectedLinks = this.collectedLinks.slice(0, targetCount);
     return this.collectedLinks;
   }
+
+  // 递归处理滚动逻辑，替代while循环
+  private async processScrolling(targetCount: number, maxScrollAttempts: number, scrollAttempts: number): Promise<void> {
+    // 检查是否已达到目标或取消
+    if (this.totalCount >= targetCount || scrollAttempts >= maxScrollAttempts || this.isCancelled) {
+      return;
+    }
+
+    if (this.collectionTask.taskStatus === 'cancelled') {
+      this.outputLog('任务被取消');
+      return;
+    }
+
+    // 检查是否有活跃处理器，如果有则等待处理完成
+    if (this.activeProcessors > 0) {
+      this.outputLog(`有 ${this.activeProcessors} 个商品正在处理，暂停滚动等待...`);
+      // 等待一段时间再检查
+      await this.delay(1000);
+      return this.processScrolling(targetCount, maxScrollAttempts, scrollAttempts);
+    }
+
+    const previousLength = this.collectedLinks.length;
+    // 随机延迟
+    const randomDelay = this.getRandomDelay(2000, 4000);
+    this.outputLog(`滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${this.collectedLinks.length}`);
+    await this.delay(randomDelay);
+
+    // 执行滚动操作 - 滚动整个页面
+    const scrollSuccess = await this.performScroll();
+    if (!scrollSuccess) {
+      log.info('滚动操作未成功执行，可能已到达底部');
+      return;
+    }
+
+    await this.delay(2000);
+
+    // 提取新链接 - 从指定容器提取
+    const newLinks = await this.extractLinks();
+    const uniqueNewLinks = newLinks.filter(item =>
+      !this.collectedLinks.map(obj => obj.id).includes(item.id)
+    )
+
+    if (uniqueNewLinks.length > 0) {
+      this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
+      this.processed = this.collectedLinks.length - this.processedIds.size
+      this.outputLog(`处理过的商品数量：${this.processedIds.size}`)
+      // 将新链接加入队列而不是直接处理
+      this.addToTaskQueue(uniqueNewLinks);
+      scrollAttempts = 0; // 有新链接，重置尝试次数
+    } else {
+      scrollAttempts++; // 没有新链接，增加尝试次数
+      this.outputLog('本次滚动未发现新链接');
+    }
+
+    this.outputLog(`已收集 ${this.collectedLinks.length}个链接`);
+
+    // 递归调用处理下一轮滚动
+    await this.processScrolling(targetCount, maxScrollAttempts, scrollAttempts);
+  }
+
   // 添加到任务队列
   private addToTaskQueue(links: any[]) {
     this.taskQueue.push(...links);
@@ -374,6 +396,7 @@ export class Collection {
       this.startQueueProcessor();
     }
   }
+
   // 启动队列处理器
   private async startQueueProcessor() {
     if (this.isProcessingQueue || this.isCancelled || this.totalCount === parseInt(this.collectionTask.targetCount)) {
@@ -382,7 +405,7 @@ export class Collection {
     this.isProcessingQueue = true;
     // 启动并发任务处理器
     const processors = [];
-    const concurrentCount = Math.min(this.maxConcurrentTasks, 10);
+    const concurrentCount = Math.min(this.maxConcurrentTasks, 5);
     for (let i = 0; i < concurrentCount; i++) {
       processors.push(this.processQueue());
     }
@@ -393,35 +416,48 @@ export class Collection {
 
   // 处理队列中的任务
   private async processQueue() {
-    while ((this.taskQueue.length > 0 || this.activeProcessors > 0) && !this.isCancelled) {
-      if (this.collectionTask.taskStatus === 'cancelled') {
-        this.isCancelled = true;
-        break;
-      }
-      if (this.totalCount === parseInt(this.collectionTask.targetCount)) {
-        break // 已达到目标数量
-      }
-      // 检查当前活跃处理器数量，控制并发
-      if (this.taskQueue.length > 0 && this.activeProcessors < this.maxConcurrentTasks) {
-        // 从队列中取出一批任务处理
-        const batch = this.taskQueue.splice(0, 1); // 每次处理1个，可以根据需要调整
+    // 不使用while循环，而是使用递归方式
+    await this.processNextTask();
+  }
 
-        if (batch.length > 0) {
-          this.activeProcessors++;
+  // 递归处理下一个任务
+  private async processNextTask() {
+    if (this.collectionTask.taskStatus === 'cancelled' || this.totalCount >= parseInt(this.collectionTask.targetCount)) {
+      this.isCancelled = true;
+      return;
+    }
 
-          // 使用 addPendingTask 包装任务，确保能追踪完成状态
-          const task = this.handleSingleLink(batch[0]);
-          this.addPendingTask(task)
-            .finally(() => {
-              this.activeProcessors--;
-            })
-            .catch(error => {
-              log.error('处理单个链接时发生错误', error);
-            });
-        }
+    // 检查是否有任务和并发限制
+    if (this.taskQueue.length > 0 && this.activeProcessors < this.maxConcurrentTasks) {
+      // 从队列中取出一个任务处理
+      const batch = this.taskQueue.splice(0, 1);
+
+      if (batch.length > 0) {
+        this.activeProcessors++;
+
+        // 使用 addPendingTask 包装任务，确保能追踪完成状态
+        const task = this.handleSingleLink(batch[0]);
+        this.addPendingTask(task)
+          .finally(() => {
+            this.activeProcessors--;
+          })
+          .catch(error => {
+            log.error('处理单个链接时发生错误', error);
+          });
       }
-      // 短暂延迟，避免过度占用CPU
-      await this.delay(1000);
+    }
+
+    // 检查是否还有任务需要处理
+    if (this.taskQueue.length > 0 || this.activeProcessors > 0) {
+      // 使用setTimeout而非await delay，避免阻塞
+      return new Promise<void>(resolve => {
+        const timer = setTimeout(async () => {
+          this.timers = this.timers.filter(t => t !== timer);
+          await this.processNextTask();
+          resolve();
+        }, 100); // 减少延迟时间
+        this.timers.push(timer);
+      });
     }
   }
 
@@ -1189,12 +1225,25 @@ export class Collection {
     if (this.isCancelled) throw new Error('任务正在取消中，请勿频繁请求...')
     this.outputLog('任务取消中...')
     this.isCancelled = true;
+
+    // 清除所有定时器
     this.timers.forEach(timer => {
       if (timer) {
         clearTimeout(timer);
       }
     });
     this.timers = [];
+
+    // 清除可能存在的间隔定时器
+    if (this.scrollIntervalId) {
+      clearInterval(this.scrollIntervalId);
+      this.scrollIntervalId = null;
+    }
+
+    if (this.processingCheckIntervalId) {
+      clearInterval(this.processingCheckIntervalId);
+      this.processingCheckIntervalId = null;
+    }
 
     if (this.browserWindow) {
       this.browserWindow.close();
@@ -1230,9 +1279,10 @@ export class Collection {
       this.outputLog('开始执行任务...');
       await this.createCollectionWindow();
       await this.waitForAllPendingTasks();
-      while (this.isProcessingQueue || this.activeProcessors > 0) {
-        await this.delay(500); // 等待500ms后再次检查
-      }
+
+      // 等待处理完成 - 使用事件驱动方式替代while循环
+      await this.waitUntilProcessingComplete();
+
       if (this.browserWindow) {
         this.browserWindow.close();
         this.browserWindow = null;
@@ -1253,5 +1303,20 @@ export class Collection {
       this.activeProcessors = 0;
       this.isCancelled = true;
     }
+  }
+
+  // 等待处理完成 - 替代while循环
+  private waitUntilProcessingComplete(): Promise<void> {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!this.isProcessingQueue && this.activeProcessors === 0) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 500); // 检查间隔改为500ms
+
+      // 添加到定时器数组以便于清理
+      this.timers.push(checkInterval as unknown as NodeJS.Timeout);
+    });
   }
 }
