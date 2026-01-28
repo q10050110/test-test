@@ -7,7 +7,7 @@ import { globalBroadcast } from './ipc/broadcast.js'
 // 重启相关常量
 const RESTART_COUNT_KEY = 'restart-count'
 const MAX_RESTART_COUNT = 3
-
+let IS_EXITING = false
 class ElectronApp {
   private isAppCrashed = false;
 
@@ -152,12 +152,19 @@ class ElectronApp {
     /**
      * 应用退出前的清理工作
      */
-    app.on('before-quit', async () => {
+    app.on('before-quit', async (event) => {
+      if (IS_EXITING) return
+      IS_EXITING = true
+
+      event.preventDefault()
       try {
         globalBroadcast.broadcast('app-ready-quit', '退出清理等待')
         await new CloseProcessService().run();
-      } finally {
+        await new Promise(resolve => setTimeout(resolve, 2000))
         app.exit(0)
+      } catch (error) {
+        log.error('退出清理失败！', error)
+        app.exit(1)
       }
       log.info('应用即将退出');
     });

@@ -80,7 +80,7 @@ export class Collection {
   // 新增：任务队列和并发控制
   private taskQueue: any[] = [];
   private isProcessingQueue = false;
-  private maxConcurrentTasks = 1; // 控制并发处理数量
+  private maxConcurrentTasks = 5; // 控制并发处理数量
   private activeProcessors: number = 0;
 
   // 新增：任务状态标志
@@ -142,7 +142,7 @@ export class Collection {
       totalCount: Math.min(this.totalCount, +this.collectionTask.targetCount)
     };
 
-    if (this.mainWindow) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('task-progress', {
         collectionTask: this.collectionTask,
         log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },
@@ -297,7 +297,7 @@ export class Collection {
     // 清除之前的挂起任务
     this.pendingTasks = [];
     let scrollAttempts = 0;
-    const maxScrollAttempts = 30; // 最大尝试次数
+    const maxScrollAttempts = 10; // 最大尝试次数
     this.outputLog(`开始采集链接，目标数量: ${targetCount}`);
     // 等待页面加载 
     await this.delay(2000);
@@ -469,7 +469,6 @@ export class Collection {
         this.processedIds.add(link.id);
         // 写入Excel
         const saveResult = await this.excel?.appendAndSave(integratedData);
-        console.log(saveResult, '表格写入状态');
 
         this.totalCount++;
         this.collectionTask.tableFilePath = this.tableFilePath;
@@ -603,7 +602,7 @@ export class Collection {
         let win: BrowserWindow | null = await new BrowserWindow({
           width: 1200,
           height: 800,
-          show: false,
+          show: true,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,

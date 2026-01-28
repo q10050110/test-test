@@ -175,6 +175,17 @@ export const collectionIpc = (win: BrowserWindow) => {
     }
   });
 
+  // 取消所有任务
+  ipcMain.handle('collection-cancel-all-task', async (event, taskId: string) => {
+    try {
+      await taskManager.stopAllTasks()
+      return true
+    } catch (error) {
+      log.error(error)
+      return true
+    }
+  })
+
   // 删除任务
   ipcMain.handle('collection-delete-task', async (event, taskId: string | string[]) => {
     try {

@@ -323,7 +323,7 @@ export class TaskManager {
    * 通知任务状态更新
    */
   private notifyTaskUpdate(taskId: string, status: string) {
-    if (this.mainWindow) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const task = this.getTask(taskId);
       if (task) {
         this.mainWindow.webContents.send('task-status-update', { task, status });
@@ -401,11 +401,6 @@ export class TaskManager {
  * 终止所有任务（切换登录时调用）
  */
   async stopAllTasks(): Promise<void> {
-    log.info('开始停止所有任务...');
-
-    // 收集所有需要处理的任务ID
-    const allTaskIds = Array.from(this.tasks.keys());
-
     // 首先清空任务队列
     this.taskQueue = [];
 
@@ -418,21 +413,9 @@ export class TaskManager {
       }
     }
 
-    // 更新所有其他任务的状态为已取消
-    for (const taskId of allTaskIds) {
-      if (!this.activeTasks.has(taskId)) { // 不是活跃任务
-        const task = this.tasks.get(taskId);
-        if (task && task.getStatus() !== 'cancelled' && task.getStatus() !== 'completed') {
-          task.updateStatus('cancelled');
-          task.outputLog('用户切换登录，任务被取消');
-
-          // 通知前端状态变更
-          this.notifyTaskUpdate(taskId, 'cancelled');
-        }
-      }
-    }
-
-
-    log.info('所有任务已停止');
+    // 清除所有注册的任务
+    this.tasks.clear()
+    await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
+    log.info(this.tasks.size, '已清空所有队列');
   }
 }
