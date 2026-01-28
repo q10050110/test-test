@@ -67,7 +67,7 @@ export default {
   publish: [
     {
       provider: "generic",
-      url: 'https://plus.shopbang.cn/version/'
+      url: 'https://test-plus.shopbang.cn/version/'
     }
   ],
 

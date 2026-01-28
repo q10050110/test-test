@@ -5,6 +5,7 @@ import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form';
 import feedback from '@/utils/feedback';
 import { useUserStore } from '@/stores';
+import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons-vue';
 // 表单数据
 const formData = ref<Login>({
   phone: '',
@@ -21,6 +22,9 @@ const rules: Record<string, Rule[]> = {
     { min: 6, message: '密码长度不能小于6位', trigger: ['blur', 'change'] }
   ]
 }
+
+// 显示隐藏密码
+const passwordVisible = ref(false)
 
 // 记住密码
 const rememberPassword = ref(false)
@@ -52,7 +56,7 @@ const loading = ref(false)
 const loginHandle = async () => {
   await formRef.value?.validate()
   loading.value = true
-  const { data, code, message } = await loginAPI(formData.value)
+  const { data, code } = await loginAPI(formData.value)
   if (code === 0) {
     changeHandle()
     store.setToken(data.token)
@@ -102,7 +106,12 @@ const operationHandle = (type: 'hide' | 'close') => {
             </a-form-item>
             <a-form-item name="pwd">
               <a-input v-model:value="formData.pwd" @pressEnter="loginHandle" placeholder="请输入密码"
-                type="password"></a-input>
+                :type="passwordVisible ? 'text' : 'password'">
+                <template #suffix>
+                  <EyeOutlined v-if="passwordVisible" @click="passwordVisible = !passwordVisible" class="eye-icon" />
+                  <EyeInvisibleOutlined v-else @click="passwordVisible = !passwordVisible" class="eye-icon" />
+                </template>
+              </a-input>
             </a-form-item>
             <a-form-item>
               <a-checkbox v-model:checked="rememberPassword" @change="changeHandle">记住密码</a-checkbox>

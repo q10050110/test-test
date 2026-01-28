@@ -8,7 +8,7 @@ export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
   private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 5;
+  private maxConcurrentTasks = 1;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
   private constructor() { }
@@ -179,8 +179,6 @@ export class TaskManager {
       });
 
       data.list.forEach((task: Task) => {
-        task.createTime = dayjs(task.createTime).format('YYYY-MM-DD HH:mm:ss');
-        task.updateTime = dayjs(task.updateTime).format('YYYY-MM-DD HH:mm:ss');
         if (!this.tasks.has(task._id)) {
           task.progress = task.progress || { current: 0, total: 0, totalCount: 0 };
           const collection = new Collection(task, this.mainWindow!)

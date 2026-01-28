@@ -7,6 +7,7 @@ import TaskDialog from './components/taskDialog.vue';
 import feedback from '@/utils/feedback';
 import Tabs from './components/tabs.vue';
 import { getLogisticsSimpleAPI } from '@/api/collection'
+import dayjs from 'dayjs';
 // 表单参数
 const initParams = ref({
   pageNo: 1,
@@ -115,12 +116,18 @@ const startTask = async (task: Task) => {
 }
 // 批量开始任务
 const batchStartHandle = async () => {
-  selectData.value?.forEach(async item => {
-    const task = tableData.value?.find(task => task._id === item)
-    if (!task) return
-    startTask(task)
-    await new Promise(resolve => { setTimeout(resolve, 1000) })
-  })
+  if (!selectData.value?.length || !tableData.value?.length) {
+    feedback.error('请选择要开始的任务！');
+    return;
+  }
+
+  for (const item of selectData.value) {
+    const task = tableData.value?.find(task => task._id === item);
+    if (!task) continue;
+
+    await startTask(task);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
 }
 
 // 复制任务
@@ -169,6 +176,8 @@ const getLogisticsSimpleList = async () => {
 }
 getLogisticsSimpleList()
 
+const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+
 // 导出表格
 const exportHandle = async (taskId: string) => {
   window.electronAPI.invoke('collection-download-excel', taskId)
@@ -215,10 +224,10 @@ onUnmounted(() => {
                 {{ record.taskName }}
               </div>
               <div>
-                创建时间：{{ record.createTime }}
+                创建时间：{{ formatDate(record.createTime) }}
               </div>
               <div>
-                最近执行：{{ record.updateTime || '-' }}
+                最近执行：{{ formatDate(record.updateTime) || '-' }}
               </div>
             </template>
             <template v-if="column.key === 'status'">
@@ -259,7 +268,7 @@ onUnmounted(() => {
     </a-row>
     <a-row class="pagination">
       <a-pagination v-model:current="params.pageNo" :defaultPageSize="params.pageSize" :total="total" show-less-items
-        :show-total="total => `每页1条 共${total}条记录`" :showSizeChanger="false" @change="pageChange" />
+        :show-total="total => `每页10条 共${total}条记录`" :showSizeChanger="false" @change="pageChange" />
     </a-row>
     <a-row class="tabs">
       <a-col :span="24">
