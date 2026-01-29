@@ -149,6 +149,11 @@ export const createWindow = () => {
     }
   )
 
+  mainWindow.on('close', (event) => {
+    event.preventDefault()
+    mainWindow?.webContents.send('window-close')
+  })
+
   mainWindow.on('closed', () => {
     log.info('主窗口已关闭')
     mainWindow = null

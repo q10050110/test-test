@@ -84,8 +84,7 @@ const operationHandle = (type: 'hide' | 'close') => {
       <div class="login-left">
         <img src="@/assets/login/background.png" alt="Background" class="background-img" />
         <div class="left-content">
-          <p>文字还没想好，文字还没想好，文字还没想好</p>
-          <p>文字还没想好文字还没想好文字还没想好文字还没想好文字还没</p>
+          <p>化繁为简，让重复成为过去</p>
         </div>
       </div>
 
@@ -193,19 +192,31 @@ const operationHandle = (type: 'hide' | 'close') => {
 
   .left-content {
     position: absolute;
-    bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
-    color: white;
+    bottom: 80px;
+    max-width: 520px;
     text-align: center;
-    padding: 0 20px;
 
     p {
-      margin: 8px 0;
-      font-size: 14px;
-      opacity: 0.8;
+      font-family:
+        'HarmonyOS Sans SC',
+        'Alibaba PuHuiTi 2.0',
+        'Inter',
+        -apple-system,
+        BlinkMacSystemFont,
+        'PingFang SC',
+        'Microsoft YaHei',
+        sans-serif;
+
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.6;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.88);
     }
   }
+
 }
 
 .login-right {

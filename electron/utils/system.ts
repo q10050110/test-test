@@ -588,10 +588,12 @@ export class SysTemUtils {
     /**
      * 退出应用
      */
-    quit: () => {
-      app.quit();
+    quit: (win: BrowserWindow) => {
+      win.close()
     },
-
+    appQuit: () => {
+      app.quit()
+    },
     /**
      * 重启应用
      */

@@ -311,7 +311,7 @@
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
                 <a-form-item label="发货模式">
-                  <a-select placeholder="请选择发货模式" v-model:value="formData.salesSchema">
+                  <a-select placeholder="请选择发货模式" v-model:value="formData.salesSchema" style="width: 80%;">
                     <a-select-option value="FBO">FBO</a-select-option>
                     <a-select-option value="FBS">FBS</a-select-option>
                     <a-select-option value="FBO,FBS">FBO & FBS</a-select-option>
@@ -322,10 +322,10 @@
                 <a-form-item label="跟卖人数">
                   <div class="range-input-wrapper">
                     <a-input-number placeholder="最小值" v-model:value="formData.followMin" style="width: calc(50% - 8px)"
-                      :precision="2" :min="0" />
+                      :min="0" />
                     <span class="separator">至</span>
                     <a-input-number placeholder="最大值" v-model:value="formData.followMax" style="width: calc(50% - 8px)"
-                      :precision="2" :min="0" />
+                      :min="0" />
                   </div>
                 </a-form-item>
               </a-col>
@@ -538,7 +538,7 @@ defineExpose({
 .range-input-wrapper {
   display: flex;
   align-items: center;
-  width: 100%;
+  width: 80%;
 
   .separator {
     margin: 0 8px;

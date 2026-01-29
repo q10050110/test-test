@@ -8,7 +8,7 @@ export const windowIpc = (win: BrowserWindow) => {
         SysTemUtils.appOperations.minimizeToTray(win)
         break;
       case 'close':
-        SysTemUtils.appOperations.quit()
+        SysTemUtils.appOperations.quit(win)
         break;
       case 'maximize':
         SysTemUtils.appOperations.maximize(win)
@@ -17,6 +17,10 @@ export const windowIpc = (win: BrowserWindow) => {
         SysTemUtils.appOperations.unmaximize(win)
         break;
     }
+  })
+
+  ipcMain.on('app-quit', (event, data: any) => {
+    SysTemUtils.appOperations.appQuit()
   })
 
   ipcMain.handle('app', (event, data: any) => {

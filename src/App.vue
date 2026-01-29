@@ -4,10 +4,12 @@ import { useAppStore, useUserStore } from './stores'
 import feedback from './utils/feedback'
 import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
+import type CCloseModal from './components/c-close-modal.vue'
 
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
+const cCloseModalRef = ref<InstanceType<typeof CCloseModal>>()
 
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
@@ -47,6 +49,11 @@ window.electronAPI.on('update-error', async (error) => {
 })
 
 
+window.electronAPI.on('window-close', () => {
+  console.log('关闭窗口了')
+  cCloseModalRef.value && cCloseModalRef.value.openHandle()
+})
+
 const onResize = debounce(() => {
   appStore.setRootFontSize()
 }, 100)
@@ -58,7 +65,8 @@ window.addEventListener('resize', onResize)
   <a-config-provider :locale="zhCN" :theme="appStore.theme">
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
-    <c-modal />
+    <c-modal ref="cModalRef" />
+    <c-close-modal ref="cCloseModalRef" />
   </a-config-provider>
 </template>
 

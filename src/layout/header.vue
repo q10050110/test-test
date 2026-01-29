@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores';
-import type { Task } from '@/types/selectGoods'
 import suofang from '@/assets/window/suofang.png'
 import fangda from '@/assets/window/fangda.png'
 
@@ -11,13 +10,6 @@ const desc = ref('真的真的要退出吗T_T？')
 // 隐藏&放大&关闭
 const operationHandle = async (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value
-  if (type === 'close') {
-    const data = await window.electronAPI.invoke('collection-get-all-tasks', {})
-    const isRunning = data.some((item: Task) => item.taskStatus === 'running')
-    if (isRunning) desc.value = '现在退出的话，正在进行的任务会中断哦～'
-    open.value = true
-    return
-  }
   window.electronAPI.sendMessage('window', type)
 }
 // 导出日志
