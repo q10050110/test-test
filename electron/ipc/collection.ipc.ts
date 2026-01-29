@@ -26,6 +26,26 @@ export const collectionIpc = (win: BrowserWindow) => {
     }
   });
 
+  // 复制任务
+  ipcMain.handle('collection-copy', async (event, data: any) => {
+    const taskId = await taskManager.copyTask(data.data);
+    const task = taskManager.getTask(taskId)!;
+    try {
+      return {
+        code: 200,
+        message: '任务复制成功',
+        data: task,
+      };
+    } catch (error) {
+      log.error('复制任务失败', error);
+      return {
+        code: 500,
+        message: error instanceof Error ? error.message : String(error),
+        data: null,
+      };
+    }
+  })
+
   // 开始任务
   ipcMain.handle('collection-start-task', async (event, taskId: string) => {
     try {

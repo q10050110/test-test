@@ -69,6 +69,7 @@ export class UpdaterManager {
    * 手动触发检测更新
     */
   checkUpdate() {
+    log.info('开始检测更新')
     return autoUpdater.checkForUpdates()
   }
 

@@ -7,6 +7,7 @@ import TaskDialog from './components/taskDialog.vue';
 import feedback from '@/utils/feedback';
 import Tabs from './components/tabs.vue';
 import { getLogisticsSimpleAPI } from '@/api/collection'
+
 import dayjs from 'dayjs';
 // 表单参数
 const initParams = ref({
@@ -59,7 +60,8 @@ const total = ref(0)
 const columns = ref<TableColumnsType<Task>>([{
   title: '任务名称',
   dataIndex: 'taskName',
-  key: 'taskName'
+  key: 'taskName',
+  width: '30%'
 },
 {
   title: '任务状态',
@@ -80,6 +82,7 @@ const columns = ref<TableColumnsType<Task>>([{
 ])
 const selectData = ref<string[]>()
 const rowSelection: TableProps['rowSelection'] = {
+  selectedRowKeys: selectData.value,
   onChange: (selectedRowKeys, selectedRows) => {
     selectData.value = selectedRowKeys as string[]
   }
@@ -128,15 +131,18 @@ const batchStartHandle = async () => {
     await startTask(task);
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
+  selectData.value = []
 }
 
 // 复制任务
+const timer = ref<number | undefined>(undefined)
 const copyHandle = async (task: Task) => {
+  if (timer.value) return feedback.error('请勿频繁点击！')
+  timer.value = setTimeout(() => {
+    timer.value = undefined
+  }, 1000)
   const newTask = JSON.parse(JSON.stringify(task))
-  newTask._id = undefined
-  newTask.taskStatus = 'noExecuted'
-  newTask.taskName = `${task.taskName}-副本`
-  const { code, message } = await window.electronAPI.invoke('collection-create', { data: toRaw(newTask) })
+  const { code, message } = await window.electronAPI.invoke('collection-copy', { data: toRaw(newTask) })
   await getTaskList(undefined, true)
   if (code === 200) return feedback.success('复制成功')
   feedback.error(message)
@@ -156,7 +162,10 @@ const deleteTask = async () => {
   if (!res) return
   const { code, message } = await window.electronAPI.invoke('collection-delete-task', toRaw(selectData.value))
   await getTaskList(undefined, true)
-  if (code === 200) return feedback.success('删除成功')
+  if (code === 200) {
+    selectData.value = []
+    return feedback.success('删除成功')
+  }
   feedback.error(message)
 }
 // 获取任务进度
@@ -202,7 +211,7 @@ onUnmounted(() => {
         </a-input>
       </a-form-item>
       <a-form-item>
-        <a-select v-model:value="params.taskStatus" style="width: 120px;" placeholder="请选择状态">
+        <a-select v-model:value="params.taskStatus" style="width: 140px;" placeholder="请选择状态">
           <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{ item.label
           }}</a-select-option>
         </a-select>

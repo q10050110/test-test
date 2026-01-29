@@ -113,6 +113,27 @@ class ElectronApp {
    * 设置应用事件处理器
    */
   private setupEventHandlers() {
+    // 进程锁
+    const gotTheLock = app.requestSingleInstanceLock();
+
+    if (!gotTheLock) {
+      log.info('应用已在运行，退出当前实例');
+      app.quit();
+      return;
+    }
+
+    // 监听第二个实例尝试启动的事件
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+      log.info('检测到第二个实例尝试启动');
+
+      // 如果有第二个实例启动，则激活现有的窗口
+      const windows = BrowserWindow.getAllWindows();
+      if (windows.length > 0) {
+        const mainWindow = windows[0];
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    });
     /**
      * 应用准备就绪
      */

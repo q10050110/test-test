@@ -27,11 +27,11 @@ export class Collection {
   // 新增：任务队列和并发控制
   private taskQueue: any[] = [];
   private isProcessingQueue = false;
-  private maxConcurrentTasks = 5; // 控制并发处理数量
+  private maxConcurrentTasks = 3; // 控制并发处理数量
   private activeProcessors: number = 0;
   // 新增：任务状态标志
   private isCancelled: boolean = false;
-
+  private taskWindowS: any[] = []
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task };
     this.mainWindow = mainWindow;
@@ -56,6 +56,7 @@ export class Collection {
   // 等待所有挂起的任务完成
   private async waitForAllPendingTasks(): Promise<void> {
     if (this.pendingTasks.length > 0) {
+      log.info(this.pendingTasks.length, '等待完成的任务数量')
       await Promise.allSettled(this.pendingTasks); // 使用 allSettled 防止一个失败影响全部
     }
   }
@@ -264,6 +265,10 @@ export class Collection {
         return;
       }
 
+      if (this.taskWindowS.length >= +this.collectionTask.targetCount) {
+        return
+      }
+
       if (this.taskQueue.length > 20) {
         await this.delay(2000)
         log.info('任务队列数据源充足，等待处理中')
@@ -355,13 +360,13 @@ export class Collection {
       // 检查当前活跃处理器数量，控制并发
       if (this.taskQueue.length > 0 && this.activeProcessors < this.maxConcurrentTasks) {
         // 从队列中取出一批任务处理
-        const batch = this.taskQueue.splice(0, 1); // 每次处理1个，可以根据需要调整
+        const batch = this.taskQueue.splice(0, this.maxConcurrentTasks); // 每次处理5个，可以根据需要调整
 
         if (batch.length > 0) {
           this.activeProcessors++;
 
           // 使用 addPendingTask 包装任务，确保能追踪完成状态
-          const task = this.handleSingleLink(batch[0]);
+          const task = this.handleSingleLink(batch);
           this.addPendingTask(task)
             .finally(() => {
               this.activeProcessors--;
@@ -377,20 +382,21 @@ export class Collection {
   }
 
   // 处理单个链接
-  private async handleSingleLink(link: any): Promise<void> {
-    if (!link) return;
+  private async handleSingleLink(links: any): Promise<void> {
+    if (this.totalCount >= +this.collectionTask.targetCount) return
+    if (!links.length) return;
     // 检查窗口是否存在且未被销毁
-    if (this.checkBrowserAlice()) return;
+    if (this.checkBrowserAlice()) return
+    const ids = links.map((link: any) => link.id).join(',')
     // 检查是否已经处理过此ID
-    if (link.id && this.processedIds.has(link.id)) {
-      this.outputLog(`跳过已处理的商品 ${link.id}`);
-      return;
-    }
-    this.outputLog(`获取商品数据中... ID: ${link.id}`);
-    // 标记这个ID为已处理
-    this.processedIds.add(link.id);
-
-    try {
+    for (const link of links) {
+      if (link.id && this.processedIds.has(link.id)) {
+        this.outputLog(`跳过已处理的商品 ${link.id}`);
+        continue;
+      }
+      this.outputLog(`获取商品数据中... ID: ${link.id}`);
+      // 标记这个ID为已处理
+      this.processedIds.add(link.id);
       // 获取跟卖人数
       if (this.browserWindow && !this.browserWindow.isDestroyed()) {
         try {
@@ -409,38 +415,40 @@ export class Collection {
           log.error(`获取商品 ${link.id} 的跟卖人数失败:`, error);
         }
       }
+    }
+
+    try {
       // 获取商品详细数据
       const res = await request({
         url: '/api/goods/hotSales/getOzonSaleDataByIds',
         method: 'post',
         data: {
-          goodsIds: [link.id],
+          goodsIds: links.map((item: any) => item.id),
           v: 5
         }
       });
-      const integratedData = await this.integrateAndFilterData([link], res.data || []);
+      const integratedData = await this.integrateAndFilterData(links, res.data || []);
       if (integratedData.length > 0) {
-        this.outputLog(`完成商品 ${link.id} 的处理...`);
         this.outputLog('表格写入中...');
         // 写入Excel
-        if (parseInt(this.collectionTask.targetCount) === this.totalCount) return
+
         const saveResult = await this.excel?.appendAndSave(integratedData);
 
-        this.totalCount++;
+        this.totalCount += integratedData.length;
         this.collectionTask.tableFilePath = this.tableFilePath;
 
         if (!saveResult) {
-          this.outputLog(`输出表格文件处于编辑状态中，写入失败... ID: ${link.id}`);
+          this.outputLog(`输出表格文件处于编辑状态中，写入失败... ID: ${integratedData.map((item: any) => item.id).join(',')}`);
         } else {
-          this.outputLog(`表格写入完成，新增 1 条记录，ID: ${link.id}`);
+          this.outputLog(`表格写入完成，新增 ${integratedData.length} 条记录，ID: ${integratedData.length}`);
         }
       } else {
-        this.outputLog(`商品 ${link.id} 经过过滤后不符合条件`);
+        this.outputLog(`商品 ${ids} 经过过滤后不符合条件`);
       }
 
     } catch (error) {
-      log.error(`${this.collectionTask.taskName} 处理商品 ${link.id} 时出错:`, error);
-      this.outputLog(`商品 ${link.id} 处理失败: ${error || '未知错误'}`);
+      log.error(`${this.collectionTask.taskName} 处理商品 ${ids} 时出错:`, error);
+      this.outputLog(`商品 ${ids} 处理失败: ${error || '未知错误'}`);
     } finally {
       this.processed--
     }
@@ -577,12 +585,13 @@ export class Collection {
   // 获取1688数据
   private async get1688Data(link: any) {
     let timer: NodeJS.Timeout | undefined = undefined
+    this.taskWindowS.push(link.id)
     return new Promise(async (resolve, reject) => {
       try {
         let win: BrowserWindow | null = await new BrowserWindow({
           width: 1200,
           height: 800,
-          show: true,
+          show: false,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -681,7 +690,7 @@ export class Collection {
                     const pricePart1 = priceElements[0] ? priceElements[0].textContent.trim() : '';
                     const pricePart2 = priceElements[1] ? priceElements[1].textContent.trim() : '';
                     const fullPrice = pricePart1 + pricePart2;
-                    sourcePrice = isNaN(Number(fullPrice)) ? 0 : fullPrice;
+                    sourcePrice = fullPrice;
                   }
                   
                   // 提取商品图片
@@ -718,7 +727,7 @@ export class Collection {
             resolve(link)
           }
         })
-        win?.webContents?.openDevTools()
+
         win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
         await win?.webContents?.executeJavaScript(`
         new Promise(async (resolve, reject) => {
@@ -797,12 +806,14 @@ export class Collection {
         })
       `)
       } catch (error) {
+        this.taskWindowS.splice(this.taskWindowS.indexOf(link.id), 1)
         reject(error)
       }
     })
   }
   // 整合和过滤数据的方法
   private async integrateAndFilterData(links: any[], apiData: any[]): Promise<any[]> {
+    if (this.taskWindowS.length >= +this.collectionTask.targetCount) return []
     try {
       const apiDataMap = new Map();
       (apiData.map((item: any) => ({ ...item, ...item.data })) || []).forEach(item => {
@@ -819,6 +830,7 @@ export class Collection {
       });
       const filteredData = await this.filterData(integratedData)
       for (const link of filteredData) {
+        if (this.taskWindowS.length >= +this.collectionTask.targetCount) continue
         await this.get1688Data(link)
       }
       const finalIntegratedData = await this.integrateAdditionalData(filteredData);
@@ -963,7 +975,8 @@ export class Collection {
       const overallResult = results.every(r => r);
       return overallResult;
     });
-    return filteredData;
+    const needNum = +this.collectionTask.targetCount - this.totalCount
+    return filteredData.slice(0, needNum);
   }
 
   /**
@@ -1141,24 +1154,26 @@ export class Collection {
   async cancel() {
     if (this.isCancelled) throw new Error('任务正在取消中，请勿频繁请求...')
     this.outputLog('任务取消中...')
-    this.isCancelled = true;
+    this.isCancelled = true
     this.timers.forEach(timer => {
       if (timer) {
-        clearTimeout(timer);
+        clearTimeout(timer)
       }
     });
-    this.timers = [];
+    this.timers = []
 
     if (this.browserWindow) {
-      this.browserWindow.close();
-      this.browserWindow = null;
+      this.browserWindow.close()
+      this.browserWindow = null
     }
     if (this.excel) {
-      await this.excel.flushToDisk();
+      await this.excel.flushToDisk()
     }
-    await this.waitForAllPendingTasks();
-    this.updateStatus('cancelled');
-    this.outputLog('任务已取消');
+    await this.waitForAllPendingTasks()
+    this.processed = 0
+    this.taskWindowS = []
+    this.updateStatus('cancelled')
+    this.outputLog('任务已取消')
   }
 
   // 检查浏览器是否存活
@@ -1190,7 +1205,7 @@ export class Collection {
         this.browserWindow.close();
         this.browserWindow = null;
       }
-      this.processed = 0;
+
       this.updateStatus('completed');
       this.outputLog('任务执行完成');
       return this.collectionTask;
@@ -1205,6 +1220,8 @@ export class Collection {
       this.isProcessingQueue = false;
       this.activeProcessors = 0;
       this.isCancelled = true;
+      this.taskWindowS = []
+      this.outputLog('重置进度详情')
     }
   }
 }

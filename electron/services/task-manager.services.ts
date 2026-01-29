@@ -8,7 +8,7 @@ export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
   private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 1;
+  private maxConcurrentTasks = 2;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
   private constructor() { }
@@ -84,6 +84,31 @@ export class TaskManager {
     });
   }
 
+  /** 
+   * 复制任务
+    */
+  copyTask(taskData: Task): Promise<string> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await request({
+          url: '/api/auto/autoTask/copyTask',
+          method: 'post',
+          data: {
+            taskId: taskData._id
+          },
+        });
+        const newTaskData = { ...taskData, _id: response.data };
+        const collection = new Collection(newTaskData, this.mainWindow!);
+        collection.complementTaskInfo();
+        this.tasks.set(collection.getTaskInfo()._id, collection);
+        const taskInfo = collection.getTaskInfo();
+        resolve(taskInfo._id);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+    })
+  }
   /**
    * 开始执行任务
    */
@@ -405,7 +430,7 @@ export class TaskManager {
     // 取消所有活跃任务
     for (const taskId of [...this.activeTasks]) { // 使用副本避免迭代时修改
       try {
-        await this.cancelTask(taskId);
+        await this.cancelTask(taskId)
       } catch (error) {
         log.error(`取消活跃任务 ${taskId} 失败:`, error);
       }
