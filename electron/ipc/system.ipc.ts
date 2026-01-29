@@ -38,4 +38,8 @@ export const windowIpc = (win: BrowserWindow) => {
   ipcMain.on('start-update-app', async () => {
     UpdaterManager.getInstance().startDownload()
   })
+
+  ipcMain.on('quit-and-install-app', async () => {
+    UpdaterManager.getInstance().quitAndInstall()
+  })
 }

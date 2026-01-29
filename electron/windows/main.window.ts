@@ -52,6 +52,7 @@ export const createWindow = () => {
   try {
     resisterAllIpc(mainWindow)
     const updaterManagerInstance = UpdaterManager.getInstance()
+    updaterManagerInstance.init()
     updaterManagerInstance.setMainWindow(mainWindow)
     updaterManagerInstance.checkUpdate()
     log.info('IPC处理器注册成功')

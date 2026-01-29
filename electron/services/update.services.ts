@@ -34,10 +34,11 @@ export class UpdaterManager {
     })
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
-      log.info('检测到新版本')
+      log.info(info, '检测到新版本')
       this.send('update-available', {
         version: info.version,
-        releaseNotes: info.releaseNotes
+        date: info.releaseDate,
+        size: info.files[0].size
       })
     })
 
@@ -47,10 +48,12 @@ export class UpdaterManager {
     })
 
     autoUpdater.on('download-progress', progress => {
+      log.info(progress, '下载进度')
       this.send('update-download-progress', {
         percent: Math.floor(progress.percent),
-        transferred: progress.transferred,
-        total: progress.total
+        speed: (progress.bytesPerSecond / 1024 / 1024).toFixed(1), // MB/s
+        downloaded: (progress.transferred / 1024 / 1024).toFixed(1),
+        total: (progress.total / 1024 / 1024).toFixed(1)
       })
     })
 
@@ -94,6 +97,7 @@ export class UpdaterManager {
     this.isInit = true
     autoUpdater.autoDownload = false
     autoUpdater.allowDowngrade = false
+    autoUpdater.autoInstallOnAppQuit = false
     this.registerEvents()
   }
 }

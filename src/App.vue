@@ -5,12 +5,23 @@ import feedback from './utils/feedback'
 import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
 import type CCloseModal from './components/c-close-modal.vue'
+import type { Progress, Version } from './types'
 
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
 const cCloseModalRef = ref<InstanceType<typeof CCloseModal>>()
-
+const version = ref<Version>({
+  version: '未知',
+  size: 0,
+  releaseDate: '未知'
+})
+const progress = ref<Progress>({
+  percent: 0,
+  total: '0',
+  speed: '0',
+  downloaded: '0'
+})
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
   store.logout()
@@ -25,15 +36,20 @@ window.electronAPI.on('checking-for-update', () => {
   console.log('检测更新啦~~')
 })
 
-window.electronAPI.on('update-available', async () => {
+window.electronAPI.on('update-available', async (info: Version) => {
   console.log('发现新版本啦~~')
   await nextTick()
+  version.value = info
   cModalRef.value && cModalRef.value.openHandle()
 })
 
 window.electronAPI.on('update-not-available', () => {
   feedback.success('当前版本已经是最新的啦~~~')
   console.log('已经是最新版本啦~~')
+})
+
+window.electronAPI.on('update-download-progress', (data: Progress) => {
+  progress.value = data
 })
 
 window.electronAPI.on('update-downloaded', async () => {
@@ -65,7 +81,7 @@ window.addEventListener('resize', onResize)
   <a-config-provider :locale="zhCN" :theme="appStore.theme">
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
-    <c-modal ref="cModalRef" />
+    <c-modal ref="cModalRef" :version="version" :progress="progress" />
     <c-close-modal ref="cCloseModalRef" />
   </a-config-provider>
 </template>

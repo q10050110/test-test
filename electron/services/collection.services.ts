@@ -7,7 +7,7 @@ import { ExcelWriter } from '../utils/excel.js';
 import { SysTemUtils } from '../utils/system.js';
 import { fileURLToPath } from 'url'
 import { Task, TaskStatus } from '../types/collection.js'
-
+import * as cheerio from 'cheerio'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -248,7 +248,7 @@ export class Collection {
     // 等待页面加载 
     await this.delay(2000);
     // 获取初始链接
-    const initialLinks = (await this.extractLinks())?.slice(0, targetCount) || [];
+    const initialLinks = (await this.extractLinks()) || [];
     this.collectedLinks = [...initialLinks];
     this.processed = this.collectedLinks.length
 
@@ -354,7 +354,8 @@ export class Collection {
         this.isCancelled = true;
         break;
       }
-      if (this.totalCount === parseInt(this.collectionTask.targetCount)) {
+      if (this.taskWindowS.length === parseInt(this.collectionTask.targetCount)) {
+        log.info('已达到目标数量，停止处理队列')
         break // 已达到目标数量
       }
       // 检查当前活跃处理器数量，控制并发
@@ -383,7 +384,7 @@ export class Collection {
 
   // 处理单个链接
   private async handleSingleLink(links: any): Promise<void> {
-    if (this.totalCount >= +this.collectionTask.targetCount) return
+    if (this.taskWindowS.length > +this.collectionTask.targetCount) return
     if (!links.length) return;
     // 检查窗口是否存在且未被销毁
     if (this.checkBrowserAlice()) return
@@ -427,8 +428,11 @@ export class Collection {
           v: 5
         }
       });
-      const integratedData = await this.integrateAndFilterData(links, res.data || []);
+
+      const integratedData = (await this.integrateAndFilterData(links, res.data || []))
+
       if (integratedData.length > 0) {
+        if (this.isCancelled) return
         this.outputLog('表格写入中...');
         // 写入Excel
 
@@ -509,73 +513,49 @@ export class Collection {
   private async extractLinks(): Promise<any[]> {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return [];
     try {
-      const result = await this.browserWindow.webContents.executeJavaScript(`
-      (function() {
-        const links = document.querySelectorAll('#contentScrollPaginator a');
-        const domain = window.location.origin;
-        const linksParent = [];
-        
-        for (let i = 0; i < links.length; i++) {
-          const element = links[i];
-          const href = element.getAttribute('href');
-          const cover = element.querySelector('img')?.getAttribute('src');
-          const idMatch = href?.match(/-(\\d+)(?=\\/|\\?)/);
-          const id = idMatch ? idMatch[1] : null;
-          
-          if (id) {
-            const queryUrl = encodeURIComponent(
-              \`/modal/otherOffersFromSellers?product_id=\${id}&page_changed=true\`
-            );
-            const requestUrl = \`\${domain}/api/entrypoint-api.bx/page/json/v2?url=\${queryUrl}\`;
-            const link = \`https://www.ozon.ru/product/\${id}\`;
-            
-            // 获取价格信息
-            const parentElement = element.parentElement;
-            const priceText = parentElement?.querySelector('.tsHeadline500Medium')?.textContent || '';
-            const price = parseFloat(priceText.replace(/[\\s\\u2009₽]/g, ''));
-            
-            const oPriceText = parentElement?.querySelector('.tsBodyControl400Small')?.textContent || '';
-            const oPriceMatch = oPriceText.match(/[\\d\\s\\u2009]+(?=₽)/);
-            const oPrice = oPriceMatch ? oPriceMatch[0].replace(/[\\s\\u2009]/g, '') : null;
-            
-            const discountMatch = oPriceText.trim().match(/-\\d+%|\\d+%/);
-            const discount = discountMatch ? discountMatch[0] : null;
-            
-            const name = parentElement?.querySelector('a')?.children[0]?.children[0]?.textContent || '';
-            
-            const ratingText = parentElement?.querySelector('.p6b3_0_6-a4')?.querySelector('svg')?.nextSibling?.textContent || '';
-            const ratingMatch = ratingText.match(/\\d+\\.\\d+/);
-            const rating = ratingMatch ? parseFloat(ratingMatch[0]).toFixed(1) : null;
-            
-            const reviewCountMatch = ratingText.match(/(\\d+)\\s*отзывов/);
-            const reviewCount = reviewCountMatch ? parseInt(reviewCountMatch[1]) : 0;
-            
-            // 检查是否已存在该ID
-            const exists = linksParent.some(item => item.id === id);
-            if (!exists) {
-              linksParent.push({
-                href,
-                price: price || 0,
-                oPrice,
-                discount,
-                link,
-                cover,
-                name,
-                id,
-                rating,
-                sku: id,
-                requestUrl,
-                reviewCount,
-              });
-            }
-          }
-        }
-        
-        return linksParent;
-      })();
-    `);
+      const html = await this.browserWindow.webContents.executeJavaScript(
+        'document.documentElement.outerHTML'
+      );
+      const $ = cheerio.load(html);
+      const links = $('#contentScrollPaginator a');
+      const linksParent: any[] = [];
+      const domain = new URL(this.browserWindow!.webContents.getURL()).origin;
 
-      return result || [];
+      // 解析DOM，获取商品数据
+      links.each((index, element) => {
+        const href = $(element).attr('href');
+        const cover = $(element).find('img')?.attr('src');
+        const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1];
+        const queryUrl = encodeURIComponent(
+          `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`
+        );
+        const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`;
+        const link = `https://www.ozon.ru/product/${id}`;
+        const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '');
+        const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
+        const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
+        const name = $(element).parent().find('a').children('div').children('span').text();
+        const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1);
+        const reviewCount = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/(\d+)\s*отзывов/)?.[1]) || 0;
+
+        if (!linksParent.map(item => item.id).includes(id)) {
+          linksParent.push({
+            href,
+            price: Number(price),
+            oPrice,
+            discount,
+            link,
+            cover,
+            name,
+            id,
+            rating,
+            sku: id,
+            requestUrl,
+            reviewCount,
+          });
+        }
+      });
+      return linksParent;
     } catch (error) {
       log.error(`${this.collectionTask.taskName}提取链接时出错:`, error);
       return [];
@@ -611,7 +591,6 @@ export class Collection {
         await new Promise(resolve => setTimeout(resolve, 2000))
         let processed = false
         win?.webContents?.on('console-message', async (event, level, message) => {
-          console.log(`[浏览器控制台 ${level}]:`, message)
           if (processed) return
           if (message.includes('tab=imageSearch') || message.includes('imageId')) {
             processed = true
@@ -651,77 +630,21 @@ export class Collection {
             `)
             }
             await new Promise(resolve => setTimeout(resolve, 10000))
-            const html = await win?.webContents?.executeJavaScript(`
-              new Promise((resolve, reject) => {
-                try {
-                  // 获取页面HTML
-                  const pageHtml = document.documentElement.outerHTML;
-                  
-                  // 使用原生DOM解析器解析HTML
-                  const parser = new DOMParser();
-                  const doc = parser.parseFromString(pageHtml, 'text/html');
-                  
-                  // 查找商品容器
-                  const productContainer = doc.querySelector('.offerListLayoutWrapper--o0LXuuFm > div');
-                  if (!productContainer) {
-                    resolve({ error: '未找到商品容器' });
-                    return;
-                  }
-                  
-                  // 提取商品ID
-                  const renderKey = productContainer.getAttribute('data-renderkey');
-                  if (!renderKey) {
-                    resolve({ error: '未找到商品渲染键值' });
-                    return;
-                  }
-                  
-                  const keyParts = renderKey.split('_');
-                  const offerId = keyParts[keyParts.length - 1];
-                  if (!offerId) {
-                    resolve({ error: '无法提取商品ID' });
-                    return;
-                  }
-                  
-                  // 提取价格信息
-                  const priceRow = productContainer.querySelector('.offer-price-row');
-                  let sourcePrice = 0;
-                  if (priceRow) {
-                    const priceElements = priceRow.querySelectorAll('.textMain--s_l2eHVJ');
-                    const pricePart1 = priceElements[0] ? priceElements[0].textContent.trim() : '';
-                    const pricePart2 = priceElements[1] ? priceElements[1].textContent.trim() : '';
-                    const fullPrice = pricePart1 + pricePart2;
-                    sourcePrice = fullPrice;
-                  }
-                  
-                  // 提取商品图片
-                  const coverImage = productContainer.querySelector('.mainImg--GT1EYFGa')?.getAttribute('src') || '';
-                  
-                  resolve({
-                    success: true,
-                    data: {
-                      link1688: 'https://detail.1688.com/offer/' + offerId + '.html',
-                      sourcePrice: sourcePrice,
-                      cover2: coverImage
-                    }
-                  });
-                } catch (error) {
-                  resolve({ error: error.message });
-                }
-              })
-            `);
-
-            // 处理结果
-            if (html && html.success) {
-              const { link1688, sourcePrice, cover2 } = html.data;
-              link['1688link'] = link1688;
-              link.sourcePrice = sourcePrice;
-              link.cover2 = cover2;
-            } else {
-              log.error('获取1688商品信息失败:', html?.error || '未知错误');
-              link['1688link'] = '';
-              link.sourcePrice = 0;
-              link.cover2 = '';
+            const html = await win?.webContents?.executeJavaScript(`new Promise((resolve,reject)=>{
+            try {
+              resolve(document.documentElement.outerHTML)
+            } catch (error) {
+              reject(error)
             }
+            })`)
+            const $ = cheerio.load(html)
+            const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
+            const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
+            const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
+            link['1688link'] = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+            const sourcePrice = `${price1}${price2}`
+            link.sourcePrice = isNaN(Number(sourcePrice)) ? 0 : sourcePrice
+            link.cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
             win?.destroy()
             clearInterval(timer)
             resolve(link)
@@ -830,14 +753,16 @@ export class Collection {
       });
       const filteredData = await this.filterData(integratedData)
       for (const link of filteredData) {
-        if (this.taskWindowS.length >= +this.collectionTask.targetCount) continue
+        if (this.isCancelled) return []
+        if (this.taskWindowS.length >= +this.collectionTask.targetCount) {
+          filteredData.splice(this.taskWindowS.indexOf(link.id), 1)
+          continue
+        }
         await this.get1688Data(link)
+        await this.delay(1000)
       }
       const finalIntegratedData = await this.integrateAdditionalData(filteredData);
-      return finalIntegratedData.map(item => ({
-        ...item,
-        createDate: dayjs(item.createDate).format('YYYY-MM-DD HH:mm:ss')
-      }));
+      return finalIntegratedData
     } catch (error) {
       log.error('整合数据时出错:', error);
       return [];
@@ -965,18 +890,19 @@ export class Collection {
         return result;
       },
       // 最小利润率校验
-      (item: any) => {
-        const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
-        return result;
-      },
+      /*       (item: any) => {
+              const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
+              return result;
+            }, */
     ];
     const filteredData = data.filter(item => {
       const results = filters.map(filterFn => filterFn(item));
       const overallResult = results.every(r => r);
       return overallResult;
     });
-    const needNum = +this.collectionTask.targetCount - this.totalCount
-    return filteredData.slice(0, needNum);
+    log.info(filteredData.length, '筛选后的数据')
+    return filteredData
+
   }
 
   /**

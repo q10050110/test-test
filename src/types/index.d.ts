@@ -17,3 +17,16 @@ export interface Params {
   pageNo: number
   pageSize: number
 }
+
+export type Version = {
+  version: string
+  releaseDate: string
+  size: number
+}
+
+export type Progress = {
+  percent: number
+  total: string
+  speed: string
+  downloaded: string
+}
