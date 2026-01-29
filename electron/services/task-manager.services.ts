@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron';
-import { Collection, Task } from './collection.services.js';
+import { Collection } from './collection.services.js';
 import log from '../log/index.js';
 import request from '../utils/request.js';
-import dayjs from 'dayjs';
+import { Task } from '../types/collection.js';
 import fs from 'fs/promises'
 export class TaskManager {
   private static instance: TaskManager;

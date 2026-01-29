@@ -2,64 +2,13 @@ import request from '../utils/request.js';
 import dayjs from 'dayjs';
 import path, { join } from 'path';
 import { BrowserWindow, session } from 'electron';
-import * as cheerio from 'cheerio';
 import log from '../log/index.js';
-export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
 import { ExcelWriter } from '../utils/excel.js';
 import { SysTemUtils } from '../utils/system.js';
 import { fileURLToPath } from 'url'
+import { Task, TaskStatus } from '../types/collection.js'
 
-export interface Task {
-  _id: string;
-  taskStatus: TaskStatus;
-  progress: any;
-  createTime: string;
-  updateTime: string;
-  taskName: string;
-  targetUrl: string;
-  myProfitPercent?: number;
-  internalExpress?: string;
-  rubExpressPrice?: number;
-  elsePercent?: number;
-  sourceType: string;
-  targetCount: string;
-  targetProfitPercent: number;
-  brandType?: string;
-  soldCountMin?: number;
-  soldCountMax?: number;
-  gmvSumMin?: number;
-  gmvSumMax?: number;
-  salePriceMin?: number;
-  salePriceMax?: number;
-  weightMin?: number;
-  weightMax?: number;
-  upGoodsTimeMin?: number;
-  upGoodsTimeMax?: number;
-  monthDynamicsMin?: number;
-  monthDynamicsMax?: number;
-  adFeeMin?: number;
-  adFeeMax?: number;
-  promotionDayMin?: number;
-  promotionDayMax?: number;
-  promotionDiscountMin?: number;
-  promotionDiscountMax?: number;
-  promotionDynamicsMin?: number;
-  promotionDynamicsMax?: number;
-  promoteDayMin?: number;
-  promoteDayMax?: number;
-  viewsMin?: number;
-  viewsMax?: number;
-  cardRateMin?: number;
-  cardRateMax?: number;
-  showRateMin?: number;
-  showRateMax?: number;
-  salesSchema?: string;
-  followMin?: number;
-  followMax?: number;
-  token?: string;
-  log?: { date: string; log: string }[];
-  tableFilePath?: string;
-}
 
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 const __filename = fileURLToPath(import.meta.url)
@@ -77,22 +26,16 @@ export class Collection {
   tableFilePath: string = '';
   private pendingTasks: Promise<any>[] = [];
   private processedIds: Set<string> = new Set();
-
   // 任务队列和并发控制
   private taskQueue: any[] = [];
   private isProcessingQueue = false;
   private maxConcurrentTasks = 5; // 控制并发处理数量
   private activeProcessors: number = 0;
-
   // 任务状态标志
   private isCancelled: boolean = false;
-  private isInitialized: boolean = false;
-
   // 用于控制滚动的标志
-  private isWaitingForProcessing = false;
   private scrollIntervalId: NodeJS.Timeout | null = null;
   private processingCheckIntervalId: NodeJS.Timeout | null = null;
-
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.collectionTask = { ...task };
     this.mainWindow = mainWindow;
@@ -310,7 +253,7 @@ export class Collection {
     // 获取初始链接
     const initialLinks = (await this.extractLinks())?.slice(0, targetCount) || [];
     this.collectedLinks = [...initialLinks];
-    this.processed = this.collectedLinks.length - this.processedIds.size
+    this.processed = this.activeProcessors
 
     if (initialLinks.length) {
       // 将初始链接加入队列而不是直接处理
@@ -323,7 +266,7 @@ export class Collection {
 
     // 启动队列处理器
     this.startQueueProcessor();
-    this.processed = this.collectedLinks.length - this.processedIds.size
+    this.processed = this.activeProcessors
     this.outputLog(`收集完成，共收集到 ${Math.min(this.collectedLinks.length, +this.collectionTask.targetCount)} 个链接`);
     this.collectedLinks = this.collectedLinks.slice(0, targetCount);
     return this.collectedLinks;
@@ -342,16 +285,14 @@ export class Collection {
     }
 
     // 检查是否有活跃处理器，如果有则等待处理完成
-    if (this.activeProcessors > 0) {
-      this.outputLog(`有 ${this.activeProcessors} 个商品正在处理，暂停滚动等待...`);
+    if (this.activeProcessors > 0 && this.activeProcessors < targetCount) {
       // 等待一段时间再检查
       await this.delay(1000);
       return this.processScrolling(targetCount, maxScrollAttempts, scrollAttempts);
     }
 
-    const previousLength = this.collectedLinks.length;
     // 随机延迟
-    const randomDelay = this.getRandomDelay(2000, 4000);
+    const randomDelay = this.getRandomDelay(2000, 2000);
     this.outputLog(`滚动加载中... (${scrollAttempts + 1}/${maxScrollAttempts})，已收集: ${this.collectedLinks.length}`);
     await this.delay(randomDelay);
 
@@ -372,7 +313,7 @@ export class Collection {
 
     if (uniqueNewLinks.length > 0) {
       this.collectedLinks = [...this.collectedLinks, ...uniqueNewLinks];
-      this.processed = this.collectedLinks.length - this.processedIds.size
+      this.processed = this.activeProcessors
       this.outputLog(`处理过的商品数量：${this.processedIds.size}`)
       // 将新链接加入队列而不是直接处理
       this.addToTaskQueue(uniqueNewLinks);
@@ -528,7 +469,7 @@ export class Collection {
       log.error(`${this.collectionTask.taskName} 处理商品 ${link.id} 时出错:`, error);
       this.outputLog(`商品 ${link.id} 处理失败: ${error || '未知错误'}`);
     } finally {
-      this.processed = this.collectedLinks.length - this.processedIds.size
+      this.processed = this.activeProcessors
     }
   }
 
@@ -1287,7 +1228,7 @@ export class Collection {
         this.browserWindow.close();
         this.browserWindow = null;
       }
-      this.processed = 0;
+
       this.updateStatus('completed');
       this.outputLog('任务执行完成');
       return this.collectionTask;
