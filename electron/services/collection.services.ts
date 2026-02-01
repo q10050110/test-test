@@ -6,7 +6,7 @@ import log from '../log/index.js';
 import { ExcelWriter } from '../utils/excel.js';
 import { SysTemUtils } from '../utils/system.js';
 import { fileURLToPath } from 'url'
-import { Task, TaskStatus } from '../types/collection.js'
+import { Task, TaskStatus } from './collection/type.js'
 import * as cheerio from 'cheerio'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 const __filename = fileURLToPath(import.meta.url)
@@ -206,7 +206,7 @@ export class Collection {
       return;
     }
 
-    const targetCount = parseInt(this.collectionTask.targetCount || '0');
+    const targetCount = this.collectionTask.targetCount || 0
     if (targetCount <= 0) {
       log.info('目标数量无效，跳过滚动采集');
       return;
@@ -332,7 +332,7 @@ export class Collection {
   }
   // 启动队列处理器
   private async startQueueProcessor() {
-    if (this.isProcessingQueue || this.isCancelled || this.totalCount === parseInt(this.collectionTask.targetCount)) {
+    if (this.isProcessingQueue || this.isCancelled || this.totalCount === this.collectionTask.targetCount) {
       return; // 已经在处理中或已取消
     }
     this.isProcessingQueue = true;
@@ -349,12 +349,12 @@ export class Collection {
 
   // 处理队列中的任务
   private async processQueue() {
-    while ((this.taskQueue.length > 0 || this.activeProcessors > 0) && !this.isCancelled && this.totalCount < parseInt(this.collectionTask.targetCount)) {
+    while ((this.taskQueue.length > 0 || this.activeProcessors > 0) && !this.isCancelled && this.totalCount < this.collectionTask.targetCount) {
       if (this.collectionTask.taskStatus === 'cancelled') {
         this.isCancelled = true;
         break;
       }
-      if (this.taskWindowS.length === parseInt(this.collectionTask.targetCount)) {
+      if (this.taskWindowS.length === this.collectionTask.targetCount) {
         log.info('已达到目标数量，停止处理队列')
         break // 已达到目标数量
       }

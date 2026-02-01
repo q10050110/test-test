@@ -1,0 +1,204 @@
+import request from '../../utils/request.js'
+import { Task } from './type.js'
+import log from '../../log/index.js'
+import dayjs from 'dayjs'
+export class DataProcessService {
+  private data: Map<string, any> = new Map()
+  constructor() { }
+  /** 
+   * 获取基础数据
+    */
+  async getBaseData(data: any[]) {
+    for (const item of data) {
+      const cached = this.data.get(item.id)
+      if (cached) {
+        const merge = { ...cached, ...item }
+        this.data.set(item.id, merge)
+        continue
+      }
+    }
+
+    try {
+      const res = await request({
+        url: '/api/goods/hotSales/getOzonSaleDataByIds',
+        method: 'post',
+        data: {
+          goodsIds: data.map((item: any) => item.id),
+          v: 5
+        }
+      })
+
+      if (res.data) {
+        res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
+          item.nullableCreateDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
+          item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}%1501~5000卢布: ${item.rfbs || 0}%>5000卢布：${item.rfbs_large || 0}%`
+          item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}%1501~5000卢布: ${item.fbp || 0}%>5000卢布：${item.fbp_large || 0}%`
+          if (item.goods_id) this.data.set(item.goods_id, item)
+        })
+      }
+
+      const mergeData = data.map(item => {
+        const obj = this.data.get(item.id)
+        if (obj) {
+          return { ...item, ...obj, productId: item.id };
+        }
+        return { ...item, productId: item.id };
+      })
+      return mergeData
+    } catch (error) {
+      throw new Error('获取基础数据失败')
+    }
+  }
+
+  /** 
+   * 获取详细数据
+    */
+  async getDetailData(params: { taskId: string, reqDatas: any[] }) {
+    try {
+      const { taskId, reqDatas } = params
+      const res = await request({
+        url: '/api/auto/filterGoods/goodsFilter',
+        method: 'post',
+        data: {
+          taskId,
+          reqDatas
+        }
+      })
+
+      return res.data.map((item: any) => {
+        const obj = this.data.get(item.id)
+        if (obj) item = { ...obj, ...item }
+        return item
+      })
+    } catch (error) {
+      throw new Error('获取详情数据失败')
+    }
+  }
+  /** 
+   * 数据过滤
+    */
+  async filterData(data: any[], task: Task) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return [];
+    }
+
+    // 定义过滤条件映射
+    const filters = [
+      // 品牌类型过滤
+      (item: any) => {
+        if (task?.brandType === undefined || task?.brandType === null || +task?.brandType === 2) return true;
+        if (+task?.brandType === 0) return item.brand && item.brand.trim();
+        if (+task?.brandType === 1) return !(item.brand && item.brand.trim());
+        return true;
+      },
+      // 销量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.soldCount, task.soldCountMin, task.soldCountMax);
+        return result;
+      },
+      // 月销售额范围校验
+      (item: any) => {
+        const result = this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax);
+        return result;
+      },
+      // 销售价格范围校验
+      (item: any) => {
+        const result = this.checkRange(item.price, task.salePriceMin, task.salePriceMax);
+        return result;
+      },
+      // 重量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.weight, task.weightMin, task.weightMax);
+        return result;
+      },
+      // 上架时间范围校验
+      (item: any) => {
+        const result = this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax);
+        return result;
+      },
+      // 月销售动态范围校验
+      (item: any) => {
+        const result = this.checkRange(item.salesDynamics, task.monthDynamicsMin, task.monthDynamicsMax);
+        return result;
+      },
+      // 广告份额范围校验
+      (item: any) => {
+        const result = this.checkRange(item.drr, task.adFeeMin, task.adFeeMax);
+        return result;
+      },
+      // 参与促销天数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.daysInPromo, task.promotionDayMin, task.promotionDayMax);
+        return result;
+      },
+      // 参与促销折扣范围校验
+      (item: any) => {
+        const result = this.checkRange(item.discount, task.promotionDiscountMin, task.promotionDiscountMax);
+        return result;
+      },
+      // 促销活动转化率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.promoRevenueShare, task.promotionDynamicsMin, task.promotionDynamicsMax);
+        return result;
+      },
+      // 付费推广天数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.daysWithTrafarets, task.promoteDayMin, task.promoteDayMax);
+        return result;
+      },
+      // 浏览量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sessionCount, task.viewsMin, task.viewsMax);
+        return result;
+      },
+      // 商品卡片加购率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.convToCartPdp, task.cardRateMin, task.cardRateMax);
+        return result;
+      },
+      // 搜索和目录加购率范围校验
+      (item: any) => {
+        const result = this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax);
+        return result;
+      },
+      // 跟卖人数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax);
+        return result;
+      },
+      // 最小利润率校验
+      /*       (item: any) => {
+              const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
+              return result;
+            }, */
+    ];
+    const filteredData = data.filter(item => {
+      const results = filters.map(filterFn => filterFn(item));
+      const overallResult = results.every(r => r);
+      return overallResult;
+    });
+    return filteredData
+
+  }
+
+
+  /**
+ * 检查数值是否在范围内
+ * @param value 待检查的值
+ * @param min 最小值
+ * @param max 最大值
+ * @returns 是否符合范围
+ */
+  private checkRange(value: number | string | undefined | null, min?: number, max?: number): boolean {
+    if ((min === undefined && max === undefined) || (min === null && max === null)) return true
+
+    let num = 0
+    if (value !== undefined && value !== null) num = Number(value)
+    if (isNaN(num)) return false
+
+    if (min !== undefined && min !== null && num < min) return false
+    if (max !== undefined && max !== null && num > max) return false
+
+    return true
+  }
+}

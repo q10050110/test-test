@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
-import { promises as fsPromises, constants } from 'fs'
-import { dirname, join } from 'path'
+import { promises as fsPromises } from 'fs'
+import { dirname } from 'path'
 import type { Workbook, Worksheet, Row, Font, Fill, Border, CellValue } from 'exceljs'
 import log from '../log/index.js'
 
@@ -346,5 +346,12 @@ export class ExcelWriter {
       writable: !inUse,
       inUse
     };
+  }
+
+  /**
+   * 获取表格文件路径
+    */
+  getFilePath() {
+    return this.filePath
   }
 }

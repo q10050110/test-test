@@ -1,5 +1,4 @@
-import request from '../utils/request.js'
-import { TaskManager } from '../services/task-manager.services.js'
+import { TaskManager } from './collection/task-manager.services.js'
 import { operationStore } from '../store/index.js'
 export class CloseProcessService {
 

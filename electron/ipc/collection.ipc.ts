@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { TaskManager } from '../services/task-manager.services.js';
+import { TaskManager } from '../services/collection/task-manager.services.js';
 import log from '../log/index.js';
 
 export const collectionIpc = (win: BrowserWindow) => {

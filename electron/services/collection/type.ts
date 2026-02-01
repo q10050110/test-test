@@ -12,8 +12,8 @@ export interface Task {
   internalExpress?: string;
   rubExpressPrice?: number;
   elsePercent?: number;
-  sourceType: string;
-  targetCount: string;
+  sourceType: '1' | '2';
+  targetCount: number;
   targetProfitPercent: number;
   brandType?: string;
   soldCountMin?: number;
@@ -51,3 +51,5 @@ export interface Task {
   log?: { date: string; log: string }[];
   tableFilePath?: string;
 }
+
+export type Reason = 'success' | "cancel" | 'failed' | undefined

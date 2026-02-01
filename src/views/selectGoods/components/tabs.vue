@@ -33,6 +33,7 @@ const getTaskStackList = (data?: any) => {
     }
   } else {
     taskStackList.value = taskStackList.value.filter(item => item._id !== task._id)
+    activeKey.value = taskStackList.value?.[0]?._id
   }
 }
 

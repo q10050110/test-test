@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron';
 import { Collection } from './collection.services.js';
-import log from '../log/index.js';
-import request from '../utils/request.js';
-import { Task } from '../types/collection.js';
+import log from '../../log/index.js';
+import request from '../../utils/request.js';
+import { Task } from './type.js'
 import fs from 'fs/promises'
 export class TaskManager {
   private static instance: TaskManager;
@@ -66,7 +66,7 @@ export class TaskManager {
           });
           const newTaskData = { ...taskData, _id: response.data };
           collection = new Collection(newTaskData, this.mainWindow!);
-          collection.complementTaskInfo();
+
           this.tasks.set(collection.getTaskInfo()._id, collection);
         } catch (error) {
           reject(error);
@@ -99,7 +99,6 @@ export class TaskManager {
         });
         const newTaskData = { ...taskData, _id: response.data };
         const collection = new Collection(newTaskData, this.mainWindow!);
-        collection.complementTaskInfo();
         this.tasks.set(collection.getTaskInfo()._id, collection);
         const taskInfo = collection.getTaskInfo();
         resolve(taskInfo._id);
@@ -203,7 +202,7 @@ export class TaskManager {
         data: params,
       });
 
-      data.list.forEach((task: Task) => {
+      data.list.forEach(async (task: Task) => {
         if (!this.tasks.has(task._id)) {
           task.progress = task.progress || { current: 0, total: 0, totalCount: 0 };
           const collection = new Collection(task, this.mainWindow!)
@@ -211,7 +210,7 @@ export class TaskManager {
         } else {
           task.progress = this.tasks.get(task._id)?.getTaskInfo().progress
         }
-        if (task.taskStatus !== 'noExecuted') task.tableFilePath = this.tasks.get(task._id)?.tableFilePath
+        if (task.taskStatus !== 'noExecuted') task.tableFilePath = await this.tasks.get(task._id)?.getTableFilePath()
       });
 
       return data;
@@ -324,8 +323,9 @@ export class TaskManager {
         }
 
         try {
-          await fs.access(task.tableFilePath)
-          await fs.unlink(task.tableFilePath)
+          const filePath = await task.getTableFilePath()
+          await fs.access(filePath)
+          await fs.unlink(filePath)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -382,8 +382,9 @@ export class TaskManager {
         }
 
         try {
-          await fs.access(task.tableFilePath)
-          await fs.unlink(task.tableFilePath)
+          const filePath = await task.getTableFilePath()
+          await fs.access(filePath)
+          await fs.unlink(filePath)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -397,11 +398,13 @@ export class TaskManager {
   }
 
   // 下载表格
-  downloadExcel(taskId: string) {
+  async downloadExcel(taskId: string) {
     const task = this.tasks.get(taskId)
     if (!task) log.error('找不到该任务')
+    const filePath = await task?.getTableFilePath()
+
     try {
-      this.mainWindow?.webContents.downloadURL(`file://${task!.tableFilePath}`)
+      this.mainWindow?.webContents.downloadURL(`file://${filePath}`)
     } catch (error) {
       log.error('下载表格失败', error)
     }
@@ -412,7 +415,7 @@ export class TaskManager {
     if (this.activeTasks.size) {
       for (const taskId of this.activeTasks) {
         const task = this.tasks.get(taskId)
-        if (task && task.getStatus() !== 'running') {
+        if (task && task.getTaskInfo().taskStatus !== 'running') {
           this.activeTasks.delete(taskId)
         }
       }

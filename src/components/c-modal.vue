@@ -6,7 +6,7 @@ defineProps<{
   progress?: Progress
 }>()
 
-const open = ref(true)
+const open = ref(false)
 const status = ref<'isUpdate' | 'download' | 'isInstall'>('download')
 const updateHandle = async () => {
   status.value = 'download'
