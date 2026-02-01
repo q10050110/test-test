@@ -1,23 +1,17 @@
 import { BrowserWindow, session } from 'electron';
 import log from '../../log/index.js'
 import * as cheerio from 'cheerio'
-import { Reason } from './type.js'
-
 
 export class MainWindowService {
   private browserWindow: BrowserWindow | null = null
-  private reason: Reason
-  constructor() { }
-  /** 
-   * 终止标志
-    */
-  abort(reason: Reason) {
-    this.reason = reason
+  private closeHandle: () => void
+  constructor(closeHandle: () => void) {
+    this.closeHandle = closeHandle
   }
   /** 
    * 创建采集窗口
   */
-  createCollectionWindow(url: string) {
+  createCollectionWindow(url: string,) {
     return new Promise((resolve, reject) => {
       let settled = false
       const safeResolve = (v: any) => {
@@ -54,7 +48,7 @@ export class MainWindowService {
           this.closeCollectionWindow()
         }
         safeReject('页面加载超时')
-      }, 1000000);
+      }, 100000);
 
       // 监听页面加载完成事件
       this.browserWindow.webContents.once('dom-ready', async () => {
@@ -66,18 +60,7 @@ export class MainWindowService {
 
       // 监听窗口关闭事件
       this.browserWindow.once('closed', () => {
-        switch (this.reason) {
-          case 'success':
-            log.info('任务完成，窗口关闭')
-            break
-          case 'cancel':
-            log.info('任务取消，窗口关闭')
-            break
-          default:
-            log.info('窗口异常关闭')
-            break;
-        }
-        this.browserWindow = null
+        this.closeHandle && this.closeHandle()
       });
 
       this.browserWindow.loadURL(url);
@@ -88,7 +71,7 @@ export class MainWindowService {
    * 获取页面
     */
   async getHTML() {
-    if (!this.browserWindow) return { $: undefined, domain: undefined }
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) return { $: undefined, domain: undefined }
     try {
       const html = await this.browserWindow.webContents.executeJavaScript('document.documentElement.outerHTML')
       const $ = cheerio.load(html)
@@ -153,10 +136,7 @@ export class MainWindowService {
    * 关闭采集窗口
    */
   async closeCollectionWindow() {
-    if (this.browserWindow) {
-      this.browserWindow.removeAllListeners()
-      this.browserWindow.destroy()
-      this.browserWindow = null
-    }
+    this.browserWindow?.destroy()
+    this.browserWindow = null
   }
 }

@@ -1,4 +1,4 @@
-import { Task, TaskStatus } from './type.js'
+import { Task, TaskStatus, Reason } from './type.js'
 import { MainWindowService } from './main-window.services.js'
 import { WindowService } from './1688-window.services.js'
 import { ExcelService } from './excel.services.js'
@@ -20,37 +20,66 @@ export class Collection {
   private dataProcessService: DataProcessService
   private parseService: ParseService
   private targetData = 0 // 完成的任务
-  private isCancel = false // 是否取消
+  private reason: Reason = undefined
+  private isCleared = false
   private process = 0 // 正在处理的任务
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
-    this.mainWindowService = new MainWindowService()
+    this.mainWindowService = new MainWindowService(this.closeHandle)
     this.windowService = new WindowService()
     this.taskQueueService = new TaskQueueService(this.taskHandle)
     this.excelService = new ExcelService(task.taskName)
     this.dataProcessService = new DataProcessService()
     this.parseService = new ParseService()
   }
-  async run() {
-    try {
-      this.updateStatus('running')
-      this.outputLog('窗口创建成功，任务开始执行')
-      await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
-      this.outputLog('页面解析成功，开始获取商品列表')
-      await this.getHtmlData(this.task.targetCount)
-      await this.waitForAllTasks()
-      this.updateStatus('completed')
-      this.outputLog('任务完成')
-    } catch (error) {
-      log.error(error)
-      this.updateStatus('failed')
-      this.outputLog(`采集失败：${error}`)
-    } finally {
-      log.info('任务结束，开始清理工作')
-      await this.clearStatus()
-      return this.task
+  run() {
+    let timer: NodeJS.Timeout | undefined
+    let settled: boolean = false
+    const safeResolve = (v: any, resolve: Function) => {
+      if (settled) return
+      settled = true
+      resolve(v)
     }
+    const safeReject = (e: any, reject: Function) => {
+      if (settled) return
+      settled = true
+      reject(e)
+    }
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        timer = setInterval(async () => {
+          if (this.reason === 'cancel' || this.reason === 'failed') {
+            clearInterval(timer)
+            safeReject('任务已终止', reject)
+          }
+        }, 1000)
+        this.updateStatus('running')
+        this.outputLog('窗口创建成功，任务开始执行')
+        await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
+        this.outputLog('页面解析成功，开始获取商品列表')
+        await this.getHtmlData(this.task.targetCount)
+        await this.waitForAllTasks()
+        if (this.reason !== 'success') {
+          safeReject('任务已被终止', reject)
+          return
+        }
+        this.updateStatus('completed')
+        this.outputLog('任务完成')
+      } catch (error) {
+        if (this.reason) return
+        this.updateStatus('failed')
+        this.outputLog(`采集失败：${error}`)
+      } finally {
+        log.info('任务结束，开始清理工作')
+        clearInterval(timer)
+        const res = this.reason !== 'failed'
+        this.mainWindowService.closeCollectionWindow()
+        this.clearStatus(res)
+        safeResolve(this.task, resolve)
+      }
+    })
   }
 
 
@@ -66,7 +95,7 @@ export class Collection {
       const goodsList = await this.parseService.ozonListParser($, domain)
       if (goodsList.length) this.processData(goodsList)
       while (this.targetData < targetCount) {
-        if (this.isCancel) return
+        if (this.reason && this.reason !== 'success') throw new Error('任务终止')
 
         if (this.taskQueueService.getTaskCount() > 20) {
           this.outputLog('任务队列数据源充足，等待处理中')
@@ -74,6 +103,7 @@ export class Collection {
           continue
         }
         if (scrollAttempts >= maxScrollAttempts) {
+          if (!this.reason) this.reason = 'success'
           this.outputLog('尝试获取商品达到最大次数')
           return
         }
@@ -82,6 +112,7 @@ export class Collection {
         const result = await this.mainWindowService.scrollPage()
         scrollAttempts++
         if (!result) {
+          if (!this.reason) this.reason = 'success'
           this.outputLog('已滚动至页面底部')
           return
         }
@@ -94,8 +125,8 @@ export class Collection {
         }
         await new Promise(resolve => setTimeout(resolve, 2000))
       }
-
-      this.outputLog(`收集完成，共收集到 ${this.task.targetCount} 个链接`)
+      if (!this.reason) this.reason = 'success'
+      this.outputLog(`收集完成，共收集到 ${this.parseService.getDataCount()} 个链接`)
     } catch (error) {
       return error
     }
@@ -113,6 +144,7 @@ export class Collection {
       this.outputLog(`筛选商品条件中`)
       baseDataList.filter(item => !filterDataList.map(item => item.id).includes(item.id)).forEach(async (item, i) => {
         await new Promise(resolve => setTimeout(() => {
+          if (this.reason) return
           this.process--
           this.outputLog(`完成商品${item.name}的处理`)
           resolve(true)
@@ -131,6 +163,7 @@ export class Collection {
    * 更改任务状态
     */
   async updateStatus(status: TaskStatus) {
+    if (this.task.taskStatus === status) return
     try {
       this.task.taskStatus = status;
       await this.syncStatusToServer(status);
@@ -176,45 +209,63 @@ export class Collection {
    * 处理单个任务
     */
   taskHandle = async (task: any) => {
+    let timer: NodeJS.Timeout | undefined
     try {
-      if (this.isCancel) throw new Error('任务被终止')
+      timer = setInterval(() => {
+        if (this.reason === 'cancel' || this.reason === 'failed') {
+          this.windowService.cleanup()
+          clearInterval(timer)
+          throw new Error('任务被终止')
+        }
+      }, 1000)
       if (this.targetData >= this.task.targetCount) return
       const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
       const { link1688, sourcePrice, cover2 } = await this.parseService['1688Parse']($, task)
+      if (this.reason === 'cancel' || this.reason === 'failed') return
       task = { ...task, '1688link': link1688, sourcePrice, cover2 }
       const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
-      const result = await this.excelService.saveExcel(detailData)
-      if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
-      if (result) {
-        this.process--
-        this.targetData++
-      } else {
-        this.process--
-        this.outputLog('写入表格失败')
+      if (this.targetData < this.task.targetCount) {
+        const result = await this.excelService.saveExcel(detailData)
+        if (result && this.reason === 'success') this.targetData++
       }
-
+      if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
     } catch (error) {
-      log.error(error)
-      this.outputLog(error as string)
-      return
+      log.error(error, '处理链接失败')
+    } finally {
+      if (this.reason != 'cancel' && this.reason !== 'failed') this.process--
+      this.outputLog('单个商品处理完成')
+      clearInterval(timer)
+    }
+  }
+
+  /** 
+   * 窗口被关闭回调
+   */
+  closeHandle = async () => {
+    if (!this.reason) {
+      this.reason = 'failed'
+      this.updateStatus('failed')
+      this.outputLog('窗口异常关闭')
     }
   }
   /** 
-   * 等待任务结束
-    */
+     * 等待任务结束
+      */
   private async waitForAllTasks(): Promise<void> {
     while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount()) {
-      if (this.isCancel) return
+      if (this.reason === 'cancel' || this.reason === 'failed') return
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
   /** 
    * 重置任务
     */
-  resetTask() {
-    this.isCancel = false
-    this.clearStatus()
+  async resetTask() {
+    this.excelService.DeleteFilled()
+    this.isCleared = false
+    this.reason = undefined
     this.parseService.clearData()
+    this.taskQueueService.clear()
   }
   /** 
    * 获取任务信息 
@@ -244,18 +295,21 @@ export class Collection {
    * 取消任务
     */
   async cancel() {
-    if (this.isCancel) throw new Error('任务正在取消中，请勿频繁请求')
-    this.isCancel = true
-    this.mainWindowService.abort('cancel')
+    if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
+    this.reason = 'cancel'
+    this.clearStatus(true)
+    this.mainWindowService.closeCollectionWindow()
     this.updateStatus('cancelled')
     this.outputLog('任务已取消')
   }
   /** 
    * 清理工作
     */
-  async clearStatus() {
+  clearStatus(isRetainCompletedTasks = false) {
+    if (this.isCleared) return
+    this.isCleared = true
     this.process = 0
-    this.mainWindowService.closeCollectionWindow()
-    this.taskQueueService.clear()
+    this.taskQueueService.clear(isRetainCompletedTasks)
+    this.outputLog('清理完成')
   }
 }

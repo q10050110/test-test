@@ -112,7 +112,16 @@ const openTaskDialogHandle = async (data?: Task) => {
 
 
 // 开始任务
-const startTask = async (task: Task) => {
+let startTimer: number | undefined = undefined
+const taskId = ref()
+const startTask = async (task: Task, isThrottle = false) => {
+  if (isThrottle) {
+    if (startTimer && taskId.value == task._id) return feedback.error('请勿频繁点击！')
+    taskId.value = task._id
+    startTimer = setTimeout(() => {
+      startTimer = undefined
+    }, 3000)
+  }
   const { code, message } = task.taskStatus === 'noExecuted' ? await window.electronAPI.invoke('collection-start-task', task._id) : await window.electronAPI.invoke('collection-re-execute-task', task._id)
   if (code === 200) return feedback.success('执行任务成功')
   feedback.error(message)
@@ -252,7 +261,7 @@ onUnmounted(() => {
             <template v-if="column.key === 'action'">
               <a-button type="link" :icon="h(CaretRightOutlined)"
                 v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
-                @click="startTask(record as Task)">开始</a-button>
+                @click="startTask(record as Task, true)">开始</a-button>
               <a-button type="link" v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
                 :icon="h(PauseCircleFilled)" @click="cancelTask(record._id)">终止</a-button>
               <a-tooltip placement="topRight">

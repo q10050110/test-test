@@ -30,31 +30,53 @@ export class TaskQueueService {
     */
   async startProcessing() {
     if (this.isProcessing || this.activeTasks >= this.maxConcurrency) {
-      return
+      return;
     }
 
-    this.isProcessing = true
+    this.isProcessing = true;
+
+    const promises: Promise<void>[] = [];
 
     while (this.taskQueue.size > 0 && this.activeTasks < this.maxConcurrency) {
-      const task = this.taskQueue.values().next().value
-      if (!task) continue
-      this.taskQueue.delete(task.id)
+      log.info('队列执行中')
+      const task = this.taskQueue.values().next().value;
+      if (!task) continue;
+
+      this.taskQueue.delete(task.id); // 从队列中移除任务
       if (this.taskIsProcessing.has(task.id)) {
-        log.info('跳过已处理的商品')
-        continue
+        log.info('跳过已处理的任务');
+        continue;
       }
-      this.taskIsProcessing.add(task.id)
-      this.activeTasks++
-      this.processTask(task).then(() => {
-        this.completedTasks.push(task)
-      }).catch(error => {
-        this.failedTasks.push(task)
-      }).finally(() => {
-        this.activeTasks--
-        this.checkNext()
-      })
+
+      this.taskIsProcessing.add(task.id);
+      this.activeTasks++;
+
+      log.info(`开始处理任务: ${task.id}, 当前活跃任务数: ${this.activeTasks}`);
+
+      // 并发处理任务
+      const taskPromise = this.processTask(task)
+        .then(() => {
+          this.completedTasks.push(task);
+        })
+        .catch((error) => {
+          log.error(`任务 ${task.id} 处理失败:`, error);
+          this.failedTasks.push(task);
+        })
+        .finally(() => {
+          if (this.activeTasks > 0) this.activeTasks--;
+          this.taskIsProcessing.delete(task.id);
+          log.info(`任务 ${task.id} 处理完成, 当前活跃任务数: ${this.activeTasks}`);
+          this.checkNext(); // 触发下一轮任务处理
+        });
+
+      promises.push(taskPromise);
     }
-    this.isProcessing = false
+
+    // 等待所有任务完成
+    await Promise.all(promises);
+
+    this.isProcessing = false;
+    this.checkNext()
   }
 
   /** 
@@ -102,10 +124,11 @@ export class TaskQueueService {
   /** 
    * 清空队列和状态
     */
-  clear() {
+  clear(isRetainCompletedTasks = false) {
     this.taskQueue.clear()
+    this.taskIsProcessing.clear()
     this.activeTasks = 0
-    this.completedTasks = []
+    if (!isRetainCompletedTasks) this.completedTasks = []
     this.failedTasks = []
   }
 }

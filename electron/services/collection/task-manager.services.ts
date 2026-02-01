@@ -150,6 +150,8 @@ export class TaskManager {
 
     try {
       await task.run();
+    } catch (error) {
+
     } finally {
       // 任务完成后清理并通知
       this.activeTasks.delete(taskId);
@@ -202,16 +204,25 @@ export class TaskManager {
         data: params,
       });
 
-      data.list.forEach(async (task: Task) => {
+      for (const task of data.list) {
         if (!this.tasks.has(task._id)) {
-          task.progress = task.progress || { current: 0, total: 0, totalCount: 0 };
+          task.progress = task.progress || { current: 0, total: 0, totalCount: 0 }
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
           task.progress = this.tasks.get(task._id)?.getTaskInfo().progress
         }
-        if (task.taskStatus !== 'noExecuted') task.tableFilePath = await this.tasks.get(task._id)?.getTableFilePath()
-      });
+
+        if (task.taskStatus !== 'noExecuted') {
+          const filePath = await this.tasks.get(task._id)!.getTableFilePath()
+          if (!filePath) continue
+
+          try {
+            await fs.access(filePath)
+            task.tableFilePath = '啦啦啦'
+          } catch { }
+        }
+      }
 
       return data;
     } catch (error) {
@@ -274,7 +285,7 @@ export class TaskManager {
       const taskInfo = task!.getTaskInfo();
       // 只有已完成、失败或已取消的任务才能重新执行
       if (['completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
-        task.resetTask(); // 重置任务状态
+        await task.resetTask(); // 重置任务状态
 
         // 立即更新状态并通知
         if (this.activeTasks.size < this.maxConcurrentTasks) {

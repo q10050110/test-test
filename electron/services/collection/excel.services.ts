@@ -2,7 +2,7 @@ import { ExcelWriter } from '../../utils/excel.js';
 import { join } from 'path';
 import { SysTemUtils } from '../../utils/system.js';
 import log from '../../log/index.js'
-
+import fs from 'fs/promises'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 export class ExcelService {
   private excel: ExcelWriter
@@ -160,5 +160,14 @@ export class ExcelService {
 
   async getFilePath() {
     return this.excel.getFilePath()
+  }
+
+  async DeleteFilled() {
+    try {
+      const filePath = await this.getFilePath()
+      await fs.rm(filePath, { force: true })
+    } catch (error) {
+      log.error('删除任务文件失败', error)
+    }
   }
 }

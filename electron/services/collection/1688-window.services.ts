@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export class WindowService {
+  cleanup: Function = () => { }
   constructor() { }
 
   /**
@@ -21,15 +22,18 @@ export class WindowService {
     let win: BrowserWindow | null = null;
     let settled = false;
     let timer: NodeJS.Timeout | undefined;
-    let closingBySelf = false;
-
+    let senderWin: BrowserWindow | null = null;
     // 清理资源
-    const cleanup = () => {
+    this.cleanup = () => {
       clearTimeout(timer);
       if (win && !win.isDestroyed()) {
-        closingBySelf = true;
         win.removeAllListeners();
-        win.close();
+        win.destroy();
+      }
+
+      if (senderWin && !senderWin.isDestroyed()) {
+        senderWin.removeAllListeners();
+        senderWin.destroy();
       }
       // 移除当前窗口的 IPC 监听器
       ipcMain.removeAllListeners(`result-page-${winId}`);
@@ -40,7 +44,7 @@ export class WindowService {
     const safeResolve = (value: cheerio.CheerioAPI, resolve: Function) => {
       if (settled) return;
       settled = true;
-      cleanup();
+      this.cleanup();
       resolve(value);
     };
 
@@ -48,7 +52,7 @@ export class WindowService {
     const safeReject = (error: Error, reject: Function) => {
       if (settled) return;
       settled = true;
-      cleanup();
+      this.cleanup();
       reject(error);
     };
 
@@ -75,15 +79,11 @@ export class WindowService {
         }, 60000 * 2); // 2分钟超时
 
 
-        // 监听窗口关闭事件
-        win.once('closed', () => {
-          if (closingBySelf) return;
-          safeReject(new Error('窗口被提前关闭'), reject);
-        });
-
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
-          const senderWin = BrowserWindow.fromWebContents(event.sender);
+
+          senderWin = BrowserWindow.fromWebContents(event.sender);
+
           if (!senderWin || senderWin !== win) {
             return; // 忽略非法来源的事件
           }
@@ -119,7 +119,7 @@ export class WindowService {
               'document.documentElement.outerHTML'
             );
             const $ = cheerio.load(html);
-
+            senderWin.destroy()
             // 增加延迟以确保页面稳定
             await new Promise((res) => setTimeout(res, 5000));
             safeResolve($, resolve);
@@ -197,6 +197,7 @@ export class WindowService {
           });
         `);
       } catch (error) {
+        console.log(error, '1688采集发生错误')
         safeReject(error as Error, reject);
       }
     });

@@ -60,7 +60,6 @@ export class ParseService {
     const price = `${price1}${price2}`
     const sourcePrice = isNaN(Number(price)) ? 0 : price
     const cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
-    console.log(price, '价格', cover2, '封面图', link1688, '商品链接')
     return { link1688, sourcePrice, cover2 }
   }
 
