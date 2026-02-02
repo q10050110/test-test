@@ -54,7 +54,6 @@ export const createWindow = () => {
     const updaterManagerInstance = UpdaterManager.getInstance()
     updaterManagerInstance.init()
     updaterManagerInstance.setMainWindow(mainWindow)
-    updaterManagerInstance.checkUpdate()
     log.info('IPC处理器注册成功')
   } catch (error) {
     log.error('IPC 处理器注册失败:', error)

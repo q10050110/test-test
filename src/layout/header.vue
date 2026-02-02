@@ -7,6 +7,11 @@ const store = useAppStore()
 const isMax = ref(false)
 const open = ref(false)
 const desc = ref('真的真的要退出吗T_T？')
+const btnText = computed(() => {
+  if (store.updateStatus === 'downloaded') return '立即安装'
+  return '立即下载'
+})
+console.log(store.updateStatus, '看看是啥')
 // 隐藏&放大&关闭
 const operationHandle = async (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value
@@ -19,7 +24,11 @@ const downloadLog = () => {
 
 // 检测更新
 const checkUpdateHandle = () => {
-  store.setUpdate(true)
+  if (store.updateStatus === 'downloaded') {
+    window.electronAPI.sendMessage('start-downloaded-app', '')
+  } else {
+    window.electronAPI.sendMessage('check-update-app', '')
+  }
 }
 
 // 退出
@@ -48,7 +57,9 @@ window.electronAPI.on('unmaximize', () => {
     <div class="left">
       <img src="@/assets/login/logo.png" alt="">
       <span class="version">V{{ store.appInfo?.version }}</span>
-      <a-button type="primary" @click="checkUpdateHandle" v-if="store.isUpdate">立即更新</a-button>
+      <a-button type="primary" @click="checkUpdateHandle" v-if="store.updateStatus !== 'hasNew'">{{
+        btnText
+      }}</a-button>
     </div>
     <div class="drag"></div>
     <div class="right">

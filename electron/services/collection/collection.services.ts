@@ -23,7 +23,6 @@ export class Collection {
   private targetData = 0 // 完成的任务
   private reason: Reason = undefined
   private isCleared = false
-  private excelData: any[] = []
   private process = 0 // 正在处理的任务
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
@@ -38,7 +37,6 @@ export class Collection {
   run() {
     let timer: NodeJS.Timeout | undefined
     let settled: boolean = false
-    this.uuid = randomUUID()
     const safeResolve = (v: any, resolve: Function) => {
       if (settled) return
       settled = true
@@ -52,6 +50,9 @@ export class Collection {
 
     return new Promise(async (resolve, reject) => {
       try {
+        if (this.uuid) await this.resetTask()
+        this.uuid = randomUUID()
+        log.info(this.uuid, '重新生成的UUID')
         timer = setInterval(async () => {
           if (this.reason === 'cancel' || this.reason === 'failed') {
             clearInterval(timer)
@@ -178,8 +179,7 @@ export class Collection {
     */
   async updateStatus(status: TaskStatus) {
     let uuid = this.uuid
-    if (uuid !== this.uuid) return
-    if (this.task.taskStatus === status) return
+    if (this.task.taskStatus === status || uuid !== this.uuid) return
     try {
       this.task.taskStatus = status;
       await this.syncStatusToServer(status);
@@ -276,7 +276,7 @@ export class Collection {
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
         log.info(`获取详细数据:${task.id}`)
         if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid) {
-          this.excelData.push(detailData)
+          log.info(uuid, this.uuid, 'uuid对比')
           const result = await this.excelService.saveExcel(detailData)
           if (result) this.targetData++
           if (!result) this.resetWriteExcel(detailData, uuid!, 0)
@@ -323,9 +323,8 @@ export class Collection {
      * 等待任务结束
       */
   private async waitForAllTasks(): Promise<void> {
-    const uuid = this.uuid
     while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount()) {
-      if ((this.reason === 'cancel' || this.reason === 'failed' || this.targetData >= this.task.targetCount) && this.uuid === uuid) return
+      if (this.reason === 'cancel' || this.reason === 'failed' || this.targetData >= this.task.targetCount) return
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }

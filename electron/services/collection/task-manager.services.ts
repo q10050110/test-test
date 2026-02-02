@@ -285,8 +285,6 @@ export class TaskManager {
       const taskInfo = task!.getTaskInfo();
       // 只有已完成、失败或已取消的任务才能重新执行
       if (['completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
-        await task.resetTask(); // 重置任务状态
-
         // 立即更新状态并通知
         if (this.activeTasks.size < this.maxConcurrentTasks) {
           this.executeTask(taskId);

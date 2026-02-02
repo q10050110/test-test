@@ -5,18 +5,13 @@ import feedback from './utils/feedback'
 import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
 import type CCloseModal from './components/c-close-modal.vue'
-import type { Progress, Version } from './types'
+import type { Progress } from './types'
 
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
 const cCloseModalRef = ref<InstanceType<typeof CCloseModal>>()
-const isCheckUpdate = ref(false)
-const version = ref<Version>({
-  version: '未知',
-  size: 0,
-  releaseDate: '未知'
-})
+
 const progress = ref<Progress>({
   percent: 0,
   total: '0',
@@ -33,16 +28,16 @@ window.electronAPI.on('app-ready-quit', () => {
   appStore.setLoading(true)
 })
 
-window.electronAPI.on('checking-for-update', () => {
-  isCheckUpdate.value = true
+
+window.electronAPI.on('update-checking', () => {
+  if (appStore.updateStatus !== 'hasNew') cModalRef.value?.openHandle()
   console.log('检测更新啦~~')
 })
 
-window.electronAPI.on('update-available', async (info: Version) => {
+window.electronAPI.on('update-available', async () => {
   console.log('发现新版本啦~~')
   await nextTick()
-  appStore.setUpdate(true)
-  if (info?.version) version.value = info
+  appStore.setUpdate('hasUpdate')
   cModalRef.value && cModalRef.value.openHandle()
 })
 
@@ -58,7 +53,7 @@ window.electronAPI.on('update-download-progress', (data: Progress) => {
 window.electronAPI.on('update-downloaded', async () => {
   console.log('更新完成啦~~')
   await nextTick()
-  cModalRef.value && cModalRef.value.changeStatus('isInstall')
+  appStore.setUpdate('downloaded')
   cModalRef.value && cModalRef.value.openHandle()
 })
 
@@ -80,18 +75,18 @@ const onResize = debounce(() => {
 
 window.addEventListener('resize', onResize)
 
-onMounted(() => {
-  if (!isCheckUpdate.value) window.electronAPI.sendMessage('check-update-app', '')
-  if (appStore.isUpdate) cModalRef.value?.openHandle()
+onMounted(async () => {
+  await nextTick()
+  await appStore.initAppInfo()
+  if (appStore.updateStatus !== 'hasNew') cModalRef.value?.openHandle()
 })
-
 </script>
 
 <template>
   <a-config-provider :locale="zhCN" :theme="appStore.theme">
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
-    <c-modal ref="cModalRef" :version="version" :progress="progress" />
+    <c-modal ref="cModalRef" :progress="progress" />
     <c-close-modal ref="cCloseModalRef" />
   </a-config-provider>
 </template>

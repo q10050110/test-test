@@ -36,9 +36,9 @@ export class UpdaterManager {
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       log.info(info, '检测到新版本')
       const updateInfo = operationStore.get('update-info')
-      if (!updateInfo) return
-      if (updateInfo?.version === info.version) return
-      if (!updateInfo?.version || updateInfo?.version !== info?.version) operationStore.set('update-info', info)
+      if (!updateInfo) operationStore.set('update-info', info)
+      if (operationStore.get('update-status') === 'downloaded') return
+      operationStore.set('update-status', 'hasUpdate')
       this.send('update-available', {
         version: info.version,
         date: info.releaseDate,
@@ -48,11 +48,13 @@ export class UpdaterManager {
 
     autoUpdater.on('update-not-available', () => {
       log.info('当前为最新版本')
+      operationStore.set('update-status', 'hasNew')
       this.send('update-not-available')
     })
 
     autoUpdater.on('download-progress', progress => {
       log.info(progress, '下载进度')
+      operationStore.set('update-status', 'download')
       this.send('update-download-progress', {
         percent: Math.floor(progress.percent),
         speed: (progress.bytesPerSecond / 1024 / 1024).toFixed(1), // MB/s
@@ -62,6 +64,7 @@ export class UpdaterManager {
     })
 
     autoUpdater.on('update-downloaded', () => {
+      operationStore.set('update-status', 'downloaded')
       log.info('更新下载完成')
       this.send('update-downloaded')
     })
@@ -73,10 +76,9 @@ export class UpdaterManager {
   }
 
   /** 
-   * 
+   * 检测是否已经下载完成
     */
   checkForUpdatesAndNotify() {
-    log.info('是否已经下载安装包')
     return autoUpdater.checkForUpdatesAndNotify()
   }
   /** 
@@ -98,7 +100,13 @@ export class UpdaterManager {
    * 安装并重启
    */
   quitAndInstall() {
-    autoUpdater.quitAndInstall()
+    log.info('安装并重启')
+    try {
+      autoUpdater.quitAndInstall()
+    } catch (error) {
+      operationStore.set('update-status', 'hasUpdate')
+      log.error(error)
+    }
   }
   /** 
    * 初始化  

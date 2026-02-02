@@ -1,35 +1,30 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores';
-import type { Progress, Version } from '@/types';
+import type { Progress } from '@/types';
 import dayjs from 'dayjs';
 defineProps<{
-  version: Version
   progress?: Progress
 }>()
 
 const store = useAppStore()
-
-const status = ref<'isUpdate' | 'download' | 'isInstall'>('isUpdate')
+const open = ref(false)
 const updateHandle = async () => {
-  status.value = 'download'
+  store.setUpdate('download')
   window.electronAPI.sendMessage('start-update-app', {})
 }
 const installHandle = async () => {
-  status.value = 'isInstall'
+  store.setUpdate('isInstall')
   await setTimeout(() => {
     window.electronAPI.sendMessage('quit-and-install-app', {})
   }, 2000)
 }
 const closeHandle = () => {
-  store.setUpdate(false)
-  status.value = 'isUpdate'
+  open.value = false
 }
 
-const changeStatus = (code: 'isUpdate' | 'download' | 'isInstall') => {
-  status.value = code
-}
+
 const openHandle = () => {
-  store.setUpdate(true)
+  open.value = true
 }
 
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
@@ -47,30 +42,29 @@ const formatSize = (size: number) => {
 defineExpose({
   openHandle,
   closeHandle,
-  changeStatus
 })
 </script>
 
 <template>
-  <a-modal v-model:open="store.isUpdate" @cancel="store.setUpdate(false)" style="width: 400px;" :footer="null">
-    <div v-if="status === 'isUpdate'">
+  <a-modal v-model:open="open" @cancel="open = false" style="width: 400px;" :footer="null">
+    <div v-if="store.updateStatus === 'hasUpdate'">
       <div class="c-modal">
         <div class="icon"> <img src="@/assets/window/update.png" /></div>
         <div class="title">发现新版本</div>
         <div class="version">
-          <div>V{{ version?.version }}可用</div>
-          <div>{{ formatSize(version?.size) }}</div>
-          <div>{{ formatDate(version?.releaseDate) }}发布</div>
+          <div>V{{ store.updateInfo?.version }}可用</div>
+          <div>{{ formatSize(store.updateInfo?.size || 0) }}</div>
+          <div>{{ formatDate(store.updateInfo?.releaseDate || '') }}发布</div>
         </div>
         <div class="desc">有新版本可用，是否立即下载更新？</div>
       </div>
 
       <a-row justify="center">
         <a-button type="primary" style="margin-right: 20px;" @click="updateHandle">立即更新</a-button>
-        <a-button type="default" @click="store.setUpdate(false)">稍后再说</a-button>
+        <a-button type="default" @click="open = false">稍后再说</a-button>
       </a-row>
     </div>
-    <div v-if="status === 'download'">
+    <div v-if="store.updateStatus === 'download'">
       <div class="update">
         <div class="loading-ring">
           <span v-for="item in 12" :key="item"></span>
@@ -85,13 +79,15 @@ defineExpose({
         </div>
         <div>下载速度：{{ progress?.speed }}MB/s</div>
       </div>
-
-      <a-row justify="center" v-if="progress?.percent === 100">
+    </div>
+    <div v-if="store.updateStatus === 'downloaded'">
+      <img src="@/assets/window/download.png" alt="" style="margin-bottom: 20px;">
+      <a-row justify="center">
         <a-button type="primary" style="margin-right: 20px;" @click="installHandle">立即安装</a-button>
-        <a-button type="default" @click="store.setUpdate(false)">稍后再说</a-button>
+        <a-button type="default" @click="open = false">稍后再说</a-button>
       </a-row>
     </div>
-    <div v-if="status === 'isInstall'" class="installing">
+    <div v-if="store.updateStatus === 'isInstall'" class="installing">
       <div class="install-title">正在安装更新</div>
       <div class="install-desc">
         更新已下载完成，应用将自动重启<br />
