@@ -11,6 +11,7 @@ app.commandLine.appendSwitch('log-level', '3')
 const RESTART_COUNT_KEY = 'restart-count'
 const MAX_RESTART_COUNT = 3
 let IS_EXITING = false
+let IS_RESTARTING = false
 class ElectronApp {
   private isAppCrashed = false;
 
@@ -40,6 +41,7 @@ class ElectronApp {
    * 安全重启应用
    */
   private safeRelaunch() {
+    IS_RESTARTING = true
     const currentCount = this.getRestartCount();
 
     if (currentCount >= MAX_RESTART_COUNT) {
@@ -177,7 +179,7 @@ class ElectronApp {
      * 应用退出前的清理工作
      */
     app.on('before-quit', async (event) => {
-      if (IS_EXITING) return
+      if (IS_EXITING || IS_RESTARTING) return;
       IS_EXITING = true
 
       event.preventDefault()

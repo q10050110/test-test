@@ -88,50 +88,66 @@ export class MainWindowService {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return false
 
     try {
-      const result = await this.browserWindow.webContents.executeJavaScript(`  (function () {
-    return new Promise(resolve => {
-      const startY = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
+      const result = await this.browserWindow.webContents.executeJavaScript(`(function () {
+        return new Promise(resolve => {
+          const startY = window.scrollY;
+          const windowHeight = window.innerHeight;
+          const documentHeight = document.documentElement.scrollHeight;
 
-      const scrollAmount = Math.floor(windowHeight * 0.8);
-      const targetY = Math.min(
-        startY + scrollAmount,
-        documentHeight - windowHeight
-      );
+          const scrollAmount = Math.floor(windowHeight * 0.8);
+          const targetY = Math.min(
+            startY + scrollAmount,
+            documentHeight - windowHeight
+          );
 
-      if (startY >= documentHeight - windowHeight - 10) {
-        resolve(false);
-        return;
-      }
+          if (startY >= documentHeight - windowHeight - 10) {
+            resolve(false);
+            return;
+          }
 
-      const duration = 600; // 滚动时长 ms
-      const startTime = performance.now();
+          const duration = 600; // 滚动时长 ms
+          const startTime = performance.now();
 
-      function step(now) {
-        const progress = Math.min((now - startTime) / duration, 1);
-        const ease = progress < 0.5
-          ? 2 * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+          function step(now) {
+            const progress = Math.min((now - startTime) / duration, 1);
+            const ease = progress < 0.5
+              ? 2 * progress * progress
+              : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-        window.scrollTo(0, startY + (targetY - startY) * ease);
+            window.scrollTo(0, startY + (targetY - startY) * ease);
 
-        if (progress < 1) {
+            if (progress < 1) {
+              requestAnimationFrame(step);
+            } else {
+              resolve(true);
+            }
+          }
+
           requestAnimationFrame(step);
-        } else {
-          resolve(true);
-        }
-      }
-
-      requestAnimationFrame(step);
-    });
-  })();`)
+        });
+      })();`)
       return result === true
     } catch (error) {
       throw new Error(error as string)
     }
   }
 
+  /** 
+   * 获取跟卖数据
+    */
+  async getSellingData(requestUrl: string) {
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) return
+    try {
+      const response = await this.browserWindow.webContents.executeJavaScript(`
+            fetch(${JSON.stringify(requestUrl)}, { credentials: 'include' })
+            .then(response => response.json())
+            .then(data => ({ success: true, data: data }))
+          `);
+      return response
+    } catch (error) {
+      return false
+    }
+  }
   /**
    * 关闭采集窗口
    */

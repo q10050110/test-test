@@ -311,10 +311,10 @@
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
                 <a-form-item label="发货模式">
-                  <a-select placeholder="请选择发货模式" v-model:value="formData.salesSchema" style="width: 80%;">
+                  <a-select placeholder="请选择发货模式" v-model:value="formData.salesSchema" style="width: 80%;" allowClear>
                     <a-select-option value="FBO">FBO</a-select-option>
                     <a-select-option value="FBS">FBS</a-select-option>
-                    <a-select-option value="FBO,FBS">FBO & FBS</a-select-option>
+                    <a-select-option value="FBO,FBS">FBO | FBS</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -492,8 +492,6 @@ defineExpose({
 .dialog-content {
   max-height: 70vh;
   overflow-y: auto;
-  padding: 24px;
-  background-color: #fafafa;
 }
 
 .form {

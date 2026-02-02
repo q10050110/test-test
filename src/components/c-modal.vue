@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppStore } from '@/stores';
 import type { Progress, Version } from '@/types';
 import dayjs from 'dayjs';
 defineProps<{
@@ -6,13 +7,13 @@ defineProps<{
   progress?: Progress
 }>()
 
-const open = ref(false)
-const status = ref<'isUpdate' | 'download' | 'isInstall'>('download')
+const store = useAppStore()
+
+const status = ref<'isUpdate' | 'download' | 'isInstall'>('isUpdate')
 const updateHandle = async () => {
   status.value = 'download'
   window.electronAPI.sendMessage('start-update-app', {})
 }
-
 const installHandle = async () => {
   status.value = 'isInstall'
   await setTimeout(() => {
@@ -20,12 +21,15 @@ const installHandle = async () => {
   }, 2000)
 }
 const closeHandle = () => {
-  open.value = false
+  store.setUpdate(false)
   status.value = 'isUpdate'
 }
 
+const changeStatus = (code: 'isUpdate' | 'download' | 'isInstall') => {
+  status.value = code
+}
 const openHandle = () => {
-  open.value = true
+  store.setUpdate(true)
 }
 
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
@@ -39,29 +43,31 @@ const formatSize = (size: number) => {
   }
   return `${size.toFixed(2)} ${units[i]}`
 }
+
 defineExpose({
   openHandle,
-  closeHandle
+  closeHandle,
+  changeStatus
 })
 </script>
 
 <template>
-  <a-modal v-model:open="open" @cancel="open = false" style="width: 400px;" :footer="null">
+  <a-modal v-model:open="store.isUpdate" @cancel="store.setUpdate(false)" style="width: 400px;" :footer="null">
     <div v-if="status === 'isUpdate'">
       <div class="c-modal">
         <div class="icon"> <img src="@/assets/window/update.png" /></div>
         <div class="title">发现新版本</div>
         <div class="version">
-          <div>V{{ version.version }}可用</div>
-          <div>{{ formatSize(version.size) }}</div>
-          <div>{{ formatDate(version.releaseDate) }}发布</div>
+          <div>V{{ version?.version }}可用</div>
+          <div>{{ formatSize(version?.size) }}</div>
+          <div>{{ formatDate(version?.releaseDate) }}发布</div>
         </div>
         <div class="desc">有新版本可用，是否立即下载更新？</div>
       </div>
 
       <a-row justify="center">
         <a-button type="primary" style="margin-right: 20px;" @click="updateHandle">立即更新</a-button>
-        <a-button type="default" @click="open = false">稍后再说</a-button>
+        <a-button type="default" @click="store.setUpdate(false)">稍后再说</a-button>
       </a-row>
     </div>
     <div v-if="status === 'download'">
@@ -82,7 +88,7 @@ defineExpose({
 
       <a-row justify="center" v-if="progress?.percent === 100">
         <a-button type="primary" style="margin-right: 20px;" @click="installHandle">立即安装</a-button>
-        <a-button type="default" @click="open = false">稍后再说</a-button>
+        <a-button type="default" @click="store.setUpdate(false)">稍后再说</a-button>
       </a-row>
     </div>
     <div v-if="status === 'isInstall'" class="installing">

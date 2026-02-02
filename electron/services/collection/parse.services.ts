@@ -1,8 +1,15 @@
 import * as cheerio from 'cheerio'
+import { MainWindowService } from './main-window.services.js'
+import log from '../../log/index.js'
 
 export class ParseService {
   protected ozonGoodsData: Map<string, any> = new Map()
-  ozonListParser($: cheerio.CheerioAPI, domain: string) {
+  private windowService: MainWindowService
+
+  constructor(windowService: MainWindowService) {
+    this.windowService = windowService
+  }
+  async ozonListParser($: cheerio.CheerioAPI, domain: string) {
     const data: any[] = []
     const dom = $('#contentScrollPaginator a')
     // 解析DOM，获取商品数据
@@ -20,7 +27,7 @@ export class ParseService {
       const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
       const name = $(element).parent().find('a').children('div').children('span').text();
       const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1);
-      const reviewCount = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/(\d+)\s*отзывов/)?.[1]) || 0
+      const reviewCount = $(element).parent().find('.p6b3_0_6-a4').next().find('svg').next().text().replace(/[\s\u2009\u202F]/g, '').match(/(\d+)\s*отзывов/)?.[1] || 0;
       const obj = {
         href,
         price: Number(price),
@@ -40,15 +47,24 @@ export class ParseService {
       }
     })
 
-    const uniqueData = data.filter(item => {
-      const obj = this.ozonGoodsData.get(item.id)
-      if (obj) {
-        return false
+    const uniqueData: any[] = []
+
+    for (const item of data) {
+      if (this.ozonGoodsData.has(item.id)) continue
+      this.ozonGoodsData.set(item.id, item)
+      uniqueData.push(item)
+    }
+
+    for (const item of uniqueData) {
+      const response = await this.windowService.getSellingData(item.requestUrl)
+      if (response?.success) {
+        item.sellerNumber =
+          JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+            ?.sellers?.length || 0
       } else {
-        this.ozonGoodsData.set(item.id, item)
-        return true
+        log.error('获取跟卖数据失败')
       }
-    })
+    }
     return uniqueData
   }
 

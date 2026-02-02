@@ -31,16 +31,16 @@ export class ExcelService {
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCount', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },
-        { header: '商品创建日期', key: 'createDate', width: 15 },
-        { header: '上架时间（天）', key: 'upTimeDays', width: 15 },
-        { header: '发货模式', key: 'shippingMode', width: 15 },
+        { header: '商品创建日期', key: 'nullableCreateDate', width: 15 },
+        { header: '上架时间（天）', key: 'releaseDate', width: 15 },
+        { header: '发货模式', key: 'salesSchema', width: 15 },
 
         // 销售数据
         { header: '月销售额(卢布)', key: 'gmvSum', width: 15 },
         { header: '月销售动态(%)', key: 'salesDynamics', width: 15 },
         { header: '月销量(件)', key: 'soldCount', width: 10 },
-        { header: '平均日销售额(卢布)', key: 'avgPrice', width: 15 },
-        { header: '平均日销量(件)', key: 'avgDailySalesUnits', width: 10 },
+        { header: '平均日销售额(卢布)', key: 'avgGmvOnAccDays', width: 15 },
+        { header: '平均日销量(件)', key: 'avgOrdersOnAccDays', width: 10 },
         { header: '搜索和目录浏览量', key: 'sessionCountSearch', width: 15 },
         { header: '商品卡片浏览量', key: 'sessionCount', width: 15 },
         { header: '搜索和目录加购率(%)', key: 'convToCartSearch', width: 15 },
@@ -166,6 +166,7 @@ export class ExcelService {
     try {
       const filePath = await this.getFilePath()
       await fs.rm(filePath, { force: true })
+      log.info('文件删除成功！')
     } catch (error) {
       log.error('删除任务文件失败', error)
     }

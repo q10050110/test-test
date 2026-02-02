@@ -82,7 +82,9 @@ const columns = ref<TableColumnsType<Task>>([{
 ])
 const selectData = ref<string[]>()
 const rowSelection: TableProps['rowSelection'] = {
-  selectedRowKeys: selectData.value,
+  get selectedRowKeys() {
+    return selectData.value
+  },
   onChange: (selectedRowKeys, selectedRows) => {
     selectData.value = selectedRowKeys as string[]
   }
@@ -194,7 +196,10 @@ const getLogisticsSimpleList = async () => {
 }
 getLogisticsSimpleList()
 
-const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+const formatDate = (date: string) => {
+  if(date) return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+  return '-'
+}
 
 // 导出表格
 const exportHandle = async (taskId: string) => {
@@ -245,7 +250,7 @@ onUnmounted(() => {
                 创建时间：{{ formatDate(record.createTime) }}
               </div>
               <div>
-                最近执行：{{ formatDate(record.updateTime) || '-' }}
+                最近执行：{{ formatDate(record.updateTime)  }}
               </div>
             </template>
             <template v-if="column.key === 'status'">

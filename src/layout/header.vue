@@ -19,7 +19,7 @@ const downloadLog = () => {
 
 // 检测更新
 const checkUpdateHandle = () => {
-  window.electronAPI.sendMessage('check-update-app', '')
+  store.setUpdate(true)
 }
 
 // 退出
@@ -48,7 +48,7 @@ window.electronAPI.on('unmaximize', () => {
     <div class="left">
       <img src="@/assets/login/logo.png" alt="">
       <span class="version">V{{ store.appInfo?.version }}</span>
-      <a-button type="primary" @click="checkUpdateHandle">检测更新</a-button>
+      <a-button type="primary" @click="checkUpdateHandle" v-if="store.isUpdate">立即更新</a-button>
     </div>
     <div class="drag"></div>
     <div class="right">

@@ -37,21 +37,26 @@ export class TaskQueueService {
 
     const promises: Promise<void>[] = [];
 
-    while (this.taskQueue.size > 0 && this.activeTasks < this.maxConcurrency) {
-      log.info('队列执行中')
+    while (this.taskQueue.size > 0) {
+      if (this.activeTasks >= this.maxConcurrency) {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        // log.info('队列已满,等待中...')
+        continue
+      }
+      // log.info('队列执行中', this.taskQueue.size)
       const task = this.taskQueue.values().next().value;
       if (!task) continue;
 
       this.taskQueue.delete(task.id); // 从队列中移除任务
       if (this.taskIsProcessing.has(task.id)) {
-        log.info('跳过已处理的任务');
+        // log.info('跳过已处理的任务');
         continue;
       }
 
       this.taskIsProcessing.add(task.id);
       this.activeTasks++;
 
-      log.info(`开始处理任务: ${task.id}, 当前活跃任务数: ${this.activeTasks}`);
+      // log.info(`开始处理任务: ${task.id}, 当前活跃任务数: ${this.activeTasks}`);
 
       // 并发处理任务
       const taskPromise = this.processTask(task)
@@ -65,7 +70,7 @@ export class TaskQueueService {
         .finally(() => {
           if (this.activeTasks > 0) this.activeTasks--;
           this.taskIsProcessing.delete(task.id);
-          log.info(`任务 ${task.id} 处理完成, 当前活跃任务数: ${this.activeTasks}`);
+          // log.info(`任务 ${task.id} 处理完成, 当前活跃任务数: ${this.activeTasks}`);
           this.checkNext(); // 触发下一轮任务处理
         });
 

@@ -4,7 +4,7 @@ import { defineStore } from 'pinia'
 export const useAppStore = defineStore('app', () => {
   const appInfo = ref<AppInfo>()
   const loading = ref(false)
-
+  const isUpdate = ref(false)
   const theme = ref({
     token: {
       fontSize: 16
@@ -20,7 +20,7 @@ export const useAppStore = defineStore('app', () => {
 
   const setTheme = (data: any) => theme.value = data
 
-
+  const setUpdate = (value: boolean) => isUpdate.value = value
   const setRootFontSize = () => {
     const baseWidth = 1300
     const baseFontSize = 16
@@ -39,8 +39,10 @@ export const useAppStore = defineStore('app', () => {
     appInfo,
     loading,
     theme,
+    isUpdate,
     setLoading,
     setTheme,
-    setRootFontSize
+    setRootFontSize,
+    setUpdate
   }
 })

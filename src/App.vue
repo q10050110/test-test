@@ -11,6 +11,7 @@ const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
 const cCloseModalRef = ref<InstanceType<typeof CCloseModal>>()
+const isCheckUpdate = ref(false)
 const version = ref<Version>({
   version: '未知',
   size: 0,
@@ -33,13 +34,15 @@ window.electronAPI.on('app-ready-quit', () => {
 })
 
 window.electronAPI.on('checking-for-update', () => {
+  isCheckUpdate.value = true
   console.log('检测更新啦~~')
 })
 
 window.electronAPI.on('update-available', async (info: Version) => {
   console.log('发现新版本啦~~')
   await nextTick()
-  version.value = info
+  appStore.setUpdate(true)
+  if (info?.version) version.value = info
   cModalRef.value && cModalRef.value.openHandle()
 })
 
@@ -55,7 +58,8 @@ window.electronAPI.on('update-download-progress', (data: Progress) => {
 window.electronAPI.on('update-downloaded', async () => {
   console.log('更新完成啦~~')
   await nextTick()
-  cModalRef.value && cModalRef.value?.closeHandle()
+  cModalRef.value && cModalRef.value.changeStatus('isInstall')
+  cModalRef.value && cModalRef.value.openHandle()
 })
 
 window.electronAPI.on('update-error', async (error) => {
@@ -75,6 +79,12 @@ const onResize = debounce(() => {
 }, 100)
 
 window.addEventListener('resize', onResize)
+
+onMounted(() => {
+  if (!isCheckUpdate.value) window.electronAPI.sendMessage('check-update-app', '')
+  if (appStore.isUpdate) cModalRef.value?.openHandle()
+})
+
 </script>
 
 <template>

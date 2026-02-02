@@ -9,8 +9,9 @@ import { BrowserWindow } from 'electron'
 import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
-
+import { randomUUID } from 'crypto'
 export class Collection {
+  private uuid: string | undefined = undefined
   private task: Task // 任务信息
   private mainWindow: BrowserWindow | null = null // 主窗口
   private mainWindowService: MainWindowService // ozon窗口
@@ -22,6 +23,7 @@ export class Collection {
   private targetData = 0 // 完成的任务
   private reason: Reason = undefined
   private isCleared = false
+  private excelData: any[] = []
   private process = 0 // 正在处理的任务
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
@@ -31,11 +33,12 @@ export class Collection {
     this.taskQueueService = new TaskQueueService(this.taskHandle)
     this.excelService = new ExcelService(task.taskName)
     this.dataProcessService = new DataProcessService()
-    this.parseService = new ParseService()
+    this.parseService = new ParseService(this.mainWindowService)
   }
   run() {
     let timer: NodeJS.Timeout | undefined
     let settled: boolean = false
+    this.uuid = randomUUID()
     const safeResolve = (v: any, resolve: Function) => {
       if (settled) return
       settled = true
@@ -72,12 +75,13 @@ export class Collection {
         this.updateStatus('failed')
         this.outputLog(`采集失败：${error}`)
       } finally {
-        log.info('任务结束，开始清理工作')
+        log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`)
         clearInterval(timer)
         const res = this.reason !== 'failed'
         this.mainWindowService.closeCollectionWindow()
         this.clearStatus(res)
         safeResolve(this.task, resolve)
+        log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，完成清理工作`)
       }
     })
   }
@@ -90,6 +94,7 @@ export class Collection {
     try {
       let scrollAttempts = 0
       const maxScrollAttempts = 10
+      let bottomOutCount = 0
       const { $, domain } = await this.mainWindowService.getHTML()
       if (!$) return
       const goodsList = await this.parseService.ozonListParser($, domain)
@@ -112,10 +117,18 @@ export class Collection {
         const result = await this.mainWindowService.scrollPage()
         scrollAttempts++
         if (!result) {
+          bottomOutCount++
+          log.info(`页面触底：${bottomOutCount}`)
+          await new Promise(resolve => setTimeout(resolve, 5000))
+          continue
+        }
+
+        if (bottomOutCount >= 3) {
           if (!this.reason) this.reason = 'success'
           this.outputLog('已滚动至页面底部')
           return
         }
+
         const { $, domain } = await this.mainWindowService.getHTML()
         if (!$) return
         const goodsList = await this.parseService.ozonListParser($, domain)
@@ -136,6 +149,7 @@ export class Collection {
    * 处理获取到的数据
     */
   private async processData(goodsList: any[]) {
+    let uuid = this.uuid
     try {
       let baseDataList = await this.dataProcessService.getBaseData(goodsList)
       this.outputLog(`获取商品数据中`)
@@ -144,7 +158,7 @@ export class Collection {
       this.outputLog(`筛选商品条件中`)
       baseDataList.filter(item => !filterDataList.map(item => item.id).includes(item.id)).forEach(async (item, i) => {
         await new Promise(resolve => setTimeout(() => {
-          if (this.reason) return
+          if (this.reason || uuid !== this.uuid) return
           this.process--
           this.outputLog(`完成商品${item.name}的处理`)
           resolve(true)
@@ -163,6 +177,8 @@ export class Collection {
    * 更改任务状态
     */
   async updateStatus(status: TaskStatus) {
+    let uuid = this.uuid
+    if (uuid !== this.uuid) return
     if (this.task.taskStatus === status) return
     try {
       this.task.taskStatus = status;
@@ -191,10 +207,12 @@ export class Collection {
    * 日志输出
   */
   outputLog(taskLog: string) {
+    let uuid = this.uuid
+    if (this.uuid !== uuid) return
     this.task.progress = {
-      current: this.process,
+      current: this.process < 0 ? 0 : this.process,
       total: this.parseService.getDataCount(),
-      totalCount: this.taskQueueService.getCompletedTasksCount()
+      totalCount: this.taskQueueService.getCompletedTasksCount() < this.task.targetCount ? this.taskQueueService.getCompletedTasksCount() : this.task.targetCount
     }
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -209,40 +227,93 @@ export class Collection {
    * 处理单个任务
     */
   taskHandle = async (task: any) => {
+    log.info(`开始处理商品:${task.id}`)
     let timer: NodeJS.Timeout | undefined
-    try {
-      timer = setInterval(() => {
-        if (this.reason === 'cancel' || this.reason === 'failed') {
-          this.windowService.cleanup()
-          clearInterval(timer)
-          throw new Error('任务被终止')
-        }
-      }, 1000)
-      if (this.targetData >= this.task.targetCount) return
-      const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
-      const { link1688, sourcePrice, cover2 } = await this.parseService['1688Parse']($, task)
-      if (this.reason === 'cancel' || this.reason === 'failed') return
-      task = { ...task, '1688link': link1688, sourcePrice, cover2 }
-      const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
-      if (this.targetData < this.task.targetCount) {
-        const result = await this.excelService.saveExcel(detailData)
-        if (result && this.reason === 'success') this.targetData++
-      }
-      if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
-    } catch (error) {
-      log.error(error, '处理链接失败')
-    } finally {
-      if (this.reason != 'cancel' && this.reason !== 'failed') this.process--
-      this.outputLog('单个商品处理完成')
-      clearInterval(timer)
+    let maxTimer = 100
+    let countDown = 0
+    let settled = false
+    let uuid = this.uuid
+    const safeReject = (v: any, reject: Function) => {
+      if (settled) return
+      settled = true
+      reject(v)
     }
+    return new Promise(async (resolve, reject) => {
+      try {
+        timer = setInterval(() => {
+          countDown++
+          if (this.reason === 'cancel' || this.reason === 'failed' || countDown >= maxTimer) {
+            clearInterval(timer)
+            if (this.uuid === uuid) this.process--
+            safeReject(new Error('任务超时'), reject)
+          }
+        }, 1000)
+        const safeResolve = (v: any) => {
+          if (settled) return
+          settled = true
+          resolve(v)
+          if (this.reason != 'cancel' && this.reason !== 'failed' && this.uuid === uuid) {
+            this.process--
+            this.outputLog('单个商品处理完成')
+            clearInterval(timer)
+          }
+        }
+
+        if (this.targetData >= this.task.targetCount && this.uuid === uuid) {
+          safeResolve('任务已完成')
+          return
+        }
+
+        const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
+        log.info(`获取1688数据:${task.id}`)
+        const { link1688, sourcePrice, cover2 } = await this.parseService['1688Parse']($, task)
+        if (this.reason === 'cancel' || this.reason === 'failed' || this.uuid !== uuid) {
+          safeResolve(new Error('任务已被终止'))
+          return
+        }
+        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent }
+        log.info(`获取1688数据完成:${task.id}`)
+        const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
+        log.info(`获取详细数据:${task.id}`)
+        if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid) {
+          this.excelData.push(detailData)
+          const result = await this.excelService.saveExcel(detailData)
+          if (result) this.targetData++
+          if (!result) this.resetWriteExcel(detailData, uuid!, 0)
+        }
+        if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
+        safeResolve('单个商品处理完成')
+        log.info(`商品处理完成:${task.id}`)
+      } catch (error) {
+        log.error(error, '单个商品任务失败')
+        safeReject(new Error('单个商品任务失败'), reject)
+      }
+    })
   }
 
+  /** 
+   * 重新写入表格数据
+    */
+  async resetWriteExcel(detailData: any[], uuid: string, count: number = 0): Promise<boolean> {
+    if (this.uuid !== uuid || this.reason === 'cancel' || this.reason === 'failed') {
+      return false
+    }
+    const result = await this.excelService.saveExcel(detailData)
+    if (result) {
+      log.info('重新写入表格数据成功')
+      return true
+    }
+
+    if (count >= 5) return false
+    await new Promise(res => setTimeout(res, 1500))
+    return this.resetWriteExcel(detailData, uuid, count + 1)
+  }
   /** 
    * 窗口被关闭回调
    */
   closeHandle = async () => {
-    if (!this.reason) {
+    let uuid = this.uuid
+    if (!this.reason && this.uuid === uuid) {
       this.reason = 'failed'
       this.updateStatus('failed')
       this.outputLog('窗口异常关闭')
@@ -252,8 +323,9 @@ export class Collection {
      * 等待任务结束
       */
   private async waitForAllTasks(): Promise<void> {
+    const uuid = this.uuid
     while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount()) {
-      if (this.reason === 'cancel' || this.reason === 'failed') return
+      if ((this.reason === 'cancel' || this.reason === 'failed' || this.targetData >= this.task.targetCount) && this.uuid === uuid) return
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
@@ -261,11 +333,13 @@ export class Collection {
    * 重置任务
     */
   async resetTask() {
+    this.process = 0
     this.excelService.DeleteFilled()
     this.isCleared = false
     this.reason = undefined
     this.parseService.clearData()
     this.taskQueueService.clear()
+    this.uuid = undefined
   }
   /** 
    * 获取任务信息 
@@ -306,7 +380,8 @@ export class Collection {
    * 清理工作
     */
   clearStatus(isRetainCompletedTasks = false) {
-    if (this.isCleared) return
+    let uuid = this.uuid
+    if (this.isCleared || this.uuid !== uuid) return
     this.isCleared = true
     this.process = 0
     this.taskQueueService.clear(isRetainCompletedTasks)

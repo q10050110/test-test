@@ -2,7 +2,7 @@ import pkg from 'electron-updater'
 import { BrowserWindow } from 'electron'
 import type { UpdateInfo } from 'electron-updater'
 import log from '../log/index.js'
-
+import { operationStore } from '../store/index.js'
 const { autoUpdater } = pkg
 
 export class UpdaterManager {
@@ -35,6 +35,10 @@ export class UpdaterManager {
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       log.info(info, '检测到新版本')
+      const updateInfo = operationStore.get('update-info')
+      if (!updateInfo) return
+      if (updateInfo?.version === info.version) return
+      if (!updateInfo?.version || updateInfo?.version !== info?.version) operationStore.set('update-info', info)
       this.send('update-available', {
         version: info.version,
         date: info.releaseDate,
@@ -68,6 +72,13 @@ export class UpdaterManager {
     })
   }
 
+  /** 
+   * 
+    */
+  checkForUpdatesAndNotify() {
+    log.info('是否已经下载安装包')
+    return autoUpdater.checkForUpdatesAndNotify()
+  }
   /** 
    * 手动触发检测更新
     */

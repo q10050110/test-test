@@ -1,6 +1,5 @@
 import request from '../../utils/request.js'
 import { Task } from './type.js'
-import log from '../../log/index.js'
 import dayjs from 'dayjs'
 export class DataProcessService {
   private data: Map<string, any> = new Map()
@@ -30,7 +29,8 @@ export class DataProcessService {
 
       if (res.data) {
         res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
-          item.nullableCreateDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
+          item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD HH:mm:ss')
+          item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
           item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}%1501~5000卢布: ${item.rfbs || 0}%>5000卢布：${item.rfbs_large || 0}%`
           item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}%1501~5000卢布: ${item.fbp || 0}%>5000卢布：${item.fbp_large || 0}%`
           if (item.goods_id) this.data.set(item.goods_id, item)
@@ -71,7 +71,7 @@ export class DataProcessService {
         return item
       })
     } catch (error) {
-      throw new Error('获取详情数据失败')
+      return []
     }
   }
   /** 
@@ -166,6 +166,12 @@ export class DataProcessService {
         const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax);
         return result;
       },
+      // 发货模式校验
+      (item: any) => {
+        if (!task.salesSchema) return true
+        const result = ('FBO,FBS').includes(item.salesSchema)
+        return result
+      }
       // 最小利润率校验
       /*       (item: any) => {
               const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);

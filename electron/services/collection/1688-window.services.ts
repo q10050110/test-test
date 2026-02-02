@@ -3,12 +3,14 @@ import * as cheerio from 'cheerio';
 import { BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto'; // 使用 UUID 确保唯一性
-
+import pkg from "lodash";
+import log from "../../log/index.js";
+const { delay } = pkg
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export class WindowService {
-  cleanup: Function = () => { }
+  windows: { cleanup: Function, id: string }[] = []
   constructor() { }
 
   /**
@@ -21,11 +23,10 @@ export class WindowService {
     const winId = randomUUID(); // 使用 UUID 确保唯一性
     let win: BrowserWindow | null = null;
     let settled = false;
-    let timer: NodeJS.Timeout | undefined;
     let senderWin: BrowserWindow | null = null;
+    let timer: NodeJS.Timeout | undefined = undefined
     // 清理资源
-    this.cleanup = () => {
-      clearTimeout(timer);
+    const cleanup = () => {
       if (win && !win.isDestroyed()) {
         win.removeAllListeners();
         win.destroy();
@@ -37,6 +38,7 @@ export class WindowService {
       }
       // 移除当前窗口的 IPC 监听器
       ipcMain.removeAllListeners(`result-page-${winId}`);
+      this.windows = this.windows.filter(w => w.id !== winId)
       win = null;
     };
 
@@ -44,7 +46,8 @@ export class WindowService {
     const safeResolve = (value: cheerio.CheerioAPI, resolve: Function) => {
       if (settled) return;
       settled = true;
-      this.cleanup();
+      delay(() => cleanup(), Math.floor(Math.random() * 3000) + 1000)
+      clearTimeout(timer)
       resolve(value);
     };
 
@@ -52,8 +55,9 @@ export class WindowService {
     const safeReject = (error: Error, reject: Function) => {
       if (settled) return;
       settled = true;
-      this.cleanup();
-      reject(error);
+      clearTimeout(timer)
+      cleanup();
+      reject({ error: error || '未知错误', winId });
     };
 
     return new Promise(async (resolve, reject) => {
@@ -62,7 +66,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: false,
+          show: true,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -73,12 +77,11 @@ export class WindowService {
           },
         });
 
-        // 设置超时定时器
         timer = setTimeout(() => {
-          safeReject(new Error('图片搜索超时'), reject);
-        }, 60000 * 2); // 2分钟超时
+          safeReject(new Error('1688采集超时'), reject)
+        }, 1000 * 60 * 2)
 
-
+        this.windows.push({ cleanup, id: winId })
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
 
@@ -197,7 +200,7 @@ export class WindowService {
           });
         `);
       } catch (error) {
-        console.log(error, '1688采集发生错误')
+        log.error('1688图片搜索失败', error)
         safeReject(error as Error, reject);
       }
     });
