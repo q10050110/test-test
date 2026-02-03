@@ -31,8 +31,8 @@ export class DataProcessService {
         res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
           item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD HH:mm:ss')
           item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
-          item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}%1501~5000卢布: ${item.rfbs || 0}%>5000卢布：${item.rfbs_large || 0}%`
-          item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}%1501~5000卢布: ${item.fbp || 0}%>5000卢布：${item.fbp_large || 0}%`
+          item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
+          item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
           if (item.goods_id) this.data.set(item.goods_id, item)
         })
       }
@@ -67,6 +67,7 @@ export class DataProcessService {
 
       return res.data.map((item: any) => {
         const obj = this.data.get(item.id)
+        obj.accessibility = obj.accessibility * 100
         if (obj) item = { ...obj, ...item }
         return item
       })
@@ -113,7 +114,7 @@ export class DataProcessService {
       },
       // 上架时间范围校验
       (item: any) => {
-        const result = this.checkRange(item.upTimeDays, task.upGoodsTimeMin, task.upGoodsTimeMax);
+        const result = this.checkRange(item.releaseDate, task.upGoodsTimeMin, task.upGoodsTimeMax);
         return result;
       },
       // 月销售动态范围校验
@@ -181,6 +182,7 @@ export class DataProcessService {
     const filteredData = data.filter(item => {
       const results = filters.map(filterFn => filterFn(item));
       const overallResult = results.every(r => r);
+      console.log(results, '过滤结果！！')
       return overallResult;
     });
     return filteredData

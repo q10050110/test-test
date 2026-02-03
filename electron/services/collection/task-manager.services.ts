@@ -156,6 +156,7 @@ export class TaskManager {
       // 任务完成后清理并通知
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
+      this.tasks.delete(taskId)
 
       // 处理队列中的下一个任务
       this.processNextTask();
@@ -408,9 +409,9 @@ export class TaskManager {
 
   // 下载表格
   async downloadExcel(taskId: string) {
-    const task = this.tasks.get(taskId)
-    if (!task) log.error('找不到该任务')
-    const filePath = await task?.getTableFilePath()
+    const task = [...this.tasks.values()].find(item => item.getTaskInfo()._id === taskId)
+    if (!task) return
+    const filePath = await task.getTableFilePath()
 
     try {
       this.mainWindow?.webContents.downloadURL(`file://${filePath}`)

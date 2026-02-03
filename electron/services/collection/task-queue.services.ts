@@ -129,7 +129,7 @@ export class TaskQueueService {
   /** 
    * 清空队列和状态
     */
-  clear(isRetainCompletedTasks = false) {
+  async clear(isRetainCompletedTasks = false) {
     this.taskQueue.clear()
     this.taskIsProcessing.clear()
     this.activeTasks = 0

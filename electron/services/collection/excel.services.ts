@@ -68,14 +68,14 @@ export class ExcelService {
         { header: '国际物流费用（元）', key: 'logisticsMoney', width: 15 },
         { header: '尾程派送费', key: 'endDeliveryFee', width: 15 },
         { header: '国内运费（元）', key: 'rubExpressPrice', width: 15 },
-        { header: '其他费用（提醒、货损）（元）', key: 'elsePrice', width: 20 },
+        { header: '其他费用（提醒、货损）（元）', key: 'elsePercent', width: 20 },
         { header: '1688货源地址', key: '1688link', width: 30 },
         { header: '货源图片', key: 'cover2', width: 20 },
         { header: '货源价格（元）', key: 'sourcePrice', width: 15 },
         { header: '对方利润率（%）', key: 'otherProfitPercent', width: 15 },
         { header: '对方利润（元）', key: 'otherProfit', width: 15 },
         { header: '我的售价（元）', key: 'resMoney', width: 15 },
-        { header: '我的利润率（%）', key: 'myProfitMargin', width: 15 },
+        { header: '我的利润率（%）', key: 'myProfitPercent', width: 15 },
         { header: '我的利润（元）', key: 'myProfit', width: 15 }
       ];
 

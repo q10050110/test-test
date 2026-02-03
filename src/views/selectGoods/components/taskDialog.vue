@@ -403,7 +403,7 @@ const initData = ref<Task>(
     cardRateMax: undefined,
     showRateMin: undefined,
     showRateMax: undefined,
-    salesSchema: 'FBO',
+    salesSchema: undefined,
     followMin: undefined,
     followMax: undefined,
     token: ''
@@ -442,12 +442,103 @@ const cancelHandle = () => {
   formRef.value?.resetFields()
 }
 
+
+const checkRange = (min: number = 0, max: number = 0): boolean => {
+  if ((min === undefined && max === undefined) || (min === null && max === null)) return true
+  if (!max) return true
+  if (isNaN(min) || isNaN(max)) return false
+  if (max < min) return false
+  return true
+}
+
+const filters = [
+  // 销量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.soldCountMin, formData.value.soldCountMax);
+    return result;
+  },
+  // 月销售额范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.gmvSumMin, formData.value.gmvSumMax);
+    return result;
+  },
+  // 销售价格范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.salePriceMin, formData.value.salePriceMax);
+    return result;
+  },
+  // 重量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.weightMin, formData.value.weightMax);
+    return result;
+  },
+  // 上架时间范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.upGoodsTimeMin, formData.value.upGoodsTimeMax);
+    return result;
+  },
+  // 月销售动态范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.monthDynamicsMin, formData.value.monthDynamicsMax);
+    return result;
+  },
+  // 广告份额范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.adFeeMin, formData.value.adFeeMax);
+    return result;
+  },
+  // 参与促销天数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDayMin, formData.value.promotionDayMax);
+    return result;
+  },
+  // 参与促销折扣范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDiscountMin, formData.value.promotionDiscountMax);
+    return result;
+  },
+  // 促销活动转化率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDynamicsMin, formData.value.promotionDynamicsMax);
+    return result;
+  },
+  // 付费推广天数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promoteDayMin, formData.value.promoteDayMax);
+    return result;
+  },
+  // 浏览量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.viewsMin, formData.value.viewsMax);
+    return result;
+  },
+  // 商品卡片加购率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.cardRateMin, formData.value.cardRateMax);
+    return result;
+  },
+  // 搜索和目录加购率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.showRateMin, formData.value.showRateMax);
+    return result;
+  },
+  // 跟卖人数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.followMin, formData.value.followMax);
+    return result;
+  },
+
+];
+
 const saveHandle = async (type: 'save' | 'execute') => {
   try {
     await formRef.value?.validate()
   } catch (error) {
     feedback.error('请完善表单报错项')
     return
+  }
+  if (filters.some(item => !item(formData.value))) {
+    return feedback.error('最小值不能超过最大值')
   }
 
   if (+(formData.value.myProfitPercent || 0) + +(formData.value.elsePercent || 0) > 100) {

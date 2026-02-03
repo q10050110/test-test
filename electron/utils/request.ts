@@ -2,6 +2,7 @@ import axios from "axios"
 import { operationStore } from '../store/index.js'
 import { globalBroadcast } from '../ipc/broadcast.js'
 import log from '../log/index.js'
+
 const request = axios.create({
   baseURL: process.env.NODE_ENV === 'development' ? 'https://test-plus.shopbang.cn' : 'https://test-plus.shopbang.cn',
   timeout: 500000
@@ -21,7 +22,9 @@ request.interceptors.response.use(response => {
   const { code, message } = response.data
   if (code !== 0) {
     log.error(`URL：${response.config.url},失败原因：${message}`)
-    if (code === 401 || code === 402) globalBroadcast.broadcast('request', { code, message })
+    if (code === 401 || code === 402) {
+      globalBroadcast.broadcast('request', { code, message })
+    }
     return Promise.reject(message)
   }
   return response.data

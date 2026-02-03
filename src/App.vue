@@ -29,20 +29,21 @@ window.electronAPI.on('app-ready-quit', () => {
 })
 
 
-window.electronAPI.on('update-checking', () => {
-  if (appStore.updateStatus !== 'hasNew') cModalRef.value?.openHandle()
+window.electronAPI.on('update-checking', async () => {
   console.log('检测更新啦~~')
 })
 
 window.electronAPI.on('update-available', async () => {
   console.log('发现新版本啦~~')
   await nextTick()
-  appStore.setUpdate('hasUpdate')
+  await appStore.initAppInfo()
+  if (appStore.updateStatus !== 'hasNew' && appStore.updateStatus !== 'downloaded') appStore.setUpdate('hasUpdate')
+  console.log(appStore.updateStatus)
   cModalRef.value && cModalRef.value.openHandle()
 })
 
 window.electronAPI.on('update-not-available', () => {
-  feedback.success('当前版本已经是最新的啦~~~')
+  appStore.setUpdate('hasNew')
   console.log('已经是最新版本啦~~')
 })
 
@@ -58,8 +59,8 @@ window.electronAPI.on('update-downloaded', async () => {
 })
 
 window.electronAPI.on('update-error', async (error) => {
-  console.log('更新失败啦~~')
   await nextTick()
+  appStore.setUpdate('hasNew')
   cModalRef.value && cModalRef.value?.closeHandle()
 })
 
@@ -78,7 +79,7 @@ window.addEventListener('resize', onResize)
 onMounted(async () => {
   await nextTick()
   await appStore.initAppInfo()
-  if (appStore.updateStatus !== 'hasNew') cModalRef.value?.openHandle()
+  window.electronAPI.sendMessage('check-update-app', '')
 })
 </script>
 

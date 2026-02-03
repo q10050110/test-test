@@ -271,7 +271,9 @@ export class Collection {
           safeResolve(new Error('任务已被终止'))
           return
         }
-        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent }
+        log.info(this.task.myProfitPercent, '我的利润率')
+
+        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, elsePercent: this.task.elsePercent }
         log.info(`获取1688数据完成:${task.id}`)
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
         log.info(`获取详细数据:${task.id}`)

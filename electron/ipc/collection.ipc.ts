@@ -92,7 +92,7 @@ export const collectionIpc = (win: BrowserWindow) => {
       log.error('创建并启动任务失败', error);
       return {
         code: 500,
-        message: error instanceof Error ? error.message : '未知错误',
+        message: error,
         data: null
       };
     }

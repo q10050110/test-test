@@ -9,8 +9,9 @@ export class ParseService {
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
   }
-  async ozonListParser($: cheerio.CheerioAPI, domain: string) {
+  async ozonListParser($: cheerio.CheerioAPI | undefined, domain: string) {
     const data: any[] = []
+    if (!$) return []
     const dom = $('#contentScrollPaginator a')
     // 解析DOM，获取商品数据
     dom.each((index, element) => {

@@ -3,6 +3,9 @@ import { BrowserWindow } from 'electron'
 import type { UpdateInfo } from 'electron-updater'
 import log from '../log/index.js'
 import { operationStore } from '../store/index.js'
+import fs from 'fs'
+import path from 'path'
+import { app } from 'electron'
 const { autoUpdater } = pkg
 
 export class UpdaterManager {
@@ -36,9 +39,13 @@ export class UpdaterManager {
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       log.info(info, '检测到新版本')
       const updateInfo = operationStore.get('update-info')
-      if (!updateInfo) operationStore.set('update-info', info)
-      if (operationStore.get('update-status') === 'downloaded') return
-      operationStore.set('update-status', 'hasUpdate')
+      if (updateInfo.version !== info.version) {
+        operationStore.set('update-info', info)
+        operationStore.set('clear-update', false)
+      }
+      const updateStatus = operationStore.get('update-status')
+      if (updateStatus !== 'downloaded') operationStore.set('update-status', 'hasUpdate')
+
       this.send('update-available', {
         version: info.version,
         date: info.releaseDate,
@@ -50,6 +57,23 @@ export class UpdaterManager {
       log.info('当前为最新版本')
       operationStore.set('update-status', 'hasNew')
       this.send('update-not-available')
+      const isClearUpdate = operationStore.get('clear-update')
+      if (!isClearUpdate)
+        try {
+          operationStore.set('clear-update', true)
+          const updaterDir = path.join(
+            process.env.LOCALAPPDATA as string,
+            `${app.getName()}-updater`
+          )
+          log.info('下载目录:', updaterDir)
+          if (fs.existsSync(updaterDir)) {
+            fs.rmSync(updaterDir, { recursive: true, force: true })
+            log.info('updater 缓存已清理', updaterDir)
+          }
+        } catch (e) {
+          operationStore.set('clear-update', false)
+          log.warn('清理 updater 缓存失败', e)
+        }
     })
 
     autoUpdater.on('download-progress', progress => {
@@ -71,6 +95,7 @@ export class UpdaterManager {
 
     autoUpdater.on('error', (error) => {
       log.error('更新错误', error)
+      operationStore.set('update-status', 'hasUpdate')
       this.send('update-error', error)
     })
   }
@@ -99,9 +124,10 @@ export class UpdaterManager {
   /**  
    * 安装并重启
    */
-  quitAndInstall() {
+  async quitAndInstall() {
     log.info('安装并重启')
     try {
+      await autoUpdater.downloadUpdate()
       autoUpdater.quitAndInstall()
     } catch (error) {
       operationStore.set('update-status', 'hasUpdate')
@@ -117,6 +143,7 @@ export class UpdaterManager {
     autoUpdater.autoDownload = false
     autoUpdater.allowDowngrade = false
     autoUpdater.autoInstallOnAppQuit = false
+
     this.registerEvents()
   }
 }

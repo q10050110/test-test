@@ -124,17 +124,23 @@ const startTask = async (task: Task, isThrottle = false) => {
       startTimer = undefined
     }, 3000)
   }
-  const { code, message } = task.taskStatus === 'noExecuted' ? await window.electronAPI.invoke('collection-start-task', task._id) : await window.electronAPI.invoke('collection-re-execute-task', task._id)
+  const data = toRaw(task)
+  if (data.progress) data.progress = toRaw(data.progress)
+  const { code, message } = await window.electronAPI.invoke('collection-create-and-start', { data, type: 'execute' })
   if (code === 200) return feedback.success('执行任务成功')
   feedback.error(message)
 }
 // 批量开始任务
+const isStart = ref(false)
 const batchStartHandle = async () => {
+  if (isStart.value) return feedback.error('批量执行任务中，请勿频繁点击')
   if (!selectData.value?.length || !tableData.value?.length) {
     feedback.error('请选择要开始的任务！');
     return;
   }
-
+  const isRunning = selectData.value.some(taskId => tableData.value?.some(task => task._id === taskId && (task.taskStatus === 'running' || task.taskStatus === 'pending')));
+  if (isRunning) return feedback.error('当前选中的任务中存在执行的任务，请稍后重试')
+  isStart.value = true
   for (const item of selectData.value) {
     const task = tableData.value?.find(task => task._id === item);
     if (!task) continue;
@@ -142,7 +148,9 @@ const batchStartHandle = async () => {
     await startTask(task);
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
+
   selectData.value = []
+  isStart.value = false
 }
 
 // 复制任务
@@ -197,7 +205,7 @@ const getLogisticsSimpleList = async () => {
 getLogisticsSimpleList()
 
 const formatDate = (date: string) => {
-  if(date) return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+  if (date) return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
   return '-'
 }
 
@@ -250,7 +258,7 @@ onUnmounted(() => {
                 创建时间：{{ formatDate(record.createTime) }}
               </div>
               <div>
-                最近执行：{{ formatDate(record.updateTime)  }}
+                最近执行：{{ formatDate(record.lastRunningTime) }}
               </div>
             </template>
             <template v-if="column.key === 'status'">
