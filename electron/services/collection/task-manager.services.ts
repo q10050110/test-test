@@ -3,7 +3,7 @@ import { Collection } from './collection.services.js';
 import log from '../../log/index.js';
 import request from '../../utils/request.js';
 import { Task } from './type.js'
-import fs from 'fs/promises'
+import { SysTemUtils } from '../../utils/system.js'
 export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
@@ -11,6 +11,7 @@ export class TaskManager {
   private maxConcurrentTasks = 2;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
+  private filePathList: Map<string, { filePath: string, progress: any }> = new Map()
   private constructor() { }
 
   public static getInstance(): TaskManager {
@@ -157,7 +158,10 @@ export class TaskManager {
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
       this.tasks.delete(taskId)
-
+      this.filePathList.set(taskId, {
+        filePath: await task.getTableFilePath(),
+        progress: task.getTaskInfo().progress
+      })
       // 处理队列中的下一个任务
       this.processNextTask();
     }
@@ -211,7 +215,9 @@ export class TaskManager {
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
-          task.progress = this.tasks.get(task._id)?.getTaskInfo().progress
+          let progress = this.tasks.get(task._id)?.getTaskInfo().progress
+          if (!progress) progress = this.filePathList.get(task._id)?.progress
+          task.progress = progress
         }
 
         if (task.taskStatus !== 'noExecuted') {
@@ -219,9 +225,17 @@ export class TaskManager {
           if (!filePath) continue
 
           try {
-            await fs.access(filePath)
-            task.tableFilePath = '啦啦啦'
-          } catch { }
+            const res = await SysTemUtils.fileOperations.exists(filePath)
+            if (res) {
+              this.filePathList.set(task._id, {
+                filePath,
+                progress: task.progress
+              })
+              task.tableFilePath = filePath
+            }
+          } catch {
+            log.error('文件不存在')
+          }
         }
       }
 
@@ -334,8 +348,7 @@ export class TaskManager {
 
         try {
           const filePath = await task.getTableFilePath()
-          await fs.access(filePath)
-          await fs.unlink(filePath)
+          await SysTemUtils.fileOperations.deleteFile(filePath)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -393,8 +406,7 @@ export class TaskManager {
 
         try {
           const filePath = await task.getTableFilePath()
-          await fs.access(filePath)
-          await fs.unlink(filePath)
+          await SysTemUtils.fileOperations.deleteFile(filePath)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -409,12 +421,11 @@ export class TaskManager {
 
   // 下载表格
   async downloadExcel(taskId: string) {
-    const task = [...this.tasks.values()].find(item => item.getTaskInfo()._id === taskId)
-    if (!task) return
-    const filePath = await task.getTableFilePath()
-
+    const filePath = this.filePathList.get(taskId)
+    log.info(filePath, 'filePath')
+    if (!filePath) return new Error('文件不存在！')
     try {
-      this.mainWindow?.webContents.downloadURL(`file://${filePath}`)
+      this.mainWindow?.webContents.downloadURL(`file://${filePath.filePath}`)
     } catch (error) {
       log.error('下载表格失败', error)
     }
@@ -450,8 +461,27 @@ export class TaskManager {
     }
 
     // 清除所有注册的任务
-    this.tasks.clear()
-    await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
+    await this.deleteAllExcel()
+    try {
+      await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
+    } catch (error) {
+      log.error('重置任务状态失败:', error);
+    }
     log.info(this.tasks.size, '已清空所有队列');
+  }
+
+  /** 
+   * 删除所有表格
+    */
+  async deleteAllExcel() {
+    const files = [...this.filePathList.values()].map(item => item.filePath)
+    for (const file of files) {
+      try {
+        await SysTemUtils.fileOperations.deleteFile(file)
+      } catch (error) {
+        log.error('删除文件失败', error)
+      }
+    }
+    this.filePathList.clear()
   }
 }

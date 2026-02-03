@@ -2,7 +2,6 @@ import { ExcelWriter } from '../../utils/excel.js';
 import { join } from 'path';
 import { SysTemUtils } from '../../utils/system.js';
 import log from '../../log/index.js'
-import fs from 'fs/promises'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 export class ExcelService {
   private excel: ExcelWriter
@@ -55,7 +54,7 @@ export class ExcelService {
         { header: '商品可用性(%)', key: 'accessibility', width: 15 },
 
         // 物流信息
-        { header: '配送时间（天）', key: 'deliveryTimeDays', width: 12 },
+        { header: '配送时间（天）', key: 'avgDeliveryDays', width: 12 },
         { header: '商品体积（升）', key: 'volume', width: 12 },
         { header: '包装长(mm)', key: 'length', width: 12 },
         { header: '包装宽(mm)', key: 'width', width: 12 },
@@ -64,7 +63,7 @@ export class ExcelService {
 
         // 成本和利润
         { header: 'RFBS佣金(元)', key: 'fbsPrice', width: 15 },
-        { header: '国际物流', key: 'expressName', width: 15 },
+        { header: '国际物流', key: 'internalExpress', width: 15 },
         { header: '国际物流费用（元）', key: 'logisticsMoney', width: 15 },
         { header: '尾程派送费', key: 'endDeliveryFee', width: 15 },
         { header: '国内运费（元）', key: 'rubExpressPrice', width: 15 },
@@ -163,12 +162,7 @@ export class ExcelService {
   }
 
   async DeleteFilled() {
-    try {
-      const filePath = await this.getFilePath()
-      await fs.rm(filePath, { force: true })
-      log.info('文件删除成功！')
-    } catch (error) {
-      log.error('删除任务文件失败', error)
-    }
+    await SysTemUtils.fileOperations.deleteFile(await this.getFilePath())
+    await this.excel.reset()
   }
 }

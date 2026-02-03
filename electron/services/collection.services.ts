@@ -989,7 +989,7 @@ export class Collection {
         { header: '商品可用性(%)', key: 'accessibility', width: 15 },
 
         // 物流信息
-        { header: '配送时间（天）', key: 'deliveryTimeDays', width: 12 },
+        { header: '配送时间（天）', key: 'avgDeliveryDays', width: 12 },
         { header: '商品体积（升）', key: 'volume', width: 12 },
         { header: '包装长(mm)', key: 'length', width: 12 },
         { header: '包装宽(mm)', key: 'width', width: 12 },
@@ -998,7 +998,7 @@ export class Collection {
 
         // 成本和利润
         { header: 'RFBS佣金(元)', key: 'fbsPrice', width: 15 },
-        { header: '国际物流', key: 'expressName', width: 15 },
+        { header: '国际物流', key: 'internalExpress', width: 15 },
         { header: '国际物流费用（元）', key: 'logisticsMoney', width: 15 },
         { header: '国内运费（元）', key: 'endDeliveryFee', width: 15 },
         { header: '其他费用（提醒、货损）（元）', key: 'elsePrice', width: 20 },

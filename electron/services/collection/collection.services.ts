@@ -50,9 +50,8 @@ export class Collection {
 
     return new Promise(async (resolve, reject) => {
       try {
-        if (this.uuid) await this.resetTask()
+        await this.resetTask()
         this.uuid = randomUUID()
-        log.info(this.uuid, '重新生成的UUID')
         timer = setInterval(async () => {
           if (this.reason === 'cancel' || this.reason === 'failed') {
             clearInterval(timer)
@@ -119,7 +118,6 @@ export class Collection {
         scrollAttempts++
         if (!result) {
           bottomOutCount++
-          log.info(`页面触底：${bottomOutCount}`)
           await new Promise(resolve => setTimeout(resolve, 5000))
           continue
         }
@@ -142,6 +140,7 @@ export class Collection {
       if (!this.reason) this.reason = 'success'
       this.outputLog(`收集完成，共收集到 ${this.parseService.getDataCount()} 个链接`)
     } catch (error) {
+      log.error(error, '采集窗口发生错误')
       return error
     }
   }
@@ -271,14 +270,13 @@ export class Collection {
           safeResolve(new Error('任务已被终止'))
           return
         }
-        log.info(this.task.myProfitPercent, '我的利润率')
+        log.info(this.task.internalExpress, '国际物流')
 
-        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, elsePercent: this.task.elsePercent }
+        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, elsePercent: this.task.elsePercent, internalExpress: this.task.internalExpress }
         log.info(`获取1688数据完成:${task.id}`)
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
         log.info(`获取详细数据:${task.id}`)
         if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid) {
-          log.info(uuid, this.uuid, 'uuid对比')
           const result = await this.excelService.saveExcel(detailData)
           if (result) this.targetData++
           if (!result) this.resetWriteExcel(detailData, uuid!, 0)
@@ -335,12 +333,14 @@ export class Collection {
     */
   async resetTask() {
     this.process = 0
-    this.excelService.DeleteFilled()
+    await this.excelService.DeleteFilled()
+    this.task.tableFilePath = undefined
     this.isCleared = false
     this.reason = undefined
     this.parseService.clearData()
     this.taskQueueService.clear()
     this.uuid = undefined
+    this.outputLog('任务初始化完成')
   }
   /** 
    * 获取任务信息 

@@ -33,6 +33,7 @@ export class DataProcessService {
           item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
           item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
           item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
+          if (item.accessibility) item.accessibility = item.accessibility * 100
           if (item.goods_id) this.data.set(item.goods_id, item)
         })
       }
@@ -67,11 +68,12 @@ export class DataProcessService {
 
       return res.data.map((item: any) => {
         const obj = this.data.get(item.id)
-        obj.accessibility = obj.accessibility * 100
         if (obj) item = { ...obj, ...item }
+        if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
         return item
       })
     } catch (error) {
+      console.log(error, '啥情况')
       return []
     }
   }
@@ -182,7 +184,6 @@ export class DataProcessService {
     const filteredData = data.filter(item => {
       const results = filters.map(filterFn => filterFn(item));
       const overallResult = results.every(r => r);
-      console.log(results, '过滤结果！！')
       return overallResult;
     });
     return filteredData

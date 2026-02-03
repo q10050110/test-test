@@ -354,4 +354,18 @@ export class ExcelWriter {
   getFilePath() {
     return this.filePath
   }
+
+  reset(filePath?: string) {
+
+    this.workbook = new ExcelJS.Workbook()
+    this.worksheet = this.workbook.addWorksheet(this.sheetName)
+
+    this.initialized = true   // 已初始化，但用的是新 workbook
+    this.saving = false
+    this.memoryQueue = Promise.resolve()
+
+    if (filePath) {
+      this.filePath = filePath
+    }
+  }
 }

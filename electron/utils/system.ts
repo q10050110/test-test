@@ -1,7 +1,6 @@
 import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
 import { join, dirname, basename } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
-import { autoUpdater } from 'electron-updater'
+import { unlinkSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
 
 /**
  * Electron 系统级能力封装
@@ -325,7 +324,20 @@ export class SysTemUtils {
         console.error('获取文件信息失败：', error)
         return null
       }
-    }
+    },
+    /**
+     * 删除文件
+     * @param filePath 文件路径
+     */
+    deleteFile: (filePath: string) => {
+      try {
+        if (existsSync(filePath)) {
+          unlinkSync(filePath)
+        }
+      } catch (error) {
+        console.error('删除文件失败：', error)
+      }
+    },
   }
   /**
   * 对话框操作
@@ -621,14 +633,5 @@ export class SysTemUtils {
     unmaximize: (win: BrowserWindow) => {
       win.unmaximize()
     },
-  }
-  /**
-   * 更新 
-   */
-  static update = {
-    /**
-     * 检查更新
-     */
-
   }
 }
