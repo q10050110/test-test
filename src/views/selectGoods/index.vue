@@ -94,6 +94,7 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   if (resetPage) params.value.pageNo = 1
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
+  console.log(data.list)
   total.value = data.total
 }
 getTaskList()
@@ -160,6 +161,7 @@ const copyHandle = async (task: Task) => {
   timer.value = setTimeout(() => {
     timer.value = undefined
   }, 1000)
+  task.lastRunningTime = undefined
   const newTask = JSON.parse(JSON.stringify(task))
   const { code, message } = await window.electronAPI.invoke('collection-copy', { data: toRaw(newTask) })
   await getTaskList(undefined, true)
@@ -210,8 +212,8 @@ const formatDate = (date: string) => {
 }
 
 // 导出表格
-const exportHandle = async (taskId: string) => {
-  window.electronAPI.invoke('collection-download-excel', taskId)
+const exportHandle = async (tableFilePath: string) => {
+  window.electronAPI.invoke('collection-download-excel', tableFilePath)
 }
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
@@ -290,7 +292,7 @@ onUnmounted(() => {
                   <span>导出符合条件的商品表格</span>
                 </template>
                 <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
-                  @click="exportHandle(record?._id)">导出</a-button>
+                  @click="exportHandle(record?.tableFilePath)">导出</a-button>
               </a-tooltip>
             </template>
           </template>

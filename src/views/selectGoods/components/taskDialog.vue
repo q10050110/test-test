@@ -548,8 +548,7 @@ const saveHandle = async (type: 'save' | 'execute') => {
   submitting.value = true
 
   try {
-    const data = toRaw(formData.value)
-    if (data.progress) data.progress = toRaw(data.progress)
+    const data = JSON.parse(JSON.stringify(formData.value))
 
     const { code, message } = type === 'execute'
       ? await window.electronAPI.invoke('collection-create-and-start', { data, type })

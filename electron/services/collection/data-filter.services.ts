@@ -33,6 +33,7 @@ export class DataProcessService {
           item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
           item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
           item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
+          item.discount = item?.discount?.toFixed(2)
           if (item.accessibility) item.accessibility = item.accessibility * 100
           if (item.goods_id) this.data.set(item.goods_id, item)
         })
@@ -43,6 +44,7 @@ export class DataProcessService {
         if (obj) {
           return { ...item, ...obj, productId: item.id };
         }
+
         return { ...item, productId: item.id };
       })
       return mergeData
@@ -65,7 +67,6 @@ export class DataProcessService {
           reqDatas
         }
       })
-
       return res.data.map((item: any) => {
         const obj = this.data.get(item.id)
         if (obj) item = { ...obj, ...item }

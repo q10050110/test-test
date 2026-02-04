@@ -39,7 +39,7 @@ export class UpdaterManager {
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       log.info(info, '检测到新版本')
       const updateInfo = operationStore.get('update-info')
-      if (updateInfo.version !== info.version) {
+      if (updateInfo?.version !== info.version) {
         operationStore.set('update-info', info)
         operationStore.set('clear-update', false)
       }

@@ -18,9 +18,10 @@ request.interceptors.request.use(async config => {
 
 request.interceptors.response.use(response => {
   const store = useUserStore()
+  const route = useRoute()
   const { code, message } = response.data
   if (code !== 0) {
-    if ((code === 402 || code === 401) && !response.config.url?.includes('logout') && !useRoute().path.includes('/login')) {
+    if ((code === 402 || code === 401) && !response.config.url?.includes('logout') && !route?.path?.includes('/login')) {
       store.logout()
     }
     Promise.reject(new Error(message))

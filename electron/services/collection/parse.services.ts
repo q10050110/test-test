@@ -25,24 +25,25 @@ export class ParseService {
       const link = `https://www.ozon.ru/product/${id}`;
       const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '');
       const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
-      const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
+      // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
       const name = $(element).parent().find('a').children('div').children('span').text();
-      const rating = Number($(element).parent().find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]).toFixed(1);
-      const reviewCount = $(element).parent().find('.p6b3_0_6-a4').next().find('svg').next().text().replace(/[\s\u2009\u202F]/g, '').match(/(\d+)\s*отзывов/)?.[1] || 0;
+      const rating = $(element).parent().find('.tsBodyMBold').find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]
+      const reviewCountLabel = $(element).parent().find('.tsBodyMBold').find('.p6b3_0_6-a4').next().find('svg').next().text().replace(/[\s\u2009\u202F]/g, '').match(/(\d+)\s*отзывов/)?.[1] || 0;
       const obj = {
         href,
         price: Number(price),
         oPrice,
-        discount,
+        // discountLabel: isNaN(Number(discount)) ? discount : `${Number(discount).toFixed(2)}%`,
         link,
         cover,
         name,
         id,
-        rating,
+        rating: rating?.slice(0, 3),
         sku: id,
         requestUrl,
-        reviewCount,
+        reviewCountLabel
       }
+
       if (id) {
         data.push(obj)
       }

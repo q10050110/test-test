@@ -37,7 +37,7 @@ window.electronAPI.on('update-available', async () => {
   console.log('发现新版本啦~~')
   await nextTick()
   await appStore.initAppInfo()
-  if (appStore.updateStatus !== 'hasNew' && appStore.updateStatus !== 'downloaded') appStore.setUpdate('hasUpdate')
+  if (appStore.updateStatus !== 'downloaded') appStore.setUpdate('hasUpdate')
   console.log(appStore.updateStatus)
   cModalRef.value && cModalRef.value.openHandle()
 })

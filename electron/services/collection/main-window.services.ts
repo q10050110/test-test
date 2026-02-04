@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio'
 
 export class MainWindowService {
   private browserWindow: BrowserWindow | null = null
+  private isCheck: boolean = false
   private closeHandle: () => void
   constructor(closeHandle: () => void) {
     this.closeHandle = closeHandle
@@ -28,7 +29,6 @@ export class MainWindowService {
         width: 1200,
         height: 800,
         show: true,
-        frame: false,
         webPreferences: {
           contextIsolation: true,
           sandbox: true,
@@ -71,15 +71,43 @@ export class MainWindowService {
    * 获取页面
     */
   async getHTML() {
-    if (!this.browserWindow || this.browserWindow.isDestroyed()) return { $: undefined, domain: undefined }
-    try {
-      const html = await this.browserWindow.webContents.executeJavaScript('document.documentElement.outerHTML')
-      const $ = cheerio.load(html)
-      const domain = new URL(this.browserWindow.webContents.getURL()).origin
-      return { $, domain }
-    } catch (error) {
-      throw new Error(error as string)
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+      return { $: undefined, domain: undefined }
     }
+    const wc = this.browserWindow.webContents
+    if (!this.isCheck) {
+      this.isCheck = true
+      // 1. 点击
+      const result = await wc.executeJavaScript(`
+        (() => {
+          try {
+            const p = document.querySelector('body > div.con p.h')
+            if (!p) return { ok: false, reason: 'p not found' }
+
+            const btn = document.querySelector('.rb')
+            if (!btn) return { ok: false, reason: 'btn not found' }
+
+            btn.click()
+            return { ok: true }
+          } catch (e) {
+            return {
+              ok: false,
+              error: e?.message || String(e)
+            }
+          }
+        })()
+      `)
+      log.info('点击结果:', result)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    }
+
+    const html = await wc.executeJavaScript(
+      'document.documentElement.outerHTML'
+    )
+
+    const $ = cheerio.load(html)
+    const domain = new URL(wc.getURL()).origin
+    return { $, domain }
   }
   /**
    * 滚动页面

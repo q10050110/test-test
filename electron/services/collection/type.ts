@@ -6,6 +6,7 @@ export interface Task {
   progress: any;
   createTime: string;
   updateTime: string;
+  lastRunningTime: string;
   taskName: string;
   targetUrl: string;
   myProfitPercent?: number;

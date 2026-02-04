@@ -96,8 +96,8 @@ export class Collection {
       const maxScrollAttempts = 10
       let bottomOutCount = 0
       const { $, domain } = await this.mainWindowService.getHTML()
-      if (!$) return
-      const goodsList = await this.parseService.ozonListParser($, domain)
+      const goodsList = await this.parseService.ozonListParser($, domain || '')
+
       if (goodsList.length) this.processData(goodsList)
       while (this.targetData < targetCount) {
         if (this.reason && this.reason !== 'success') throw new Error('任务终止')
@@ -112,6 +112,13 @@ export class Collection {
           this.outputLog('尝试获取商品达到最大次数')
           return
         }
+
+        if (bottomOutCount >= 3) {
+          if (!this.reason) this.reason = 'success'
+          this.outputLog('已滚动至页面底部')
+          return
+        }
+
         await new Promise(resolve => setTimeout(resolve, 2000))
         this.outputLog(`滚动页面加载数据中，(${scrollAttempts}/${maxScrollAttempts})，已收集${this.parseService.getDataCount()}`)
         const result = await this.mainWindowService.scrollPage()
@@ -120,12 +127,6 @@ export class Collection {
           bottomOutCount++
           await new Promise(resolve => setTimeout(resolve, 5000))
           continue
-        }
-
-        if (bottomOutCount >= 3) {
-          if (!this.reason) this.reason = 'success'
-          this.outputLog('已滚动至页面底部')
-          return
         }
 
         const { $, domain } = await this.mainWindowService.getHTML()
@@ -177,6 +178,7 @@ export class Collection {
    * 更改任务状态
     */
   async updateStatus(status: TaskStatus) {
+    if (status === 'pending') this.resetTask()
     let uuid = this.uuid
     if (this.task.taskStatus === status || uuid !== this.uuid) return
     try {
@@ -190,14 +192,15 @@ export class Collection {
   // 同步状态到服务器
   private async syncStatusToServer(status: TaskStatus) {
     try {
-      await request({
+      const res = await request({
         url: '/api/auto/autoTask/updateStatus',
         method: 'post',
         data: {
           taskId: this.task._id,
           taskStatus: status,
         },
-      });
+      })
+      this.updateTaskData(res.data)
     } catch (error) {
       log.error('同步任务状态到服务器失败', error);
     }
@@ -270,9 +273,7 @@ export class Collection {
           safeResolve(new Error('任务已被终止'))
           return
         }
-        log.info(this.task.internalExpress, '国际物流')
-
-        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, elsePercent: this.task.elsePercent, internalExpress: this.task.internalExpress }
+        task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, internalExpress: this.task.internalExpress }
         log.info(`获取1688数据完成:${task.id}`)
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
         log.info(`获取详细数据:${task.id}`)
@@ -362,8 +363,8 @@ export class Collection {
     Object.assign(this.task, {
       ...task,
       _id: this.task._id, // 确保 id 不被覆盖
-      createTime: this.task.createTime, // 确保创建时间不被覆盖
       taskStatus: this.task.taskStatus, // 保持当前状态
+      progress: this.task.progress
     });
   }
   /** 

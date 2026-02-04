@@ -60,6 +60,7 @@ const loginHandle = async () => {
   if (code === 0) {
     changeHandle()
     store.setToken(data.token)
+    await window.electronAPI.invoke('resetToken', { token: data.token })
     feedback.success('登录成功！')
     router.push('/')
     return

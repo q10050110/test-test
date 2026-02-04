@@ -241,7 +241,7 @@ export const collectionIpc = (win: BrowserWindow) => {
   });
 
   // 下载表格
-  ipcMain.handle('collection-download-excel', async (event, taskId: string) => {
-    return await taskManager.downloadExcel(taskId)
+  ipcMain.handle('collection-download-excel', async (event, tableFilePath: string) => {
+    return await taskManager.downloadExcel(tableFilePath)
   })
 };

@@ -11,7 +11,7 @@ export class TaskManager {
   private maxConcurrentTasks = 2;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
-  private filePathList: Map<string, { filePath: string, progress: any }> = new Map()
+  private filePathList: Map<string, Task> = new Map()
   private constructor() { }
 
   public static getInstance(): TaskManager {
@@ -37,15 +37,16 @@ export class TaskManager {
         const existingCollection = this.tasks.get(taskData._id);
         if (existingCollection) {
           try {
-            await request({
+            const res = await request({
               url: '/api/auto/autoTask/editTask',
               method: 'post',
               data: {
                 ...taskData,
                 taskId: taskData._id,
               },
-            });
-            existingCollection.updateTaskData(taskData);
+            })
+
+            existingCollection.updateTaskData(res.data);
             collection = existingCollection;
           } catch (error) {
             log.error('更新任务数据失败', error);
@@ -65,8 +66,8 @@ export class TaskManager {
             method: 'post',
             data: taskData,
           });
-          const newTaskData = { ...taskData, _id: response.data };
-          collection = new Collection(newTaskData, this.mainWindow!);
+
+          collection = new Collection(response.data, this.mainWindow!);
 
           this.tasks.set(collection.getTaskInfo()._id, collection);
         } catch (error) {
@@ -148,20 +149,18 @@ export class TaskManager {
     // 添加到活动任务并立即通知
     this.activeTasks.add(taskId);
     this.notifyTaskUpdate(taskId, 'running');
-
     try {
+      this.filePathList.set(taskId, { ...task.getTaskInfo() })
       await task.run();
+
     } catch (error) {
 
     } finally {
       // 任务完成后清理并通知
+      this.filePathList.set(taskId, { ...task.getTaskInfo() })
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
       this.tasks.delete(taskId)
-      this.filePathList.set(taskId, {
-        filePath: await task.getTableFilePath(),
-        progress: task.getTaskInfo().progress
-      })
       // 处理队列中的下一个任务
       this.processNextTask();
     }
@@ -209,36 +208,26 @@ export class TaskManager {
         data: params,
       });
 
-      for (const task of data.list) {
+      for (let task of data.list) {
+        const copyTask = this.filePathList.get(task._id)
         if (!this.tasks.has(task._id)) {
-          task.progress = task.progress || { current: 0, total: 0, totalCount: 0 }
+          task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+          task.tableFilePath = copyTask?.tableFilePath
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
-          let progress = this.tasks.get(task._id)?.getTaskInfo().progress
-          if (!progress) progress = this.filePathList.get(task._id)?.progress
-          task.progress = progress
-        }
-
-        if (task.taskStatus !== 'noExecuted') {
-          const filePath = await this.tasks.get(task._id)!.getTableFilePath()
-          if (!filePath) continue
-
-          try {
-            const res = await SysTemUtils.fileOperations.exists(filePath)
-            if (res) {
-              this.filePathList.set(task._id, {
-                filePath,
-                progress: task.progress
-              })
-              task.tableFilePath = filePath
-            }
-          } catch {
-            log.error('文件不存在')
+          const progress2 = this.tasks.get(task._id)?.getTaskInfo().progress
+          const filePath = this.tasks.get(task._id)?.getTaskInfo().tableFilePath
+          if (task.taskStatus === 'running') {
+            if (filePath && SysTemUtils.fileOperations.exists(filePath)) task.tableFilePath = filePath
+            task.progress = progress2
+          } else {
+            task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+            task.tableFilePath = copyTask?.tableFilePath
           }
         }
-      }
 
+      }
       return data;
     } catch (error) {
       log.error('获取任务列表失败', error);
@@ -325,15 +314,11 @@ export class TaskManager {
     let successCount = 0;
 
     for (const id of taskIds) {
-      const task = this.tasks.get(id);
-      if (!task) continue;
+      const task = this.tasks.get(id)
+      const task2 = this.filePathList.get(id)
+      if (!task && !task2) continue
 
       try {
-        // 如果任务在执行或队列中，先取消
-        if (this.activeTasks.has(id) || this.taskQueue.includes(id)) {
-          this.cancelTask(id);
-        }
-
         // 从服务器删除
         await request({
           url: '/api/auto/autoTask/deleteTask', // 或者使用批量删除接口
@@ -341,14 +326,11 @@ export class TaskManager {
           data: { taskId: id },
         });
 
-        // 从本地缓存删除
-        if (this.tasks.delete(id)) {
-          successCount++;
-        }
+        successCount++;
 
         try {
-          const filePath = await task.getTableFilePath()
-          await SysTemUtils.fileOperations.deleteFile(filePath)
+          const filePath = await task?.getTableFilePath() || task2?.tableFilePath
+          await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -393,20 +375,14 @@ export class TaskManager {
       let successCount = 0;
       for (const id of taskIds) {
         const task = this.tasks.get(id);
-        if (!task) continue;
+        const task2 = this.filePathList.get(id);
+        if (!task && !task2) continue;
 
-        // 如果任务在执行或队列中，先取消
-        if (this.activeTasks.has(id) || this.taskQueue.includes(id)) {
-          this.cancelTask(id);
-        }
-
-        if (this.tasks.delete(id)) {
-          successCount++;
-        }
+        successCount++;
 
         try {
-          const filePath = await task.getTableFilePath()
-          await SysTemUtils.fileOperations.deleteFile(filePath)
+          const filePath = await task?.getTableFilePath() || task2?.tableFilePath
+          await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
@@ -420,12 +396,10 @@ export class TaskManager {
   }
 
   // 下载表格
-  async downloadExcel(taskId: string) {
-    const filePath = this.filePathList.get(taskId)
-    log.info(filePath, 'filePath')
+  async downloadExcel(filePath: string) {
     if (!filePath) return new Error('文件不存在！')
     try {
-      this.mainWindow?.webContents.downloadURL(`file://${filePath.filePath}`)
+      this.mainWindow?.webContents.downloadURL(`file://${filePath}`)
     } catch (error) {
       log.error('下载表格失败', error)
     }
@@ -449,7 +423,7 @@ export class TaskManager {
  */
   async stopAllTasks(): Promise<void> {
     // 首先清空任务队列
-    this.taskQueue = [];
+    this.taskQueue = []
 
     // 取消所有活跃任务
     for (const taskId of [...this.activeTasks]) { // 使用副本避免迭代时修改
@@ -460,13 +434,13 @@ export class TaskManager {
       }
     }
 
-    // 清除所有注册的任务
     await this.deleteAllExcel()
     try {
       await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
     } catch (error) {
       log.error('重置任务状态失败:', error);
     }
+    this.tasks.clear()
     log.info(this.tasks.size, '已清空所有队列');
   }
 
@@ -474,10 +448,10 @@ export class TaskManager {
    * 删除所有表格
     */
   async deleteAllExcel() {
-    const files = [...this.filePathList.values()].map(item => item.filePath)
+    const files = [...this.filePathList.values()].map(item => item.tableFilePath)
     for (const file of files) {
       try {
-        await SysTemUtils.fileOperations.deleteFile(file)
+        await SysTemUtils.fileOperations.deleteFile(file || '')
       } catch (error) {
         log.error('删除文件失败', error)
       }

@@ -2,7 +2,7 @@ import axios from "axios"
 import { operationStore } from '../store/index.js'
 import { globalBroadcast } from '../ipc/broadcast.js'
 import log from '../log/index.js'
-
+import { TaskManager } from '../services/collection/task-manager.services.js'
 let isTokenFailure = false
 
 const request = axios.create({
@@ -12,9 +12,9 @@ const request = axios.create({
 
 request.interceptors.request.use(async config => {
   const token = operationStore.get('token')
-  if (isTokenFailure && !config.url?.includes('/login')) return Promise.reject(new Error('token失效'))
+  if (isTokenFailure && !config.url?.includes('getUserInfo')) return Promise.reject(new Error('token失效'))
   if (token && config.data) config.data.token = token
-  // console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
+  // if (config.url?.includes('goodsFilter')) console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
   return config
 }, error => {
   return Promise.reject(error)
@@ -28,6 +28,7 @@ request.interceptors.response.use(response => {
     if (code === 401 || code === 402) {
       if (isTokenFailure) return Promise.reject(message)
       isTokenFailure = true
+      TaskManager.getInstance().stopAllTasks()
       globalBroadcast.broadcast('request', { code, message })
     }
     return Promise.reject(message)

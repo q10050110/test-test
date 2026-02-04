@@ -10,6 +10,7 @@ export type Task = {
   }
   createTime?: string
   updateTime?: string
+  lastRunningTime?: string
   taskName: string
   targetUrl: string
   myProfitPercent?: number
