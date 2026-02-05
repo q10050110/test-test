@@ -3,6 +3,8 @@ export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'f
 export type Task = {
   _id?: string
   taskStatus?: TaskStatus
+  autoSelling: boolean
+  autoType: string | number
   progress?: {
     current?: number
     total?: number
@@ -69,3 +71,22 @@ export type LogisticsSimple = {
 }
 
 export type LogisticsSimpleList = LogisticsSimple[]
+
+
+export type Warehouse = {
+  name: string
+  warehouse_id: number
+}
+
+export type Shop = {
+  account_id: string
+  client_id: string
+  cookie_status: number
+  currency_code: string
+  platform: string
+  shop_name: string
+  status: number,
+  warehouse: Warehouse[]
+}
+
+export type ShopList = Shop[]

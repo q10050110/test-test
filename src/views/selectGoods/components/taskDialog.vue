@@ -1,3 +1,234 @@
+<script setup lang="ts">
+import { QuestionCircleOutlined, SwapOutlined } from '@ant-design/icons-vue';
+import type { FormInstance } from 'ant-design-vue';
+import type { Rule } from 'ant-design-vue/es/form';
+import type { LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
+import feedback from '@/utils/feedback';
+
+defineProps<{
+  logisticsSimpleList: LogisticsSimpleList
+  shopList: ShopList
+}>()
+
+const emits = defineEmits(['refresh'])
+const open = ref(false)
+const submitting = ref(false)
+
+const initData = ref<Task>(
+  {
+    _id: undefined,
+    taskStatus: 'noExecuted',
+    autoSelling: false,
+    progress: undefined,
+    createTime: undefined,
+    updateTime: undefined,
+    taskName: '',
+    targetUrl: '',
+    myProfitPercent: undefined,
+    internalExpress: undefined,
+    rubExpressPrice: undefined,
+    elsePercent: undefined,
+    sourceType: '0',
+    targetCount: undefined,
+    targetProfitPercent: undefined,
+    brandType: '2',
+    soldCountMin: undefined,
+    soldCountMax: undefined,
+    gmvSumMin: undefined,
+    gmvSumMax: undefined,
+    salePriceMin: undefined,
+    salePriceMax: undefined,
+    weightMin: undefined,
+    weightMax: undefined,
+    upGoodsTimeMin: undefined,
+    upGoodsTimeMax: undefined,
+    monthDynamicsMin: undefined,
+    monthDynamicsMax: undefined,
+    adFeeMin: undefined,
+    adFeeMax: undefined,
+    promotionDayMin: undefined,
+    promotionDayMax: undefined,
+    promotionDiscountMin: undefined,
+    promotionDiscountMax: undefined,
+    promotionDynamicsMin: undefined,
+    promotionDynamicsMax: undefined,
+    promoteDayMin: undefined,
+    promoteDayMax: undefined,
+    viewsMin: undefined,
+    viewsMax: undefined,
+    cardRateMin: undefined,
+    cardRateMax: undefined,
+    showRateMin: undefined,
+    showRateMax: undefined,
+    salesSchema: undefined,
+    followMin: undefined,
+    followMax: undefined,
+    autoType: 1,
+    token: ''
+  }
+)
+
+const formData = ref<Task>({ ...initData.value })
+
+const rules: Record<string, Rule[]> = {
+  taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
+  targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
+  sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
+  targetCount: [
+    { required: true, message: '请输入目标数量', trigger: ['change', 'blur'] },
+    {
+      validator: (_, value) => {
+        if (value <= 0) {
+          return Promise.reject('请输入大于0的数字');
+        }
+        return Promise.resolve();
+      },
+      trigger: ['change', 'blur']
+    }
+  ],
+  // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
+}
+
+const openDialog = () => open.value = true
+
+// 创建采集任务
+const formRef = ref<FormInstance>()
+
+const cancelHandle = () => {
+  open.value = false
+  formData.value = { ...initData.value }
+  formRef.value?.resetFields()
+}
+
+
+const checkRange = (min: number = 0, max: number = 0): boolean => {
+  if ((min === undefined && max === undefined) || (min === null && max === null)) return true
+  if (!max) return true
+  if (isNaN(min) || isNaN(max)) return false
+  if (max < min) return false
+  return true
+}
+
+const filters = [
+  // 销量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.soldCountMin, formData.value.soldCountMax);
+    return result;
+  },
+  // 月销售额范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.gmvSumMin, formData.value.gmvSumMax);
+    return result;
+  },
+  // 销售价格范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.salePriceMin, formData.value.salePriceMax);
+    return result;
+  },
+  // 重量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.weightMin, formData.value.weightMax);
+    return result;
+  },
+  // 上架时间范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.upGoodsTimeMin, formData.value.upGoodsTimeMax);
+    return result;
+  },
+  // 月销售动态范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.monthDynamicsMin, formData.value.monthDynamicsMax);
+    return result;
+  },
+  // 广告份额范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.adFeeMin, formData.value.adFeeMax);
+    return result;
+  },
+  // 参与促销天数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDayMin, formData.value.promotionDayMax);
+    return result;
+  },
+  // 参与促销折扣范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDiscountMin, formData.value.promotionDiscountMax);
+    return result;
+  },
+  // 促销活动转化率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promotionDynamicsMin, formData.value.promotionDynamicsMax);
+    return result;
+  },
+  // 付费推广天数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.promoteDayMin, formData.value.promoteDayMax);
+    return result;
+  },
+  // 浏览量范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.viewsMin, formData.value.viewsMax);
+    return result;
+  },
+  // 商品卡片加购率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.cardRateMin, formData.value.cardRateMax);
+    return result;
+  },
+  // 搜索和目录加购率范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.showRateMin, formData.value.showRateMax);
+    return result;
+  },
+  // 跟卖人数范围校验
+  (item: any) => {
+    const result = checkRange(formData.value.followMin, formData.value.followMax);
+    return result;
+  },
+
+];
+
+const saveHandle = async (type: 'save' | 'execute') => {
+  try {
+    await formRef.value?.validate()
+  } catch (error) {
+    feedback.error('请完善表单报错项')
+    return
+  }
+  if (filters.some(item => !item(formData.value))) {
+    return feedback.error('最小值不能超过最大值')
+  }
+
+  if (+(formData.value.myProfitPercent || 0) + +(formData.value.elsePercent || 0) > 100) {
+    return feedback.error('利润率与其他费用加起来不能大于100%')
+  }
+
+  submitting.value = true
+
+  try {
+    const data = JSON.parse(JSON.stringify(formData.value))
+
+    const { code, message } = type === 'execute'
+      ? await window.electronAPI.invoke('collection-create-and-start', { data, type })
+      : await window.electronAPI.invoke('collection-create', { data: data, type })
+
+    if (code === 200) {
+      emits('refresh')
+      feedback.success('操作成功')
+      cancelHandle()
+      return
+    }
+    feedback.error(message)
+  } finally {
+    submitting.value = false
+  }
+}
+
+defineExpose({
+  formData,
+  openDialog
+})
+</script>
 <template>
   <div class="task-page">
     <a-modal v-model:open="open" :title="formData._id ? '编辑任务' : '新增任务'" @cancel="cancelHandle" width="900px"
@@ -29,7 +260,47 @@
               </a-col>
             </a-row>
           </section>
-
+          <!-- 自动上架 -->
+          <section class="form-section">
+            <h3 class="section-title">
+              <span>自动上架</span>
+              <a-tooltip title="开启后，任务结束后将自动上架所有符合条件的商品">
+                <QuestionCircleOutlined class="info-icon" />
+              </a-tooltip>
+              <a-switch v-model:checked="formData.autoSelling" size="default" style="margin-left: 10px;" />
+            </h3>
+            <a-row>
+              <a-col :span="3" style="color: #5a89ff;font-size: 14px; cursor: pointer;"
+                @click="formData.autoType === 1 ? formData.autoType = 0 : formData.autoType = 1">
+                <SwapOutlined />
+                <span>{{ formData.autoType ? '上架配置' : '单店铺' }}</span>
+              </a-col>
+              <a-row :gutter="[16, 16]" v-if="formData.autoType === 1">
+                <a-col :span="8">
+                  <a-form-item label="选择店铺">
+                    <a-select placeholder="请选择店铺">
+                      <a-select-option :value="item.client_id" v-for="item in shopList" :key="item.client_id">
+                        {{ item.shop_name }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item label="选择仓库">
+                    <a-select placeholder="请选择仓库"></a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item label="库存">
+                    <a-input placeholder="请输入库存" type="number"></a-input>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]" v-else>
+                <a-select placeholder="请选择上架配置"></a-select>
+              </a-row>
+            </a-row>
+          </section>
           <!-- 商品定价 -->
           <section class="form-section">
             <h3 class="section-title">
@@ -342,236 +613,6 @@
     </a-modal>
   </div>
 </template>
-
-<script setup lang="ts">
-import { QuestionCircleOutlined } from '@ant-design/icons-vue';
-import type { FormInstance } from 'ant-design-vue';
-import type { Rule } from 'ant-design-vue/es/form';
-import type { LogisticsSimpleList, Task } from '@/types/selectGoods';
-import feedback from '@/utils/feedback';
-
-defineProps<{
-  logisticsSimpleList: LogisticsSimpleList
-}>()
-
-const emits = defineEmits(['refresh'])
-const open = ref(false)
-const submitting = ref(false)
-
-const initData = ref<Task>(
-  {
-    _id: undefined,
-    taskStatus: 'noExecuted',
-    progress: undefined,
-    createTime: undefined,
-    updateTime: undefined,
-    taskName: '',
-    targetUrl: '',
-    myProfitPercent: undefined,
-    internalExpress: undefined,
-    rubExpressPrice: undefined,
-    elsePercent: undefined,
-    sourceType: '0',
-    targetCount: undefined,
-    targetProfitPercent: undefined,
-    brandType: '2',
-    soldCountMin: undefined,
-    soldCountMax: undefined,
-    gmvSumMin: undefined,
-    gmvSumMax: undefined,
-    salePriceMin: undefined,
-    salePriceMax: undefined,
-    weightMin: undefined,
-    weightMax: undefined,
-    upGoodsTimeMin: undefined,
-    upGoodsTimeMax: undefined,
-    monthDynamicsMin: undefined,
-    monthDynamicsMax: undefined,
-    adFeeMin: undefined,
-    adFeeMax: undefined,
-    promotionDayMin: undefined,
-    promotionDayMax: undefined,
-    promotionDiscountMin: undefined,
-    promotionDiscountMax: undefined,
-    promotionDynamicsMin: undefined,
-    promotionDynamicsMax: undefined,
-    promoteDayMin: undefined,
-    promoteDayMax: undefined,
-    viewsMin: undefined,
-    viewsMax: undefined,
-    cardRateMin: undefined,
-    cardRateMax: undefined,
-    showRateMin: undefined,
-    showRateMax: undefined,
-    salesSchema: undefined,
-    followMin: undefined,
-    followMax: undefined,
-    token: ''
-  }
-)
-
-const formData = ref<Task>({ ...initData.value })
-
-const rules: Record<string, Rule[]> = {
-  taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
-  targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
-  sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
-  targetCount: [
-    { required: true, message: '请输入目标数量', trigger: ['change', 'blur'] },
-    {
-      validator: (_, value) => {
-        if (value <= 0) {
-          return Promise.reject('请输入大于0的数字');
-        }
-        return Promise.resolve();
-      },
-      trigger: ['change', 'blur']
-    }
-  ],
-  // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
-}
-
-const openDialog = () => open.value = true
-
-// 创建采集任务
-const formRef = ref<FormInstance>()
-
-const cancelHandle = () => {
-  open.value = false
-  formData.value = { ...initData.value }
-  formRef.value?.resetFields()
-}
-
-
-const checkRange = (min: number = 0, max: number = 0): boolean => {
-  if ((min === undefined && max === undefined) || (min === null && max === null)) return true
-  if (!max) return true
-  if (isNaN(min) || isNaN(max)) return false
-  if (max < min) return false
-  return true
-}
-
-const filters = [
-  // 销量范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.soldCountMin, formData.value.soldCountMax);
-    return result;
-  },
-  // 月销售额范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.gmvSumMin, formData.value.gmvSumMax);
-    return result;
-  },
-  // 销售价格范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.salePriceMin, formData.value.salePriceMax);
-    return result;
-  },
-  // 重量范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.weightMin, formData.value.weightMax);
-    return result;
-  },
-  // 上架时间范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.upGoodsTimeMin, formData.value.upGoodsTimeMax);
-    return result;
-  },
-  // 月销售动态范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.monthDynamicsMin, formData.value.monthDynamicsMax);
-    return result;
-  },
-  // 广告份额范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.adFeeMin, formData.value.adFeeMax);
-    return result;
-  },
-  // 参与促销天数范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.promotionDayMin, formData.value.promotionDayMax);
-    return result;
-  },
-  // 参与促销折扣范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.promotionDiscountMin, formData.value.promotionDiscountMax);
-    return result;
-  },
-  // 促销活动转化率范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.promotionDynamicsMin, formData.value.promotionDynamicsMax);
-    return result;
-  },
-  // 付费推广天数范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.promoteDayMin, formData.value.promoteDayMax);
-    return result;
-  },
-  // 浏览量范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.viewsMin, formData.value.viewsMax);
-    return result;
-  },
-  // 商品卡片加购率范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.cardRateMin, formData.value.cardRateMax);
-    return result;
-  },
-  // 搜索和目录加购率范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.showRateMin, formData.value.showRateMax);
-    return result;
-  },
-  // 跟卖人数范围校验
-  (item: any) => {
-    const result = checkRange(formData.value.followMin, formData.value.followMax);
-    return result;
-  },
-
-];
-
-const saveHandle = async (type: 'save' | 'execute') => {
-  try {
-    await formRef.value?.validate()
-  } catch (error) {
-    feedback.error('请完善表单报错项')
-    return
-  }
-  if (filters.some(item => !item(formData.value))) {
-    return feedback.error('最小值不能超过最大值')
-  }
-
-  if (+(formData.value.myProfitPercent || 0) + +(formData.value.elsePercent || 0) > 100) {
-    return feedback.error('利润率与其他费用加起来不能大于100%')
-  }
-
-  submitting.value = true
-
-  try {
-    const data = JSON.parse(JSON.stringify(formData.value))
-
-    const { code, message } = type === 'execute'
-      ? await window.electronAPI.invoke('collection-create-and-start', { data, type })
-      : await window.electronAPI.invoke('collection-create', { data: data, type })
-
-    if (code === 200) {
-      emits('refresh')
-      feedback.success('操作成功')
-      cancelHandle()
-      return
-    }
-    feedback.error(message)
-  } finally {
-    submitting.value = false
-  }
-}
-
-defineExpose({
-  formData,
-  openDialog
-})
-</script>
-
 <style lang="scss" scoped>
 .task-page {
   :deep(.ant-modal-body) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LogisticsSimpleList, Task } from '@/types/selectGoods';
+import type { LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
 import type { TableColumnsType, TableProps } from 'ant-design-vue';
 import { h } from 'vue'
 import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined } from '@ant-design/icons-vue';
@@ -112,7 +112,6 @@ const openTaskDialogHandle = async (data?: Task) => {
   dialogRef.value?.openDialog()
 }
 
-
 // 开始任务
 let startTimer: number | undefined = undefined
 const taskId = ref()
@@ -210,9 +209,17 @@ const formatDate = (date: string) => {
   return '-'
 }
 
+// 获取店铺信息
+const shopList = ref<ShopList>([])
+const getShopList = async () => {
+  const { data, code } = await window.electronAPI.invoke('get-shop-list', {})
+  if (code !== 400) return feedback.error('获取店铺信息失败')
+  shopList.value = data
+}
+getShopList()
 // 导出表格
 const exportHandle = async (tableFilePath: string) => {
-  window.electronAPI.invoke('collection-download-excel', tableFilePath)
+  await window.electronAPI.invoke('collection-download-excel', tableFilePath)
 }
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
@@ -308,7 +315,8 @@ onUnmounted(() => {
       </a-col>
     </a-row>
   </div>
-  <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" :logisticsSimpleList="logisticsSimpleList" />
+  <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" :logisticsSimpleList="logisticsSimpleList"
+    :shop-list="shopList" />
 </template>
 
 <style lang="scss" scoped>
