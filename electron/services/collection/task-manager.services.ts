@@ -216,14 +216,14 @@ export class TaskManager {
       for (let task of data.list) {
         const copyTask = this.filePathList.get(task._id)
         if (!this.tasks.has(task._id)) {
-          task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+          task.progress = task.taskStatus !== 'pending' ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 } : { current: 0, total: 0, totalCount: 0 }
           task.tableFilePath = copyTask?.filePath
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
           const progress2 = this.tasks.get(task._id)?.getTaskInfo().progress
           const filePath = this.tasks.get(task._id)?.getTaskInfo().tableFilePath
-          if (task.taskStatus === 'running') {
+          if (task.taskStatus === 'running' || task.taskStatus === 'pending') {
             if (filePath && SysTemUtils.fileOperations.exists(filePath)) task.tableFilePath = filePath
             task.progress = progress2
           } else {
@@ -453,7 +453,7 @@ export class TaskManager {
    * 删除所有表格
     */
   async deleteAllExcel() {
-    const files = [...this.filePathList.values()].map(item => item.filePath)
+    const files = Array.from(this.filePathList.values()).map(item => item.filePath)
     for (const file of files) {
       try {
         await SysTemUtils.fileOperations.deleteFile(file || '')

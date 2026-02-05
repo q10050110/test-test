@@ -2,23 +2,28 @@
 import { QuestionCircleOutlined, SwapOutlined } from '@ant-design/icons-vue';
 import type { FormInstance } from 'ant-design-vue';
 import type { Rule } from 'ant-design-vue/es/form';
-import type { LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
+import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
 import feedback from '@/utils/feedback';
 
-defineProps<{
+const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
+  configList: ConfigList
 }>()
 
 const emits = defineEmits(['refresh'])
 const open = ref(false)
 const submitting = ref(false)
-
+const mode = ref(true)
 const initData = ref<Task>(
   {
     _id: undefined,
     taskStatus: 'noExecuted',
-    autoSelling: false,
+    isUseAutoUpGoods: false,
+    stock: undefined,
+    client_id: undefined,
+    warehouse_id: undefined,
+    upDataConfigId: undefined,
     progress: undefined,
     createTime: undefined,
     updateTime: undefined,
@@ -63,7 +68,6 @@ const initData = ref<Task>(
     salesSchema: undefined,
     followMin: undefined,
     followMax: undefined,
-    autoType: 1,
     token: ''
   }
 )
@@ -98,6 +102,7 @@ const cancelHandle = () => {
   open.value = false
   formData.value = { ...initData.value }
   formRef.value?.resetFields()
+  mode.value = true
 }
 
 
@@ -188,6 +193,15 @@ const filters = [
 
 ];
 
+watch(() => formData.value.isUseAutoUpGoods, (newVal) => {
+  if (!newVal) {
+    formData.value.stock = undefined
+    formData.value.warehouse_id = undefined
+    formData.value.client_id = undefined
+    formData.value.upDataConfigId = undefined
+  }
+})
+
 const saveHandle = async (type: 'save' | 'execute') => {
   try {
     await formRef.value?.validate()
@@ -195,6 +209,16 @@ const saveHandle = async (type: 'save' | 'execute') => {
     feedback.error('请完善表单报错项')
     return
   }
+
+  if (formData.value.isUseAutoUpGoods) {
+    if (!formData.value.client_id && !formData.value.upDataConfigId) return feedback.error('您当前已使用自动上架，请完善上架配置信息')
+  }
+
+  if (formData.value.upDataConfigId) {
+    const obj = props.configList.find(item => item._id === formData.value.upDataConfigId)
+    if (obj && !obj.shopData.length) return feedback.error('该配置无店铺，请检查后再上架')
+  }
+
   if (filters.some(item => !item(formData.value))) {
     return feedback.error('最小值不能超过最大值')
   }
@@ -224,7 +248,33 @@ const saveHandle = async (type: 'save' | 'execute') => {
   }
 }
 
+/* 自动上架 */
+// 切换自动上架配置时清空之前的配置信息
+const changeMode = computed({
+  get() {
+    return mode.value
+  },
+  set(value) {
+    if (!value) {
+      formData.value.stock = undefined
+      formData.value.warehouse_id = undefined
+      formData.value.client_id = undefined
+    } else {
+      formData.value.upDataConfigId = undefined
+    }
+    mode.value = value
+  }
+})
+
+// 获取仓库信息
+const clientList = computed(() => {
+  formData.value.warehouse_id = undefined
+  const obj = props.shopList.find(item => item.client_id === formData.value.client_id)
+  return obj ? obj.warehouse : []
+})
+
 defineExpose({
+  mode,
   formData,
   openDialog
 })
@@ -267,18 +317,18 @@ defineExpose({
               <a-tooltip title="开启后，任务结束后将自动上架所有符合条件的商品">
                 <QuestionCircleOutlined class="info-icon" />
               </a-tooltip>
-              <a-switch v-model:checked="formData.autoSelling" size="default" style="margin-left: 10px;" />
+              <a-switch v-model:checked="formData.isUseAutoUpGoods" size="default" style="margin-left: 10px;" />
             </h3>
-            <a-row>
+            <a-row :gutter="[16, 16]">
               <a-col :span="3" style="color: #5a89ff;font-size: 14px; cursor: pointer;"
-                @click="formData.autoType === 1 ? formData.autoType = 0 : formData.autoType = 1">
+                @click="changeMode = !changeMode">
                 <SwapOutlined />
-                <span>{{ formData.autoType ? '上架配置' : '单店铺' }}</span>
+                <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
               </a-col>
-              <a-row :gutter="[16, 16]" v-if="formData.autoType === 1">
+              <a-row :gutter="[16, 16]" v-if="changeMode">
                 <a-col :span="8">
                   <a-form-item label="选择店铺">
-                    <a-select placeholder="请选择店铺">
+                    <a-select placeholder="请选择店铺" v-model:value="formData.client_id" style="width: 200px;">
                       <a-select-option :value="item.client_id" v-for="item in shopList" :key="item.client_id">
                         {{ item.shop_name }}
                       </a-select-option>
@@ -287,17 +337,25 @@ defineExpose({
                 </a-col>
                 <a-col :span="8">
                   <a-form-item label="选择仓库">
-                    <a-select placeholder="请选择仓库"></a-select>
+                    <a-select placeholder="请选择仓库" v-model:value="formData.warehouse_id" style="width: 200px;">
+                      <a-select-option :value="item.warehouse_id" v-for="item in clientList" :key="item.warehouse_id">
+                        {{ item.name }}
+                      </a-select-option>
+                    </a-select>
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
                   <a-form-item label="库存">
-                    <a-input placeholder="请输入库存" type="number"></a-input>
+                    <a-input placeholder="请输入库存" type="number" v-model:value="formData.stock"></a-input>
                   </a-form-item>
                 </a-col>
               </a-row>
               <a-row :gutter="[16, 16]" v-else>
-                <a-select placeholder="请选择上架配置"></a-select>
+                <a-select placeholder="请选择上架配置" v-model:value="formData.upDataConfigId" style="width: 200px;">
+                  <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
+                    {{ item.name }}
+                  </a-select-option>
+                </a-select>
               </a-row>
             </a-row>
           </section>
@@ -607,7 +665,7 @@ defineExpose({
 
       <template #footer>
         <a-button @click="cancelHandle">取消</a-button>
-        <a-button type="primary" @click="saveHandle('save')">保存</a-button>
+        <a-button type="primary" @click="saveHandle('save')" :loading="submitting">保存</a-button>
         <a-button type="primary" @click="saveHandle('execute')" :loading="submitting">保存并执行</a-button>
       </template>
     </a-modal>

@@ -10,6 +10,7 @@ import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
+import { compressData, currencyConversion, getRate } from '../../utils/index.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -23,7 +24,9 @@ export class Collection {
   private targetData = 0 // 完成的任务
   private reason: Reason = undefined
   private isCleared = false
+  private goodsData: Map<string, any> = new Map()
   private process = 0 // 正在处理的任务
+  private rate = 0 // 汇率
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -51,6 +54,7 @@ export class Collection {
     return new Promise(async (resolve, reject) => {
       try {
         await this.resetTask()
+        this.rate = await getRate()
         this.uuid = randomUUID()
         timer = setInterval(async () => {
           if (this.reason === 'cancel' || this.reason === 'failed') {
@@ -68,6 +72,7 @@ export class Collection {
           safeReject('任务已被终止', reject)
           return
         }
+
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
@@ -239,7 +244,7 @@ export class Collection {
   taskHandle = async (task: any) => {
     log.info(`开始处理商品:${task.id}`)
     let timer: NodeJS.Timeout | undefined
-    let maxTimer = 100
+    let maxTimer = 120
     let countDown = 0
     let settled = false
     let uuid = this.uuid
@@ -284,10 +289,13 @@ export class Collection {
         task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, internalExpress: this.task.internalExpress }
         log.info(`获取1688数据完成:${task.id}`)
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
-        log.info(`获取详细数据:${task.id}`)
-        if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid) {
+        log.info(`获取详细数据:${task.id}`, '长度：', detailData.length)
+        if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid && detailData.length) {
           const result = await this.excelService.saveExcel(detailData)
-          if (result) this.targetData++
+          if (result) {
+            this.goodsData.set(detailData[0]?.id, detailData[0])
+            this.targetData++
+          }
           if (!result) this.resetWriteExcel(detailData, uuid!, 0)
         }
         if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
@@ -394,7 +402,65 @@ export class Collection {
     if (this.isCleared || this.uuid !== uuid) return
     this.isCleared = true
     this.process = 0
+    this.windowService.windows.forEach(window => window.cleanup())
     this.taskQueueService.clear(isRetainCompletedTasks)
     this.outputLog('清理完成')
+  }
+
+
+  /**
+   * 自动上架
+    */
+  async autoUpGoods() {
+    const source = Array.from(this.goodsData.values())
+
+    const baseParams = {
+      client_id: this.task.client_id,
+      collect_ids: [],
+      has_brand: 126745801,
+      img_order_type: 0,
+      is_ai: false,
+      is_compress: true,
+      is_down_fx: false,
+      stock: this.task.stock,
+      up_goods_type: 0,
+      use_pack: true,
+      warehouse_id: this.task.warehouse_id
+    }
+
+    while (source.length > 0) {
+      const chunk = source.splice(0, 100).map(item => ({
+        goods_id: item.id,
+        name: item.chineseName,
+        offer_id: '',
+        old_price: currencyConversion(Math.round(item.price * 0.95), this.rate),
+        origin_price: currencyConversion(Number((item.price * 1.6).toFixed(2)), this.rate),
+        price: currencyConversion(Number(item.price), this.rate).toFixed(2)
+      }))
+
+      const params = {
+        ...baseParams,
+        goods: compressData(chunk)
+      }
+
+      await this.batchUpGoods(params)
+    }
+
+    log.info('自动上架完成')
+  }
+
+  /**
+   * 批量上架接口
+    */
+  async batchUpGoods(data: any) {
+    try {
+      await request({
+        url: '/api/goods/batchUpGoods/ozon/batchCreateGoods',
+        method: 'post',
+        data
+      })
+    } catch (error) {
+      log.error(error, '批量上架失败')
+    }
   }
 }

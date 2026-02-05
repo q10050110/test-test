@@ -67,7 +67,6 @@ export class DataProcessService {
           to: 'zh'
         }
       })
-      console.log(res.data, '看看是啥')
       return res.data
     } catch (error) {
       return text

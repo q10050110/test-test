@@ -3,6 +3,11 @@ export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'f
 export interface Task {
   _id: string;
   taskStatus: TaskStatus;
+  isUseAutoUpGoods?: boolean
+  upDataConfigId?: string
+  warehouse_id?: string
+  stock?: number
+  client_id?: string
   progress: any;
   createTime: string;
   updateTime: string;

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
+import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
 import type { TableColumnsType, TableProps } from 'ant-design-vue';
 import { h } from 'vue'
 import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined } from '@ant-design/icons-vue';
 import TaskDialog from './components/taskDialog.vue';
 import feedback from '@/utils/feedback';
 import Tabs from './components/tabs.vue';
-import { getLogisticsSimpleAPI } from '@/api/collection'
+
 
 import dayjs from 'dayjs';
 // 表单参数
@@ -108,7 +108,10 @@ const pageChange = (page: number, pageSize: number) => {
 const dialogRef = ref<InstanceType<typeof TaskDialog>>()
 const openTaskDialogHandle = async (data?: Task) => {
   await nextTick()
-  if (data?._id && dialogRef.value) dialogRef.value.formData = { ...data }
+  if (data?._id && dialogRef.value) {
+    if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
+    dialogRef.value.formData = { ...data }
+  }
   dialogRef.value?.openDialog()
 }
 
@@ -199,7 +202,8 @@ const getProgress = async (data?: any) => {
 // 获取物流信息
 const logisticsSimpleList = ref<LogisticsSimpleList>([])
 const getLogisticsSimpleList = async () => {
-  const { data } = await getLogisticsSimpleAPI()
+  const { data, code } = await window.electronAPI.invoke('get-logistics-list', {})
+  if (code !== 400) return feedback.error('获取物流信息失败')
   logisticsSimpleList.value = data
 }
 getLogisticsSimpleList()
@@ -217,9 +221,22 @@ const getShopList = async () => {
   shopList.value = data
 }
 getShopList()
+
+// 获取配置信息
+const configList = ref<ConfigList>([])
+const getConfigList = async () => {
+  const { data, code } = await window.electronAPI.invoke('get-config-list', {})
+  if (code !== 400) return feedback.error('获取配置信息失败')
+  configList.value = data.data
+}
+getConfigList()
 // 导出表格
 const exportHandle = async (tableFilePath: string) => {
-  await window.electronAPI.invoke('collection-download-excel', tableFilePath)
+  try {
+    await window.electronAPI.invoke('collection-download-excel', tableFilePath)
+  } catch (error) {
+    feedback.error(error as string)
+  }
 }
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
@@ -316,7 +333,7 @@ onUnmounted(() => {
     </a-row>
   </div>
   <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" :logisticsSimpleList="logisticsSimpleList"
-    :shop-list="shopList" />
+    :shop-list="shopList" :config-list="configList" />
 </template>
 
 <style lang="scss" scoped>

@@ -3,8 +3,11 @@ export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'f
 export type Task = {
   _id?: string
   taskStatus?: TaskStatus
-  autoSelling: boolean
-  autoType: string | number
+  isUseAutoUpGoods?: boolean
+  upDataConfigId?: string
+  warehouse_id?: string
+  stock?: number
+  client_id?: string
   progress?: {
     current?: number
     total?: number
@@ -90,3 +93,31 @@ export type Shop = {
 }
 
 export type ShopList = Shop[]
+
+
+export type ShopData = {
+  client_id: string
+  name: string
+  stock: number
+  warehouseId: string
+}
+
+export type Config = {
+  brands: number
+  createTime: string
+  imgOrder: number
+  imgWaterMark: string
+  infringement: boolean
+  isCustomPrice: boolean
+  isCustomWaterMark: boolean
+  isDefault: boolean
+  is_ai: boolean
+  name: string
+  offerIdPrefix: string
+  platform: string
+  shopData: ShopData[]
+  user_id: string
+  _id: string
+}
+
+export type ConfigList = Config[]
