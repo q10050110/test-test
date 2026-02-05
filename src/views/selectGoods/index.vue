@@ -94,7 +94,6 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   if (resetPage) params.value.pageNo = 1
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
-  console.log(data.list)
   total.value = data.total
 }
 getTaskList()
@@ -177,8 +176,8 @@ const cancelTask = async (taskId: string) => {
 // 批量删除任务
 const deleteTask = async () => {
   if (!selectData.value?.length || !tableData.value?.length) return feedback.error('请选择要删除的任务！')
-  const isAlive = tableData.value.filter(item => selectData.value?.includes(item._id!)).some(task => task.taskStatus === 'running')
-  if (isAlive) return feedback.error('请将执行的任务终止后，在删除！')
+  const isAlive = tableData.value.filter(item => selectData.value?.includes(item._id!)).some(task => task.taskStatus === 'running' || task.taskStatus === 'pending')
+  if (isAlive) return feedback.error('请将执行、待执行的任务终止后，在删除！')
   const res = await feedback.confirm('确定要删除吗，删除以后数据不可再恢复？')
   if (!res) return
   const { code, message } = await window.electronAPI.invoke('collection-delete-task', toRaw(selectData.value))

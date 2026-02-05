@@ -20,7 +20,7 @@ export class ExcelService {
         { header: '商品链接', key: 'link', width: 30 },
         { header: '商品主图', key: 'cover', width: 20 },
         { header: '商品名称', key: 'name', width: 30 },
-        { header: '商品名称（中文）', key: 'cnName', width: 30 },
+        { header: '商品名称（中文）', key: 'chineseName', width: 30 },
         { header: '商品类目', key: 'category3', width: 20 },
         { header: '类目佣金（RFBS）', key: 'commissionRfbs', width: 15 },
         { header: '类目佣金（FBP）', key: 'commissionFbp', width: 15 },

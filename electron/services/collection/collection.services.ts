@@ -192,7 +192,7 @@ export class Collection {
   // 同步状态到服务器
   private async syncStatusToServer(status: TaskStatus) {
     try {
-      const res = await request({
+      await request({
         url: '/api/auto/autoTask/updateStatus',
         method: 'post',
         data: {
@@ -200,7 +200,15 @@ export class Collection {
           taskStatus: status,
         },
       })
+      const res = await request({
+        url: '/api/auto/autoTask/getTaskById',
+        method: 'post',
+        data: {
+          taskId: this.task._id
+        }
+      })
       this.updateTaskData(res.data)
+      this.outputLog('任务状态同步至云端')
     } catch (error) {
       log.error('同步任务状态到服务器失败', error);
     }

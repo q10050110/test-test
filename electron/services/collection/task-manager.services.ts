@@ -11,7 +11,7 @@ export class TaskManager {
   private maxConcurrentTasks = 2;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
-  private filePathList: Map<string, Task> = new Map()
+  private filePathList: Map<string, { filePath: string, progress: any }> = new Map()
   private constructor() { }
 
   public static getInstance(): TaskManager {
@@ -67,8 +67,7 @@ export class TaskManager {
             data: taskData,
           });
 
-          collection = new Collection(response.data, this.mainWindow!);
-
+          collection = new Collection({ ...response.data, _id: response.data.taskId }, this.mainWindow!);
           this.tasks.set(collection.getTaskInfo()._id, collection);
         } catch (error) {
           reject(error);
@@ -133,7 +132,7 @@ export class TaskManager {
       } else {
         task.updateStatus('pending')
         task.outputLog('pending')
-        this.taskQueue.push(taskId);
+        if (!this.taskQueue.includes(taskId)) this.taskQueue.push(taskId)
       }
       resolve(true);
     });
@@ -150,14 +149,20 @@ export class TaskManager {
     this.activeTasks.add(taskId);
     this.notifyTaskUpdate(taskId, 'running');
     try {
-      this.filePathList.set(taskId, { ...task.getTaskInfo() })
+      this.filePathList.set(taskId, {
+        filePath: await task.getTableFilePath(),
+        progress: task.getTaskInfo().progress
+      })
       await task.run();
 
     } catch (error) {
 
     } finally {
       // 任务完成后清理并通知
-      this.filePathList.set(taskId, { ...task.getTaskInfo() })
+      this.filePathList.set(taskId, {
+        filePath: await task.getTableFilePath(),
+        progress: task.getTaskInfo().progress
+      })
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
       this.tasks.delete(taskId)
@@ -212,7 +217,7 @@ export class TaskManager {
         const copyTask = this.filePathList.get(task._id)
         if (!this.tasks.has(task._id)) {
           task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
-          task.tableFilePath = copyTask?.tableFilePath
+          task.tableFilePath = copyTask?.filePath
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
@@ -223,7 +228,7 @@ export class TaskManager {
             task.progress = progress2
           } else {
             task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
-            task.tableFilePath = copyTask?.tableFilePath
+            if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath)) task.tableFilePath = copyTask.filePath
           }
         }
 
@@ -329,7 +334,7 @@ export class TaskManager {
         successCount++;
 
         try {
-          const filePath = await task?.getTableFilePath() || task2?.tableFilePath
+          const filePath = await task?.getTableFilePath() || task2?.filePath
           await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
@@ -381,7 +386,7 @@ export class TaskManager {
         successCount++;
 
         try {
-          const filePath = await task?.getTableFilePath() || task2?.tableFilePath
+          const filePath = await task?.getTableFilePath() || task2?.filePath
           await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
@@ -448,7 +453,7 @@ export class TaskManager {
    * 删除所有表格
     */
   async deleteAllExcel() {
-    const files = [...this.filePathList.values()].map(item => item.tableFilePath)
+    const files = [...this.filePathList.values()].map(item => item.filePath)
     for (const file of files) {
       try {
         await SysTemUtils.fileOperations.deleteFile(file || '')

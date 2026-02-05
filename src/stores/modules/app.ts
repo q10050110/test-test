@@ -17,6 +17,7 @@ export const useAppStore = defineStore('app', () => {
     appInfo.value = await window.electronAPI.invoke('app', {})
     updateStatus.value = await window.electronStore.get('update-status') || 'hasNew'
     updateInfo.value = await window.electronStore.get('update-info') || {}
+    console.log(JSON.stringify(updateInfo.value), '看看是啥')
   }
 
   const setLoading = (value: boolean) => loading.value = value

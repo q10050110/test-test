@@ -20,7 +20,7 @@ export interface Params {
 
 export type Version = {
   version: string
-  releaseDate: string
+  date: string
   size: number
 }
 

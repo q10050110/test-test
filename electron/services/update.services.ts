@@ -40,7 +40,11 @@ export class UpdaterManager {
       log.info(info, '检测到新版本')
       const updateInfo = operationStore.get('update-info')
       if (updateInfo?.version !== info.version) {
-        operationStore.set('update-info', info)
+        operationStore.set('update-info', {
+          version: info.version,
+          date: info.releaseDate,
+          size: info.files[0].size
+        })
         operationStore.set('clear-update', false)
       }
       const updateStatus = operationStore.get('update-status')

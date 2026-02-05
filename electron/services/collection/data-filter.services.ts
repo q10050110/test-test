@@ -54,6 +54,26 @@ export class DataProcessService {
   }
 
   /** 
+   * 获取中文名
+    */
+  async getChineseName(text: string) {
+    try {
+      const res = await request({
+        url: '/api/other/fanyi/translateText',
+        method: 'post',
+        data: {
+          text,
+          from: 'ru',
+          to: 'zh'
+        }
+      })
+      console.log(res.data, '看看是啥')
+      return res.data
+    } catch (error) {
+      return text
+    }
+  }
+  /** 
    * 获取详细数据
     */
   async getDetailData(params: { taskId: string, reqDatas: any[] }) {
@@ -67,12 +87,14 @@ export class DataProcessService {
           reqDatas
         }
       })
-      return res.data.map((item: any) => {
-        const obj = this.data.get(item.id)
-        if (obj) item = { ...obj, ...item }
-        if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-        return item
-      })
+
+      let item = res.data[0]
+      const obj = this.data.get(item.id)
+      if (obj) item = { ...obj, ...item }
+      if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
+      item.chineseName = await this.getChineseName(item.name)
+      return [item]
+
     } catch (error) {
       console.log(error, '啥情况')
       return []

@@ -54,7 +54,7 @@ defineExpose({
         <div class="version">
           <div>V{{ store.updateInfo?.version }}可用</div>
           <div>{{ formatSize(store.updateInfo?.size || 0) }}</div>
-          <div>{{ formatDate(store.updateInfo?.releaseDate || '') }}发布</div>
+          <div>{{ formatDate(store.updateInfo?.date || '') }}发布</div>
         </div>
         <div class="desc">有新版本可用，是否立即下载更新？</div>
       </div>
