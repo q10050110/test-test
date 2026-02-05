@@ -160,7 +160,7 @@ export class TaskManager {
     } finally {
       // 任务完成后清理并通知
       this.filePathList.set(taskId, {
-        filePath: await task.getTableFilePath(),
+        filePath: task.getTaskInfo().tableFilePath || '',
         progress: task.getTaskInfo().progress
       })
       this.activeTasks.delete(taskId);
@@ -301,7 +301,8 @@ export class TaskManager {
           if (this.taskQueue.includes(taskId)) return
           task.updateStatus('pending')
           task.outputLog('pending')
-          this.taskQueue.push(taskId);
+          this.filePathList.delete(taskId)
+          this.taskQueue.push(taskId)
         }
         resolve(true);
       } else {

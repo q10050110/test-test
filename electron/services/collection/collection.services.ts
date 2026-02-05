@@ -54,7 +54,7 @@ export class Collection {
     return new Promise(async (resolve, reject) => {
       try {
         await this.resetTask()
-        this.rate = await getRate()
+        if (this.task.isUseAutoUpGoods) this.rate = await getRate()
         this.uuid = randomUUID()
         timer = setInterval(async () => {
           if (this.reason === 'cancel' || this.reason === 'failed') {
@@ -72,7 +72,7 @@ export class Collection {
           safeReject('任务已被终止', reject)
           return
         }
-
+        await this.autoUpGoods()
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
@@ -82,9 +82,8 @@ export class Collection {
       } finally {
         log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`)
         clearInterval(timer)
-        const res = this.reason !== 'failed'
-        this.mainWindowService.closeCollectionWindow()
-        this.clearStatus(res)
+        this.mainWindowService.destroy()
+        this.clearStatus(true)
         safeResolve(this.task, resolve)
         log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，完成清理工作`)
       }
@@ -227,7 +226,7 @@ export class Collection {
     this.task.progress = {
       current: this.process < 0 ? 0 : this.process,
       total: this.parseService.getDataCount(),
-      totalCount: this.taskQueueService.getCompletedTasksCount() < this.task.targetCount ? this.taskQueueService.getCompletedTasksCount() : this.task.targetCount
+      totalCount: this.targetData
     }
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -278,9 +277,9 @@ export class Collection {
           safeResolve('任务已完成')
           return
         }
-
-        const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
         log.info(`获取1688数据:${task.id}`)
+        const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
+
         const { link1688, sourcePrice, cover2 } = await this.parseService['1688Parse']($, task)
         if (this.reason === 'cancel' || this.reason === 'failed' || this.uuid !== uuid) {
           safeResolve(new Error('任务已被终止'))
@@ -318,6 +317,7 @@ export class Collection {
     const result = await this.excelService.saveExcel(detailData)
     if (result) {
       log.info('重新写入表格数据成功')
+      this.targetData++
       return true
     }
 
@@ -354,8 +354,8 @@ export class Collection {
     this.task.tableFilePath = undefined
     this.isCleared = false
     this.reason = undefined
-    this.parseService.clearData()
-    this.taskQueueService.clear()
+    await this.dataProcessService.destroy()
+    await this.taskQueueService.destroy()
     this.uuid = undefined
     this.outputLog('任务初始化完成')
   }
@@ -390,20 +390,23 @@ export class Collection {
     if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
     this.reason = 'cancel'
     this.clearStatus(true)
-    this.mainWindowService.closeCollectionWindow()
+    this.mainWindowService.destroy()
     this.updateStatus('cancelled')
     this.outputLog('任务已取消')
   }
   /** 
    * 清理工作
     */
-  clearStatus(isRetainCompletedTasks = false) {
+  clearStatus(isRetainCompletedTasks = false, isDestroy = true) {
     let uuid = this.uuid
     if (this.isCleared || this.uuid !== uuid) return
     this.isCleared = true
     this.process = 0
-    this.windowService.windows.forEach(window => window.cleanup())
-    this.taskQueueService.clear(isRetainCompletedTasks)
+    this.windowService.destroy()
+    this.dataProcessService.destroy()
+    this.windowService.destroy()
+    this.excelService.destroy()
+    this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)
     this.outputLog('清理完成')
   }
 
@@ -412,6 +415,7 @@ export class Collection {
    * 自动上架
     */
   async autoUpGoods() {
+    if (!this.task.isUseAutoUpGoods || !this.rate) return
     const source = Array.from(this.goodsData.values())
 
     const baseParams = {

@@ -4,7 +4,7 @@ import log from '../../log/index.js'
 
 export class ParseService {
   protected ozonGoodsData: Map<string, any> = new Map()
-  private windowService: MainWindowService
+  private windowService: MainWindowService | null = null
 
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
@@ -58,12 +58,13 @@ export class ParseService {
     }
 
     for (const item of uniqueData) {
-      const response = await this.windowService.getSellingData(item.requestUrl)
+      const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
         item.sellerNumber =
           JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
             ?.sellers?.length || 0
       } else {
+        item.sellerNumber = 0
         log.error('获取跟卖数据失败')
       }
     }
@@ -86,12 +87,5 @@ export class ParseService {
     */
   getDataCount() {
     return this.ozonGoodsData.size
-  }
-
-  /** 
-   * 清空商品数据
-    */
-  clearData() {
-    this.ozonGoodsData.clear()
   }
 }

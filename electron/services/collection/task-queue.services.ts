@@ -9,7 +9,7 @@ export class TaskQueueService {
   private maxConcurrency = 3
   private completedTasks: any[] = []
   private failedTasks: any[] = []
-  private taskHandle: TaskHandler
+  private taskHandle: TaskHandler | null
   private taskIsProcessing: Set<string> = new Set()
   constructor(taskHandle: TaskHandler, maxConcurrency: number = 3) {
     this.maxConcurrency = maxConcurrency
@@ -88,6 +88,9 @@ export class TaskQueueService {
    * 处理单个任务
     */
   private async processTask(task: any) {
+    if (typeof this.taskHandle !== 'function') {
+      throw new Error(`Invalid taskHandle: expected a function, got ${typeof this.taskHandle}`);
+    }
     await this.taskHandle(task)
   }
 
@@ -129,11 +132,12 @@ export class TaskQueueService {
   /** 
    * 清空队列和状态
     */
-  async clear(isRetainCompletedTasks = false) {
+  async destroy(isRetainCompletedTasks = false, isDestroy = false) {
     this.taskQueue.clear()
     this.taskIsProcessing.clear()
     this.activeTasks = 0
     if (!isRetainCompletedTasks) this.completedTasks = []
     this.failedTasks = []
+    if (isDestroy) this.taskHandle = null
   }
 }

@@ -4,14 +4,14 @@ import { SysTemUtils } from '../../utils/system.js';
 import log from '../../log/index.js'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
 export class ExcelService {
-  private excel: ExcelWriter
+  private excel: ExcelWriter | null = null
   private isInit: boolean = false
   constructor(tableName: string) {
     this.excel = new ExcelWriter(join(excelDir, `${tableName}.xlsx`));
   }
   // 初始化表格
   async initTable() {
-    if (this.isInit) return
+    if (this.isInit || !this.excel) return
     try {
       // 定义所有列
       const columns = [
@@ -80,7 +80,6 @@ export class ExcelService {
 
       // 首先设置列定义
       await this.excel.init();
-      await this.excel.clearContent();
 
       // 检查是否已有列定义（即是否已有表头）
       const worksheet = this.excel.getWorksheet();
@@ -101,10 +100,10 @@ export class ExcelService {
         worksheet.getCell('AO1').value = '我的定价';
 
         // 合并单元格
-        this.excel.mergeCells('A1:Q1');    // 基础信息 (A1-Q1, 17列)
-        this.excel.mergeCells('R1:AI1');   // 销售数据 (R1-BG1, 从第18列到第55列，共38列)
-        this.excel.mergeCells('AJ1:AN1');  // 尺寸重量 (BJ1-BN1, 从第52列到第56列，共5列)
-        this.excel.mergeCells('AO1:BA1');  // 我的定价 (BO1-BZ1, 从第57列到第78列，共22列)
+        this.excel.mergeCells('A1:Q1');
+        this.excel.mergeCells('R1:AI1');
+        this.excel.mergeCells('AJ1:AN1');
+        this.excel.mergeCells('AO1:BA1');
 
         // 设置表头样式 - 只设置第1行（主类别标题）
         this.excel.setRowStyle(1, {
@@ -158,11 +157,14 @@ export class ExcelService {
   }
 
   async getFilePath() {
-    return this.excel.getFilePath()
+    return this.excel?.getFilePath() || ''
   }
 
   async DeleteFilled() {
     await SysTemUtils.fileOperations.deleteFile(await this.getFilePath())
-    await this.excel.reset()
+  }
+
+  destroy() {
+    this.excel = null
   }
 }

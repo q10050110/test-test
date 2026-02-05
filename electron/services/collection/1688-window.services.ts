@@ -38,6 +38,7 @@ export class WindowService {
       }
       // 移除当前窗口的 IPC 监听器
       ipcMain.removeAllListeners(`result-page-${winId}`);
+      clearTimeout(timer)
       this.windows = this.windows.filter(w => w.id !== winId)
       win = null;
     };
@@ -47,7 +48,6 @@ export class WindowService {
       if (settled) return;
       settled = true;
       delay(() => cleanup(), Math.floor(Math.random() * 3000) + 1000)
-      clearTimeout(timer)
       resolve(value);
     };
 
@@ -55,7 +55,6 @@ export class WindowService {
     const safeReject = (error: Error, reject: Function) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer)
       cleanup();
       reject({ error: error || '未知错误', winId });
     };
@@ -204,5 +203,12 @@ export class WindowService {
         safeReject(error as Error, reject);
       }
     });
+  }
+
+  /**
+   * 销毁实例
+    */
+  destroy() {
+    this.windows.forEach(win => win.cleanup())
   }
 }

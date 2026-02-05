@@ -5,7 +5,7 @@ import * as cheerio from 'cheerio'
 export class MainWindowService {
   private browserWindow: BrowserWindow | null = null
   private isCheck: boolean = false
-  private closeHandle: () => void
+  private closeHandle: (() => void) | null = null
   constructor(closeHandle: () => void) {
     this.closeHandle = closeHandle
   }
@@ -45,7 +45,7 @@ export class MainWindowService {
 
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
-          this.closeCollectionWindow()
+          this.destroy()
         }
         safeReject('页面加载超时')
       }, 100000);
@@ -179,8 +179,9 @@ export class MainWindowService {
   /**
    * 关闭采集窗口
    */
-  async closeCollectionWindow() {
+  async destroy() {
     this.browserWindow?.destroy()
     this.browserWindow = null
+    this.closeHandle = null
   }
 }

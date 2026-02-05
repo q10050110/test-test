@@ -232,4 +232,11 @@ export class DataProcessService {
 
     return true
   }
+
+  /**
+* 销毁实例
+*/
+  destroy() {
+    this.data.clear()
+  }
 }
