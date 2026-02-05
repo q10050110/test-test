@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { TaskManager } from '../services/collection/task-manager.services.js';
 import log from '../log/index.js';
-
+import { getShopList } from '../services/collection/interface.services.js'
 export const collectionIpc = (win: BrowserWindow) => {
   const taskManager = TaskManager.getInstance();
   taskManager.setMainWindow(win);
@@ -243,5 +243,10 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 下载表格
   ipcMain.handle('collection-download-excel', async (event, tableFilePath: string) => {
     return await taskManager.downloadExcel(tableFilePath)
+  })
+
+  // 获取店铺
+  ipcMain.handle('get-shop-list', async (event, params) => {
+    return await getShopList()
   })
 };
