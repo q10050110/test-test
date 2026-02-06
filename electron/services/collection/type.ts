@@ -56,6 +56,8 @@ export interface Task {
   token?: string;
   log?: { date: string; log: string }[];
   tableFilePath?: string;
+  unit?: "¥" | "$" | "₽" | "€" | "YN" | "₸",
+  autoResult?: string
 }
 
 export type Reason = 'success' | "cancel" | 'failed' | undefined

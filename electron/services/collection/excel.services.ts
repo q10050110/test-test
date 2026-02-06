@@ -144,7 +144,7 @@ export class ExcelService {
 
   async saveExcel(data: any) {
     try {
-      await this.initTable()
+      if (!this.isInit) await this.initTable()
       return await this.excel?.appendAndSave(data)
     } catch (error) {
       log.error('写入Excel 失败！')

@@ -1,6 +1,6 @@
 import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
 import { join, dirname, basename } from 'path'
-import { unlinkSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
+import { rmSync, unlinkSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
 
 /**
  * Electron 系统级能力封装
@@ -336,6 +336,19 @@ export class SysTemUtils {
         }
       } catch (error) {
         console.error('删除文件失败：', error)
+      }
+    },
+    /**
+    * 删除文件夹
+    * @param filePath 文件路径
+    */
+    deleteFolder: (filePath: string) => {
+      try {
+        if (existsSync(filePath)) {
+          rmSync(filePath, { recursive: true, force: true })
+        }
+      } catch (error) {
+        console.error('删除文件夹失败：', error)
       }
     },
   }

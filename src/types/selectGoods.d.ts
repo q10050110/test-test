@@ -60,6 +60,7 @@ export type Task = {
   token?: string
   log?: { taskLog: string, date: string }[],
   tableFilePath?: string
+  unit?: string
 }
 
 export type TaskList = {

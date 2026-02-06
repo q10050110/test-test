@@ -2,7 +2,7 @@
 import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
 import type { TableColumnsType, TableProps } from 'ant-design-vue';
 import { h } from 'vue'
-import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined } from '@ant-design/icons-vue';
+import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined, CloudUploadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue';
 import TaskDialog from './components/taskDialog.vue';
 import feedback from '@/utils/feedback';
 import Tabs from './components/tabs.vue';
@@ -277,6 +277,18 @@ onUnmounted(() => {
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
               <div style="font-weight: bold; color: #000;" class="ellipsis-1">
+                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === undefined">
+                  <template #title>任务完成后将会自动上架商品</template>
+                  <CloudUploadOutlined />
+                </a-tooltip>
+                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === 'success'">
+                  <template #title>自动上架成功，可在对用店铺查看商品信息</template>
+                  <CheckCircleOutlined />
+                </a-tooltip>
+                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult !== 'success'">
+                  <template #title>自动上架失败：{{ record.autoResult }}</template>
+                  <CloseCircleOutlined />
+                </a-tooltip>
                 {{ record.taskName }}
               </div>
               <div>

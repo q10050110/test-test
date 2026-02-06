@@ -4,7 +4,7 @@ import type { FormInstance } from 'ant-design-vue';
 import type { Rule } from 'ant-design-vue/es/form';
 import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
 import feedback from '@/utils/feedback';
-
+import { getShopCurCode } from '@/enums/index'
 const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
@@ -68,7 +68,8 @@ const initData = ref<Task>(
     salesSchema: undefined,
     followMin: undefined,
     followMax: undefined,
-    token: ''
+    token: '',
+    unit: undefined
   }
 )
 
@@ -193,12 +194,34 @@ const filters = [
 
 ];
 
+// 关闭自动上架清空配置项
 watch(() => formData.value.isUseAutoUpGoods, (newVal) => {
   if (!newVal) {
     formData.value.stock = undefined
     formData.value.warehouse_id = undefined
     formData.value.client_id = undefined
     formData.value.upDataConfigId = undefined
+  }
+})
+
+// 获取转换单位
+watch(() => formData.value.client_id, (newVal) => {
+  if (newVal) {
+    const currency_code = props.shopList.find(item => item.client_id === newVal)?.currency_code
+    if (currency_code) formData.value.unit = getShopCurCode(currency_code as "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT")
+    console.log(formData.value.unit, '货币单位')
+  }
+})
+
+watch(() => formData.value.upDataConfigId, (newVal) => {
+  if (newVal) {
+    const obj = props.configList.find(item => item._id === newVal)
+    if (obj && obj.shopData.length) {
+      const shop = obj.shopData[0]
+      const currency_code = props.shopList.find(item => item.client_id === shop?.client_id)?.currency_code
+      if (currency_code) formData.value.unit = getShopCurCode(currency_code as "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT")
+    }
+    console.log(formData.value.unit, '货币单位')
   }
 })
 
@@ -259,6 +282,8 @@ const changeMode = computed({
       formData.value.stock = undefined
       formData.value.warehouse_id = undefined
       formData.value.client_id = undefined
+      const obj = props.configList.find(item => item.isDefault)
+      if (obj) formData.value.upDataConfigId = obj._id
     } else {
       formData.value.upDataConfigId = undefined
     }
@@ -320,8 +345,7 @@ defineExpose({
               <a-switch v-model:checked="formData.isUseAutoUpGoods" size="default" style="margin-left: 10px;" />
             </h3>
             <a-row :gutter="[16, 16]">
-              <a-col :span="3" style="color: #5a89ff;font-size: 14px; cursor: pointer;"
-                @click="changeMode = !changeMode">
+              <a-col :span="3" class="auto-col" @click="changeMode = !changeMode">
                 <SwapOutlined />
                 <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
               </a-col>
@@ -792,5 +816,12 @@ defineExpose({
   :deep(.ant-col) {
     width: 100%;
   }
+}
+
+.auto-col {
+  color: #5a89ff;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 2px;
 }
 </style>

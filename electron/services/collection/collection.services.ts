@@ -10,7 +10,8 @@ import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
-import { compressData, currencyConversion, getRate } from '../../utils/index.js'
+import { getRate } from '../../utils/index.js'
+import { autoUpGoods } from './interface.services.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -27,6 +28,7 @@ export class Collection {
   private goodsData: Map<string, any> = new Map()
   private process = 0 // 正在处理的任务
   private rate = 0 // 汇率
+  private writeError = false
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -72,7 +74,8 @@ export class Collection {
           safeReject('任务已被终止', reject)
           return
         }
-        await this.autoUpGoods()
+        this.task.autoResult = await autoUpGoods(this.task, this.rate, this.goodsData)
+        await this.reWriteTable()
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
@@ -288,14 +291,12 @@ export class Collection {
         task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, internalExpress: this.task.internalExpress }
         log.info(`获取1688数据完成:${task.id}`)
         const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
-        log.info(`获取详细数据:${task.id}`, '长度：', detailData.length)
+        log.info(`获取详细数据:${task.id}`)
         if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid && detailData.length) {
           const result = await this.excelService.saveExcel(detailData)
-          if (result) {
-            this.goodsData.set(detailData[0]?.id, detailData[0])
-            this.targetData++
-          }
-          if (!result) this.resetWriteExcel(detailData, uuid!, 0)
+          this.goodsData.set(detailData[0]?.id, detailData[0])
+          this.targetData++
+          if (!result) this.writeError = true
         }
         if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
         safeResolve('单个商品处理完成')
@@ -308,32 +309,17 @@ export class Collection {
   }
 
   /** 
-   * 重新写入表格数据
-    */
-  async resetWriteExcel(detailData: any[], uuid: string, count: number = 0): Promise<boolean> {
-    if (this.uuid !== uuid || this.reason === 'cancel' || this.reason === 'failed') {
-      return false
-    }
-    const result = await this.excelService.saveExcel(detailData)
-    if (result) {
-      log.info('重新写入表格数据成功')
-      this.targetData++
-      return true
-    }
-
-    if (count >= 5) return false
-    await new Promise(res => setTimeout(res, 1500))
-    return this.resetWriteExcel(detailData, uuid, count + 1)
-  }
-  /** 
    * 窗口被关闭回调
    */
   closeHandle = async () => {
     let uuid = this.uuid
     if (!this.reason && this.uuid === uuid) {
+      await this.reWriteTable()
       this.reason = 'failed'
+      await this.clearStatus()
       this.updateStatus('failed')
       this.outputLog('窗口异常关闭')
+      log.info('窗口异常关闭')
     }
   }
   /** 
@@ -389,10 +375,19 @@ export class Collection {
   async cancel() {
     if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
     this.reason = 'cancel'
+    this.reWriteTable()
     this.clearStatus(true)
     this.mainWindowService.destroy()
     this.updateStatus('cancelled')
     this.outputLog('任务已取消')
+  }
+
+  /** 
+   * 重新写入表格
+    */
+  async reWriteTable() {
+    if (this.writeError) await this.excelService.flushToDisk()
+    this.writeError = false
   }
   /** 
    * 清理工作
@@ -410,61 +405,4 @@ export class Collection {
     this.outputLog('清理完成')
   }
 
-
-  /**
-   * 自动上架
-    */
-  async autoUpGoods() {
-    if (!this.task.isUseAutoUpGoods || !this.rate) return
-    const source = Array.from(this.goodsData.values())
-
-    const baseParams = {
-      client_id: this.task.client_id,
-      collect_ids: [],
-      has_brand: 126745801,
-      img_order_type: 0,
-      is_ai: false,
-      is_compress: true,
-      is_down_fx: false,
-      stock: this.task.stock,
-      up_goods_type: 0,
-      use_pack: true,
-      warehouse_id: this.task.warehouse_id
-    }
-
-    while (source.length > 0) {
-      const chunk = source.splice(0, 100).map(item => ({
-        goods_id: item.id,
-        name: item.chineseName,
-        offer_id: '',
-        old_price: currencyConversion(Math.round(item.price * 0.95), this.rate),
-        origin_price: currencyConversion(Number((item.price * 1.6).toFixed(2)), this.rate),
-        price: currencyConversion(Number(item.price), this.rate).toFixed(2)
-      }))
-
-      const params = {
-        ...baseParams,
-        goods: compressData(chunk)
-      }
-
-      await this.batchUpGoods(params)
-    }
-
-    log.info('自动上架完成')
-  }
-
-  /**
-   * 批量上架接口
-    */
-  async batchUpGoods(data: any) {
-    try {
-      await request({
-        url: '/api/goods/batchUpGoods/ozon/batchCreateGoods',
-        method: 'post',
-        data
-      })
-    } catch (error) {
-      log.error(error, '批量上架失败')
-    }
-  }
 }

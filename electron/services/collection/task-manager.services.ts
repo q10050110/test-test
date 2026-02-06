@@ -11,7 +11,7 @@ export class TaskManager {
   private maxConcurrentTasks = 2;
   private taskQueue: string[] = [];
   private mainWindow: BrowserWindow | null = null;
-  private filePathList: Map<string, { filePath: string, progress: any }> = new Map()
+  private filePathList: Map<string, { filePath: string, progress: any, autoResult?: string }> = new Map()
   private constructor() { }
 
   public static getInstance(): TaskManager {
@@ -33,30 +33,21 @@ export class TaskManager {
       let collection: Collection | null = null;
 
       if (taskData._id) {
-        // 如果是已有任务（有ID），则更新现有任务信息
-        const existingCollection = this.tasks.get(taskData._id);
-        if (existingCollection) {
-          try {
-            const res = await request({
-              url: '/api/auto/autoTask/editTask',
-              method: 'post',
-              data: {
-                ...taskData,
-                taskId: taskData._id,
-              },
-            })
-
-            existingCollection.updateTaskData(res.data);
-            collection = existingCollection;
-          } catch (error) {
-            log.error('更新任务数据失败', error);
-            reject(error);
-            return;
-          }
-        } else {
-          // 如果是新创建带ID的任务，则直接使用传入的数据
-          collection = new Collection(taskData, this.mainWindow!);
-          this.tasks.set(taskData._id, collection);
+        try {
+          const response = await request({
+            url: '/api/auto/autoTask/editTask',
+            method: 'post',
+            data: {
+              ...taskData,
+              taskId: taskData._id,
+            },
+          })
+          collection = new Collection({ ...response.data, _id: response.data.taskId }, this.mainWindow!);
+          this.tasks.set(collection.getTaskInfo()._id, collection);
+        } catch (error) {
+          log.error('更新任务数据失败', error);
+          reject(error);
+          return;
         }
       } else {
         // 新任务，需要生成ID并补充信息
@@ -151,7 +142,8 @@ export class TaskManager {
     try {
       this.filePathList.set(taskId, {
         filePath: await task.getTableFilePath(),
-        progress: task.getTaskInfo().progress
+        progress: task.getTaskInfo().progress,
+        autoResult: task.getTaskInfo().autoResult
       })
       await task.run();
 
@@ -161,7 +153,8 @@ export class TaskManager {
       // 任务完成后清理并通知
       this.filePathList.set(taskId, {
         filePath: task.getTaskInfo().tableFilePath || '',
-        progress: task.getTaskInfo().progress
+        progress: task.getTaskInfo().progress,
+        autoResult: task.getTaskInfo().autoResult
       })
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
@@ -218,6 +211,7 @@ export class TaskManager {
         if (!this.tasks.has(task._id)) {
           task.progress = task.taskStatus !== 'pending' ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 } : { current: 0, total: 0, totalCount: 0 }
           task.tableFilePath = copyTask?.filePath
+          task.autoResult = copyTask?.autoResult
           const collection = new Collection(task, this.mainWindow!)
           this.tasks.set(task._id, collection)
         } else {
@@ -228,6 +222,7 @@ export class TaskManager {
             task.progress = progress2
           } else {
             task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+            task.autoResult = copyTask?.autoResult
             if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath)) task.tableFilePath = copyTask.filePath
           }
         }
@@ -289,6 +284,7 @@ export class TaskManager {
     this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId);
+      console.log(task, '看看是啥')
       if (!task) return reject('任务不存在');
 
       const taskInfo = task!.getTaskInfo();
@@ -440,7 +436,6 @@ export class TaskManager {
       }
     }
 
-    await this.deleteAllExcel()
     try {
       await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
     } catch (error) {
@@ -448,20 +443,5 @@ export class TaskManager {
     }
     this.tasks.clear()
     log.info(this.tasks.size, '已清空所有队列');
-  }
-
-  /** 
-   * 删除所有表格
-    */
-  async deleteAllExcel() {
-    const files = Array.from(this.filePathList.values()).map(item => item.filePath)
-    for (const file of files) {
-      try {
-        await SysTemUtils.fileOperations.deleteFile(file || '')
-      } catch (error) {
-        log.error('删除文件失败', error)
-      }
-    }
-    this.filePathList.clear()
   }
 }

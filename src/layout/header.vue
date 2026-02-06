@@ -11,7 +11,7 @@ const btnText = computed(() => {
   if (store.updateStatus === 'downloaded') return '立即安装'
   return '立即下载'
 })
-console.log(store.updateStatus, '看看是啥')
+
 // 隐藏&放大&关闭
 const operationHandle = async (type: 'hide' | 'close' | 'maximize' | 'minimize') => {
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value

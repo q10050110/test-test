@@ -82,6 +82,7 @@ export const collectionIpc = (win: BrowserWindow) => {
       // 立即启动任务
       if (!taskId) throw new Error('任务创建失败')
       const task = taskManager.getTask(taskId)
+
       const started = ['completed', 'failed', 'cancelled'].includes(task!.taskStatus) ? await taskManager.reExecuteTask(taskId) : await taskManager.startTaskById(taskId)
       if (started) {
         return { code: 200, message: '任务创建并启动成功', data: { id: taskId } };

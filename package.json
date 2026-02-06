@@ -24,6 +24,7 @@
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "dayjs": "^1.11.19",
+    "decimal.js": "^10.6.0",
     "electron-log": "^5.4.3",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.7.3",
