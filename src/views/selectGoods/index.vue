@@ -279,15 +279,15 @@ onUnmounted(() => {
               <div style="font-weight: bold; color: #000;" class="ellipsis-1">
                 <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === undefined">
                   <template #title>任务完成后将会自动上架商品</template>
-                  <CloudUploadOutlined />
+                  <CloudUploadOutlined style="color:#1a7aff;" />
                 </a-tooltip>
                 <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === 'success'">
                   <template #title>自动上架成功，可在对用店铺查看商品信息</template>
-                  <CheckCircleOutlined />
+                  <CheckCircleOutlined style="color:#6bb64b;" />
                 </a-tooltip>
-                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult !== 'success'">
+                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult && record.autoResult !== 'success'">
                   <template #title>自动上架失败：{{ record.autoResult }}</template>
-                  <CloseCircleOutlined />
+                  <CloseCircleOutlined style="color:#ff7875;" />
                 </a-tooltip>
                 {{ record.taskName }}
               </div>

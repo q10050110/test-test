@@ -3,9 +3,7 @@ import * as cheerio from 'cheerio';
 import { BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto'; // 使用 UUID 确保唯一性
-import pkg from "lodash";
 import log from "../../log/index.js";
-const { delay } = pkg
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -23,7 +21,6 @@ export class WindowService {
     const winId = randomUUID(); // 使用 UUID 确保唯一性
     let win: BrowserWindow | null = null;
     let settled = false;
-    let senderWin: BrowserWindow | null = null;
     let timer: NodeJS.Timeout | undefined = undefined
     // 清理资源
     const cleanup = () => {
@@ -32,10 +29,6 @@ export class WindowService {
         win.destroy();
       }
 
-      if (senderWin && !senderWin.isDestroyed()) {
-        senderWin.removeAllListeners();
-        senderWin.destroy();
-      }
       // 移除当前窗口的 IPC 监听器
       ipcMain.removeAllListeners(`result-page-${winId}`);
       clearTimeout(timer)
@@ -47,7 +40,7 @@ export class WindowService {
     const safeResolve = (value: cheerio.CheerioAPI, resolve: Function) => {
       if (settled) return;
       settled = true;
-      delay(() => cleanup(), Math.floor(Math.random() * 3000) + 1000)
+      cleanup()
       resolve(value);
     };
 
@@ -65,7 +58,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: false,
+          show: true,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -83,13 +76,6 @@ export class WindowService {
         this.windows.push({ cleanup, id: winId })
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
-
-          senderWin = BrowserWindow.fromWebContents(event.sender);
-
-          if (!senderWin || senderWin !== win) {
-            return; // 忽略非法来源的事件
-          }
-
           try {
             let sortText: string | undefined;
             if (sourceType) {
@@ -97,7 +83,7 @@ export class WindowService {
             }
             await new Promise((res) => setTimeout(res, 5000));
             // 执行排序逻辑
-            await senderWin.webContents.executeJavaScript(`
+            await win?.webContents.executeJavaScript(`
               new Promise((resolve, reject) => {
                 const sortText = ${JSON.stringify(sortText)};
                 const list = document.querySelectorAll('.sortItem--X1Plgn6V');
@@ -121,7 +107,7 @@ export class WindowService {
               'document.documentElement.outerHTML'
             );
             const $ = cheerio.load(html);
-            senderWin.destroy()
+            win?.destroy()
             // 增加延迟以确保页面稳定
             await new Promise((res) => setTimeout(res, 5000));
             safeResolve($, resolve);

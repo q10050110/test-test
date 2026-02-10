@@ -209,7 +209,6 @@ watch(() => formData.value.client_id, (newVal) => {
   if (newVal) {
     const currency_code = props.shopList.find(item => item.client_id === newVal)?.currency_code
     if (currency_code) formData.value.unit = getShopCurCode(currency_code as "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT")
-    console.log(formData.value.unit, '货币单位')
   }
 })
 
@@ -218,10 +217,10 @@ watch(() => formData.value.upDataConfigId, (newVal) => {
     const obj = props.configList.find(item => item._id === newVal)
     if (obj && obj.shopData.length) {
       const shop = obj.shopData[0]
+      formData.value.client_id = shop?.client_id
       const currency_code = props.shopList.find(item => item.client_id === shop?.client_id)?.currency_code
       if (currency_code) formData.value.unit = getShopCurCode(currency_code as "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT")
     }
-    console.log(formData.value.unit, '货币单位')
   }
 })
 
@@ -235,6 +234,7 @@ const saveHandle = async (type: 'save' | 'execute') => {
 
   if (formData.value.isUseAutoUpGoods) {
     if (!formData.value.client_id && !formData.value.upDataConfigId) return feedback.error('您当前已使用自动上架，请完善上架配置信息')
+    if (!formData.value.myProfitPercent && formData.value.myProfitPercent !== 0) return feedback.error('您当前已使用自动上架，请填写我的利润率')
   }
 
   if (formData.value.upDataConfigId) {
@@ -461,8 +461,8 @@ defineExpose({
                     :min="1" />
                 </a-form-item>
               </a-col>
-              <!--              <a-col :span="12">
-                <a-form-item required name="targetProfitPercent">
+              <!--               <a-col :span="12">
+                <a-form-item :required="formData.isUseAutoUpGoods" name="targetProfitPercent">
                   <template #label>
                     <label class="flex-center">
                       利润率大于

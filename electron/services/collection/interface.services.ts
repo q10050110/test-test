@@ -1,5 +1,6 @@
 import request from "../../utils/request.js"
 import { Task } from "./type.js"
+import { operationStore } from '../../store/index.js'
 import { compressData, currencyConversion } from '../../utils/index.js'
 import log from "../../log/index.js"
 export const getLogisticsList = async () => {
@@ -22,18 +23,22 @@ export const getLogisticsList = async () => {
   }
 }
 export const getShopList = async () => {
+  const user = operationStore.get('user')
   try {
     const res = await request({
       url: '/api/other/shop/getShopList',
       method: 'post',
       data: {}
     })
+    const data = res.data.filter((item: any) => item.platform === 'OZON').filter((item: any) => item.account_id === user._id)
+
     return {
       code: 400,
-      data: res.data.filter((item: any) => item.platform === 'OZON'),
+      data,
       message: '获取成功'
     }
   } catch (error) {
+    console.log(error, '你失败了？')
     return {
       code: 500,
       message: '获取失败！'
@@ -67,14 +72,16 @@ export const getConfigList = async () => {
   */
 export const batchUpGoods = async (data: any) => {
   try {
-    await request({
+    const res = await request<{ code: number, data: null, message: string }, { code: number, data: null, message: string }>({
       url: '/api/goods/batchUpGoods/ozon/batchCreateGoods',
       method: 'post',
       data
     })
-    return true
+
+    return res
   } catch (error) {
-    return error
+    console.log(error, '你失败了？')
+    return error as { code: number, data: null, message: string }
   }
 }
 
@@ -87,7 +94,9 @@ export const autoUpGoods = async (task: Task, rate: number, goodsData: Map<strin
   const result = []
   const baseParams = {
     client_id: task.client_id,
-    collect_ids: [undefined],
+    upDataConfigId: task.upDataConfigId,
+    watermark_id: undefined,
+    collect_ids: [],
     has_brand: 126745801,
     img_order_type: 0,
     is_ai: false,
@@ -104,9 +113,9 @@ export const autoUpGoods = async (task: Task, rate: number, goodsData: Map<strin
       goods_id: item.id,
       name: item.chineseName,
       offer_id: '',
-      old_price: currencyConversion(item.price, rate, 'old', task.unit || '¥'),
-      origin_price: currencyConversion(item.price, rate, 'origin', task.unit || '¥'),
-      price: currencyConversion(item.price, rate, 'current', task.unit || '¥')
+      old_price: (item.resMoney * 1.05).toFixed(2),
+      origin_price: (item.resMoney * 1.65).toFixed(2),
+      price: item.resMoney
     })).filter(item => item.price)
 
     log.info(chunk, '批量上架的商品')
@@ -115,10 +124,12 @@ export const autoUpGoods = async (task: Task, rate: number, goodsData: Map<strin
       ...baseParams,
       goods: compressData(chunk)
     }
-
-    const res = await batchUpGoods(params)
-    if (res?.data?.code !== 0) result.push(res)
+    try {
+      const res = await batchUpGoods(params)
+      if (res?.code !== 0) result.push(res?.message || res)
+    } catch (error) {
+      result.push(error)
+    }
   }
-
   return result.length ? result.join(',') : 'success'
 }

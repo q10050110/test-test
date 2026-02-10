@@ -28,7 +28,9 @@ export class Collection {
   private goodsData: Map<string, any> = new Map()
   private process = 0 // 正在处理的任务
   private rate = 0 // 汇率
-  private writeError = false
+  private writeError = false // 写入错误
+  private isWrite = false // 是否写入
+  private writeQueue: any[] = []
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -270,8 +272,6 @@ export class Collection {
           settled = true
           resolve(v)
           if (this.reason != 'cancel' && this.reason !== 'failed' && this.uuid === uuid) {
-            this.process--
-            this.outputLog('单个商品处理完成')
             clearInterval(timer)
           }
         }
@@ -290,15 +290,10 @@ export class Collection {
         }
         task = { ...task, '1688link': link1688, sourcePrice, cover2, myProfitPercent: this.task.myProfitPercent, rubExpressPrice: this.task.rubExpressPrice, internalExpress: this.task.internalExpress }
         log.info(`获取1688数据完成:${task.id}`)
-        const detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
+        let detailData = await this.dataProcessService.getDetailData({ taskId: this.task._id, reqDatas: [task] })
         log.info(`获取详细数据:${task.id}`)
-        if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid && detailData.length) {
-          const result = await this.excelService.saveExcel(detailData)
-          this.goodsData.set(detailData[0]?.id, detailData[0])
-          this.targetData++
-          if (!result) this.writeError = true
-        }
-        if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
+        this.writeQueue.push(detailData)
+        this.writeTable()
         safeResolve('单个商品处理完成')
         log.info(`商品处理完成:${task.id}`)
       } catch (error) {
@@ -306,6 +301,30 @@ export class Collection {
         safeReject(new Error('单个商品任务失败'), reject)
       }
     })
+  }
+
+  /** 
+   * 写入表格
+    */
+  async writeTable() {
+    const uuid = this.uuid
+    if (this.isWrite) return
+    this.isWrite = true
+    while (this.writeQueue.length) {
+      if (this.targetData < this.task.targetCount && (this.reason === 'success' || this.reason === undefined) && this.uuid === uuid) {
+        const data = this.writeQueue.shift()
+        const result = await this.excelService.saveExcel(data)
+        this.goodsData.set(data[0]?.id, data?.[0])
+        this.targetData++
+        this.process--
+        if (!result) this.writeError = true
+        if (!this.task.tableFilePath) this.task.tableFilePath = await this.excelService.getFilePath()
+        this.outputLog('单个商品处理完成')
+      } else {
+        break
+      }
+    }
+    this.isWrite = false
   }
 
   /** 

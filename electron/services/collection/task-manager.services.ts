@@ -401,6 +401,7 @@ export class TaskManager {
   async downloadExcel(filePath: string) {
     if (!filePath) return new Error('文件不存在！')
     try {
+      if (!SysTemUtils.fileOperations.exists(filePath)) return new Error('文件不存在！')
       this.mainWindow?.webContents.downloadURL(`file://${filePath}`)
     } catch (error) {
       log.error('下载表格失败', error)

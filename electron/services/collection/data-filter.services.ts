@@ -233,6 +233,18 @@ export class DataProcessService {
     return true
   }
 
+  /** 
+   * 利润率判断
+   * @param value 待检查的值
+   * @param target 目标
+   * @returns 是否符合范围
+    */
+  checkTargetProfitPercent(value: number, target: number) {
+    if (value === undefined || value === null) return false
+    if (isNaN(Number(value))) return false
+    if (!target && Number(target) !== 0) return true
+    return Number(value) >= target
+  }
   /**
 * 销毁实例
 */
