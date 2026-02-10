@@ -4,6 +4,7 @@ import log, { initLogger } from './log/index.js'
 import { CloseProcessService } from './services/closeProcess.services.js'
 import { globalBroadcast } from './ipc/broadcast.js'
 import { operationStore } from './store/index.js'
+import { memoryMonitor } from './services/memory-monitor.services.js'
 app.commandLine.appendSwitch('disable-logging')
 app.commandLine.appendSwitch('log-level', '3')
 
@@ -143,6 +144,7 @@ class ElectronApp {
       log.info('应用准备就绪，开始创建窗口');
       // 记录重启次数
       const restartCount = this.getRestartCount();
+      memoryMonitor.start(30000)
       if (restartCount > 0) {
         log.info(`当前为第 ${restartCount} 次重启`);
       }
@@ -185,6 +187,7 @@ class ElectronApp {
      * 应用退出前的清理工作
      */
     app.on('before-quit', async (event) => {
+      memoryMonitor.stop()
       if (IS_EXITING || IS_RESTARTING) return;
       IS_EXITING = true
 

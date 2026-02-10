@@ -12,6 +12,8 @@ import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
 import { getRate } from '../../utils/index.js'
 import { autoUpGoods } from './interface.services.js'
+import { memoryMonitor } from '../memory-monitor.services.js'
+
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -57,6 +59,11 @@ export class Collection {
 
     return new Promise(async (resolve, reject) => {
       try {
+        memoryMonitor.trackBusinessMetrics({
+          taskId: this.task._id,
+          taskName: this.task.taskName,
+          phase: 'start'
+        })
         await this.resetTask()
         if (this.task.isUseAutoUpGoods) this.rate = await getRate()
         this.uuid = randomUUID()
@@ -71,6 +78,12 @@ export class Collection {
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
         this.outputLog('页面解析成功，开始获取商品列表')
         await this.getHtmlData(this.task.targetCount)
+        memoryMonitor.trackBusinessMetrics({
+          taskId: this.task._id,
+          phase: 'collected',
+          goodsDataSize: this.goodsData.size,
+          parseServiceDataSize: this.parseService.getDataCount()
+        })
         await this.waitForAllTasks()
         if (this.reason !== 'success') {
           safeReject('任务已被终止', reject)
@@ -89,8 +102,15 @@ export class Collection {
         clearInterval(timer)
         this.mainWindowService.destroy()
         this.clearStatus(true)
+        // 清理后手动触发 GC
+        memoryMonitor.forceGC()
         safeResolve(this.task, resolve)
         log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，完成清理工作`)
+        memoryMonitor.trackBusinessMetrics({
+          taskId: this.task._id,
+          phase: 'cleanup',
+          goodsDataSize: this.goodsData.size
+        })
       }
     })
   }
@@ -357,6 +377,7 @@ export class Collection {
     this.process = 0
     await this.excelService.DeleteFilled()
     this.task.tableFilePath = undefined
+    this.task.autoResult = undefined
     this.isCleared = false
     this.reason = undefined
     await this.dataProcessService.destroy()
@@ -423,5 +444,4 @@ export class Collection {
     this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)
     this.outputLog('清理完成')
   }
-
 }

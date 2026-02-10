@@ -4,6 +4,7 @@ import { BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto'; // 使用 UUID 确保唯一性
 import log from "../../log/index.js";
+import { memoryMonitor } from '../memory-monitor.services.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -18,6 +19,10 @@ export class WindowService {
    * @returns 返回解析后的 HTML 数据 (CheerioAPI)
    */
   createWindow(sourceType: string, cover: string): Promise<cheerio.CheerioAPI> {
+    memoryMonitor.trackBusinessMetrics({
+      windowCount: this.windows.length,
+      action: 'create-window'
+    })
     const winId = randomUUID(); // 使用 UUID 确保唯一性
     let win: BrowserWindow | null = null;
     let settled = false;
@@ -58,7 +63,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: true,
+          show: false,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,

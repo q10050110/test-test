@@ -90,6 +90,7 @@ export const batchUpGoods = async (data: any) => {
   */
 export const autoUpGoods = async (task: Task, rate: number, goodsData: Map<string, any>) => {
   if (!task.isUseAutoUpGoods || !rate) return
+  if (goodsData.size === 0) return '没有可上架的商品'
   const source = Array.from(goodsData.values())
   const result = []
   const baseParams = {

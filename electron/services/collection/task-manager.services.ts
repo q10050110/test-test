@@ -4,6 +4,8 @@ import log from '../../log/index.js';
 import request from '../../utils/request.js';
 import { Task } from './type.js'
 import { SysTemUtils } from '../../utils/system.js'
+import { memoryMonitor } from '../memory-monitor.services.js'
+
 export class TaskManager {
   private static instance: TaskManager;
   private tasks: Map<string, Collection> = new Map();
@@ -136,6 +138,13 @@ export class TaskManager {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
+    // 记录任务开始前的内存
+    memoryMonitor.trackBusinessMetrics({
+      taskCount: this.tasks.size,
+      activeTaskCount: this.activeTasks.size,
+      queueSize: this.taskQueue.length
+    })
+
     // 添加到活动任务并立即通知
     this.activeTasks.add(taskId);
     this.notifyTaskUpdate(taskId, 'running');
@@ -159,6 +168,18 @@ export class TaskManager {
       this.activeTasks.delete(taskId);
       this.notifyTaskUpdate(taskId, 'completed');
       this.tasks.delete(taskId)
+      memoryMonitor.trackBusinessMetrics({
+        taskCount: this.tasks.size,
+        activeTaskCount: this.activeTasks.size,
+        queueSize: this.taskQueue.length,
+        filePathListSize: this.filePathList.size
+      })
+      // 内存压力大时，触发GC
+      const usage = process.memoryUsage()
+      if (usage.heapUsed > 800 * 1024 * 1024) {
+        log.warn('[TaskManager] 内存压力大，触发 GC')
+        memoryMonitor.forceGC()
+      }
       // 处理队列中的下一个任务
       this.processNextTask();
     }
