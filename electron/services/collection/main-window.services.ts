@@ -91,7 +91,7 @@ export class MainWindowService {
         })()
       `)
       log.info('点击结果:', result)
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (result?.ok) await new Promise(resolve => setTimeout(resolve, 2000))
     }
 
     const html = await wc.executeJavaScript(

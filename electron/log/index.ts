@@ -2,7 +2,7 @@ import log from 'electron-log'
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-
+import { SysTemUtils } from '../utils/system.js'
 /**
  * 日志管理器类
  */
@@ -12,7 +12,7 @@ class LoggerManager {
   private logPath: string;
 
   private constructor() {
-    this.installDir = app.getPath('userData');
+    this.installDir = path.dirname(process.execPath);
     this.logPath = path.join(this.installDir, 'logs');
   }
 
@@ -83,7 +83,7 @@ class LoggerManager {
    * 配置控制台传输
    */
   private configureConsoleTransport(): void {
-    log.transports.console.level = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+    log.transports.console.level = SysTemUtils.getEnv() === 'development' ? 'debug' : 'info';
     log.transports.console.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
   }
 
@@ -122,7 +122,7 @@ class LoggerManager {
     log.info(`工作目录: ${process.cwd()}`);
     log.info(`安装目录: ${this.installDir}`);
     log.info(`日志目录: ${this.logPath}`);
-    log.info(`环境: ${process.env.NODE_ENV || 'production'}`);
+    log.info(`环境: ${SysTemUtils.getEnv() || 'production'}`);
     log.info('='.repeat(80));
   }
 

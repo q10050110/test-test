@@ -156,13 +156,12 @@ export class Collection {
         }
 
         const { html, domain } = await this.mainWindowService.getHTML()
-        if (!html) return
+        if (!html) continue
         const goodsList = await this.parseService.ozonListParser(html, domain)
         if (goodsList.length) {
           scrollAttempts = 0
           this.processData(goodsList)
         }
-        await new Promise(resolve => setTimeout(resolve, 2000))
       }
       if (!this.reason) this.reason = 'success'
       this.outputLog(`收集完成，共收集到 ${this.parseService.getDataCount()} 个链接`)

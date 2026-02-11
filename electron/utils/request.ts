@@ -3,11 +3,12 @@ import { operationStore } from '../store/index.js'
 import { globalBroadcast } from '../ipc/broadcast.js'
 import log from '../log/index.js'
 import { TaskManager } from '../services/collection/task-manager.services.js'
+import { SysTemUtils } from "./system.js"
 let isTokenFailure = false
 
 const request = axios.create({
-  baseURL: process.env.NODE_ENV === 'development' ? 'https://test-plus.shopbang.cn' : 'https://plus.shopbang.cn',
-  timeout: 500000
+  baseURL: SysTemUtils.getEnv() === 'development' ? 'https://test-plus.shopbang.cn' : 'https://plus.shopbang.cn',
+  timeout: 10000
 })
 
 request.interceptors.request.use(async config => {

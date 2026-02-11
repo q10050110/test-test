@@ -2,8 +2,9 @@ import { shell } from 'electron'
 import { TaskManager } from '../services/collection/task-manager.services.js'
 import request from '../utils/request.js'
 import { operationStore } from '../store/index.js'
+import { SysTemUtils } from '../utils/system.js'
 export const accountHandle = (type: 'register' | 'resetPassword') => {
-  const env = process.env.NODE_ENV === 'development'
+  const env = SysTemUtils.getEnv() === 'development'
   const testUrl = type === 'register' ? "https://test-plus.shopbang.cn/erp/#/register" : 'https://test-plus.shopbang.cn/erp/#/forgetPassword'
   const prodUrl = type === 'register' ? 'https://shopbang.cn/erp/#/register' : 'https://shopbang.cn/erp/#/forgetPassword'
   shell.openExternal(env ? testUrl : prodUrl)

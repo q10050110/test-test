@@ -1,9 +1,10 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resisterAllIpc } from '../ipc/main.ipc.js'
 import log from '../log/index.js'
 import { UpdaterManager } from '../services/update.services.js'
+import { SysTemUtils } from '../utils/system.js'
 // __dirname 表示当前文件所在目录的绝对路径
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export let mainWindow: BrowserWindow | null
@@ -110,14 +111,14 @@ export const createWindow = () => {
   })
 
   // 开发环境开启调试台
-  if (process.env.NODE_ENV === 'development') {
+  if (SysTemUtils.getEnv() === 'development' && !app.isPackaged) {
     log.info('开发环境: 打开开发者工具')
     mainWindow.webContents.openDevTools()
   }
 
   // 加载页面
-  if (process.env.NODE_ENV === 'development') {
-    const devUrl = 'http://localhost:3000/login'
+  if (SysTemUtils.getEnv() === 'development') {
+    const devUrl = app.isPackaged ? path.join(__dirname, '../../dist/index.html') : 'http://localhost:3000/login'
     log.info(`开发环境: 加载 URL - ${devUrl}`)
     mainWindow.loadURL(devUrl).catch(err => {
       log.error('加载开发服务器失败:', err)

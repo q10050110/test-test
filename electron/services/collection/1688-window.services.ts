@@ -110,7 +110,7 @@ export class WindowService {
                 }
               });
             `);
-
+            await new Promise(resolve => setTimeout(resolve, 2000))
             // 获取页面 HTML 并解析
             const html = await win?.webContents.executeJavaScript(
               'document.documentElement.outerHTML'

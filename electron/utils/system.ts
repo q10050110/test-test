@@ -1,11 +1,26 @@
 import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
 import { join, dirname, basename } from 'path'
 import { rmSync, unlinkSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
-
+import log from '../log/index.js'
 /**
  * Electron 系统级能力封装
  */
 export class SysTemUtils {
+  /** 
+   * 获取环境变量
+    */
+  static getEnv() {
+
+    if (!app.isPackaged) return 'development'
+    try {
+      const packagePath = join(app.getAppPath(), 'package.json')
+      const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'))
+      return pkg.APP_ENV || 'production'
+    } catch (err) {
+      log.info(err, '错误信息')
+      return 'production'
+    }
+  }
   /**
    * 获取应用相关信息
    */

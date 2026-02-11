@@ -1,26 +1,26 @@
 <script setup lang="ts">
-import { loginAPI } from '@/api/login';
-import type { Login } from '@/types/login';
+import { loginAPI } from '@/api/login'
+import type { Login } from '@/types/login'
 import type { FormInstance } from 'ant-design-vue'
-import type { Rule } from 'ant-design-vue/es/form';
-import feedback from '@/utils/feedback';
-import { useUserStore } from '@/stores';
-import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons-vue';
+import type { Rule } from 'ant-design-vue/es/form'
+import feedback from '@/utils/feedback'
+import { useUserStore } from '@/stores'
+import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons-vue'
 // 表单数据
 const formData = ref<Login>({
   phone: '',
-  pwd: ''
+  pwd: '',
 })
 const formRef = ref<FormInstance>()
 const rules: Record<string, Rule[]> = {
   phone: [
     { required: true, message: '请输入手机号', trigger: ['blur', 'change'] },
-    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: ['blur', 'change'] }
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: ['blur', 'change'] },
   ],
   pwd: [
     { required: true, message: '请输入密码', trigger: ['blur', 'change'] },
-    { min: 6, message: '密码长度不能小于6位', trigger: ['blur', 'change'] }
-  ]
+    { min: 6, message: '密码长度不能小于6位', trigger: ['blur', 'change'] },
+  ],
 }
 
 // 显示隐藏密码
@@ -33,7 +33,7 @@ const changeHandle = async () => {
     await window.electronStore.set('loginInfo', {
       phone: formData.value.phone,
       pwd: formData.value.pwd,
-      rememberPassword: rememberPassword.value
+      rememberPassword: rememberPassword.value,
     })
   } else {
     await window.electronStore.delete('loginInfo')
@@ -60,7 +60,11 @@ const loginHandle = async () => {
   if (code === 0) {
     changeHandle()
     store.setToken(data.token)
-    await window.electronAPI.invoke('resetToken', { token: data.token })
+    try {
+      await window.electronAPI.invoke('resetToken', { token: data.token })
+    } catch (error) {
+      feedback.error(error as string)
+    }
     feedback.success('登录成功！')
     router.push('/')
     return
@@ -96,41 +100,66 @@ const operationHandle = (type: 'hide' | 'close') => {
             <img src="@/assets/login/logo.png" alt="Logo" class="logo" />
           </div>
 
-          <div class="welcome-text">
-            欢迎使用<span class="link">上品帮自动化助手</span>
-          </div>
+          <div class="welcome-text">欢迎使用<span class="link">上品帮自动化助手</span></div>
 
           <a-form :model="formData" ref="formRef" :rules="rules">
             <a-form-item name="phone">
-              <a-input v-model:value="formData.phone" @pressEnter="loginHandle" placeholder="请输入手机号"></a-input>
+              <a-input
+                v-model:value="formData.phone"
+                @pressEnter="loginHandle"
+                placeholder="请输入手机号"
+              ></a-input>
             </a-form-item>
             <a-form-item name="pwd">
-              <a-input v-model:value="formData.pwd" @pressEnter="loginHandle" placeholder="请输入密码"
-                :type="passwordVisible ? 'text' : 'password'">
+              <a-input
+                v-model:value="formData.pwd"
+                @pressEnter="loginHandle"
+                placeholder="请输入密码"
+                :type="passwordVisible ? 'text' : 'password'"
+              >
                 <template #suffix>
-                  <EyeOutlined v-if="passwordVisible" @click="passwordVisible = !passwordVisible" class="eye-icon" />
-                  <EyeInvisibleOutlined v-else @click="passwordVisible = !passwordVisible" class="eye-icon" />
+                  <EyeOutlined
+                    v-if="passwordVisible"
+                    @click="passwordVisible = !passwordVisible"
+                    class="eye-icon"
+                  />
+                  <EyeInvisibleOutlined
+                    v-else
+                    @click="passwordVisible = !passwordVisible"
+                    class="eye-icon"
+                  />
                 </template>
               </a-input>
             </a-form-item>
             <a-form-item>
-              <a-checkbox v-model:checked="rememberPassword" @change="changeHandle">记住密码</a-checkbox>
+              <a-checkbox v-model:checked="rememberPassword" @change="changeHandle"
+                >记住密码</a-checkbox
+              >
             </a-form-item>
             <a-form-item>
-              <a-button type="primary" block style="height:40px" @click="loginHandle" :loading="loading">立即登录</a-button>
+              <a-button
+                type="primary"
+                block
+                style="height: 40px"
+                @click="loginHandle"
+                :loading="loading"
+                >立即登录</a-button
+              >
             </a-form-item>
           </a-form>
 
           <div class="other-actions">
-            <div @click.prevent="accountHandle('register')">没有帐号？去<span class="link">注册</span></div>
+            <div @click.prevent="accountHandle('register')">
+              没有帐号？去<span class="link">注册</span>
+            </div>
             <div @click.prevent="accountHandle('resetPassword')" class="link">忘记密码？</div>
           </div>
         </div>
       </div>
     </div>
     <div class="operation">
-      <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')">
-      <img src="@/assets/window/guanbi.png" alt="" @click="operationHandle('close')">
+      <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')" />
+      <img src="@/assets/window/guanbi.png" alt="" @click="operationHandle('close')" />
     </div>
   </div>
 </template>
@@ -167,7 +196,8 @@ const operationHandle = (type: 'hide' | 'close') => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.08),
+  box-shadow:
+    0 6px 16px -8px rgba(0, 0, 0, 0.08),
     0 9px 28px 0 rgba(0, 0, 0, 0.05),
     0 12px 48px 16px rgba(0, 0, 0, 0.03);
 }
@@ -217,7 +247,6 @@ const operationHandle = (type: 'hide' | 'close') => {
       color: rgba(255, 255, 255, 0.88);
     }
   }
-
 }
 
 .login-right {
@@ -282,9 +311,7 @@ const operationHandle = (type: 'hide' | 'close') => {
 
   .link {
     color: #1f71ff;
-
   }
-
 }
 
 .no-darg {

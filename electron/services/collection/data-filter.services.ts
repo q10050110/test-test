@@ -95,7 +95,6 @@ export class DataProcessService {
       return [item]
 
     } catch (error) {
-      console.log(error, '啥情况')
       return []
     }
   }

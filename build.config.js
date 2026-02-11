@@ -4,6 +4,9 @@
  */
 
 export default {
+  extraMetadata: {
+    APP_ENV: process.env.APP_ENV,
+  },
   // 国内镜像资源
   electronDownload: {
     mirror: 'https://npmmirror.com/mirrors/electron/',
@@ -47,6 +50,7 @@ export default {
     createDesktopShortcut: true, // 创建桌面快捷方式
     createStartMenuShortcut: true, // 创建开始菜单快捷方式
     shortcutName: '上品帮-自动化助手', // 快捷方式名称
+    perMachine: false, // 只允许当前电脑安装
   },
 
   // macOS 配置
