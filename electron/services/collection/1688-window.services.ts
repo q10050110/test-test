@@ -18,7 +18,7 @@ export class WindowService {
    * @param cover 图片 URL
    * @returns 返回解析后的 HTML 数据 (CheerioAPI)
    */
-  createWindow(sourceType: string, cover: string): Promise<cheerio.CheerioAPI> {
+  createWindow(sourceType: string, cover: string): Promise<any> {
     memoryMonitor.trackBusinessMetrics({
       windowCount: this.windows.length,
       action: 'create-window'
@@ -36,9 +36,13 @@ export class WindowService {
 
       // 移除当前窗口的 IPC 监听器
       ipcMain.removeAllListeners(`result-page-${winId}`);
-      clearTimeout(timer)
+      if (timer) {
+        clearTimeout(timer)
+        timer = undefined
+      }
       this.windows = this.windows.filter(w => w.id !== winId)
-      win = null;
+      win = null
+      settled = true
     };
 
     // 安全 resolve
@@ -111,11 +115,10 @@ export class WindowService {
             const html = await win?.webContents.executeJavaScript(
               'document.documentElement.outerHTML'
             );
-            const $ = cheerio.load(html);
             win?.destroy()
             // 增加延迟以确保页面稳定
             await new Promise((res) => setTimeout(res, 5000));
-            safeResolve($, resolve);
+            safeResolve(html, resolve);
           } catch (error) {
             safeReject(error as Error, reject);
           }
@@ -201,5 +204,6 @@ export class WindowService {
     */
   destroy() {
     this.windows.forEach(win => win.cleanup())
+    this.windows = []
   }
 }

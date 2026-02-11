@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods';
-import type { TableColumnsType, TableProps } from 'ant-design-vue';
+import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods'
+import type { TableColumnsType, TableProps } from 'ant-design-vue'
 import { h } from 'vue'
-import { CaretRightOutlined, EditOutlined, CopyOutlined, DownloadOutlined, PauseCircleFilled, SearchOutlined, CloudUploadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue';
-import TaskDialog from './components/taskDialog.vue';
-import feedback from '@/utils/feedback';
-import Tabs from './components/tabs.vue';
+import {
+  CaretRightOutlined,
+  EditOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  PauseCircleFilled,
+  SearchOutlined,
+  CloudUploadOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+} from '@ant-design/icons-vue'
+import TaskDialog from './components/taskDialog.vue'
+import feedback from '@/utils/feedback'
+import Tabs from './components/tabs.vue'
 
-
-import dayjs from 'dayjs';
+import dayjs from 'dayjs'
 // 表单参数
 const initParams = ref({
   pageNo: 1,
   pageSize: 10,
   taskName: '',
-  taskStatus: undefined
+  taskStatus: undefined,
 })
 const params = ref({ ...initParams.value })
 
@@ -22,63 +31,65 @@ const taskStatusList = ref([
   {
     label: '全部',
     value: undefined,
-    color: ''
+    color: '',
   },
   {
     label: '未执行',
     value: 'noExecuted',
-    color: ''
+    color: '',
   },
   {
     label: '待执行',
     value: 'pending',
-    color: 'warning'
+    color: 'warning',
   },
   {
     label: '执行中',
     value: 'running',
-    color: 'processing'
+    color: 'processing',
   },
   {
     label: '已完成',
     value: 'completed',
-    color: 'success'
-  }, {
+    color: 'success',
+  },
+  {
     label: '失败',
     value: 'failed',
-    color: 'error'
-  }, {
+    color: 'error',
+  },
+  {
     label: '取消',
     value: 'cancelled',
-    color: 'warning'
-  }
+    color: 'warning',
+  },
 ])
 
 // 表格数据&配置
 const tableData = ref<Task[]>()
 const total = ref(0)
-const columns = ref<TableColumnsType<Task>>([{
-  title: '任务名称',
-  dataIndex: 'taskName',
-  key: 'taskName',
-  width: '30%'
-},
-{
-  title: '任务状态',
-  dataIndex: 'status',
-  key: 'status',
-
-},
-{
-  title: '进度详情',
-  dataIndex: 'progress',
-  key: 'progress',
-
-}, {
-  title: '操作',
-  dataIndex: 'action',
-  key: 'action',
-}
+const columns = ref<TableColumnsType<Task>>([
+  {
+    title: '任务名称',
+    dataIndex: 'taskName',
+    key: 'taskName',
+    width: '30%',
+  },
+  {
+    title: '任务状态',
+    dataIndex: 'status',
+    key: 'status',
+  },
+  {
+    title: '进度详情',
+    dataIndex: 'progress',
+    key: 'progress',
+  },
+  {
+    title: '操作',
+    dataIndex: 'action',
+    key: 'action',
+  },
 ])
 const selectData = ref<string[]>()
 const rowSelection: TableProps['rowSelection'] = {
@@ -87,9 +98,12 @@ const rowSelection: TableProps['rowSelection'] = {
   },
   onChange: (selectedRowKeys, selectedRows) => {
     selectData.value = selectedRowKeys as string[]
-  }
+  },
 }
+let listTimer: number | undefined = undefined
 const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
+  if (listTimer) return feedback.error('请勿频繁查询')
+  listTimer = setTimeout(() => (listTimer = undefined), 2000)
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
   const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
@@ -99,8 +113,8 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
 getTaskList()
 
 const pageChange = (page: number, pageSize: number) => {
-  params.value.pageNo = page;
-  params.value.pageSize = pageSize;
+  params.value.pageNo = page
+  params.value.pageSize = pageSize
   getTaskList()
 }
 
@@ -128,7 +142,10 @@ const startTask = async (task: Task, isThrottle = false) => {
   }
   const data = toRaw(task)
   if (data.progress) data.progress = toRaw(data.progress)
-  const { code, message } = await window.electronAPI.invoke('collection-create-and-start', { data, type: 'execute' })
+  const { code, message } = await window.electronAPI.invoke('collection-create-and-start', {
+    data,
+    type: 'execute',
+  })
   if (code === 200) return feedback.success('执行任务成功')
   feedback.error(message)
 }
@@ -137,18 +154,23 @@ const isStart = ref(false)
 const batchStartHandle = async () => {
   if (isStart.value) return feedback.error('批量执行任务中，请勿频繁点击')
   if (!selectData.value?.length || !tableData.value?.length) {
-    feedback.error('请选择要开始的任务！');
-    return;
+    feedback.error('请选择要开始的任务！')
+    return
   }
-  const isRunning = selectData.value.some(taskId => tableData.value?.some(task => task._id === taskId && (task.taskStatus === 'running' || task.taskStatus === 'pending')));
+  const isRunning = selectData.value.some((taskId) =>
+    tableData.value?.some(
+      (task) =>
+        task._id === taskId && (task.taskStatus === 'running' || task.taskStatus === 'pending'),
+    ),
+  )
   if (isRunning) return feedback.error('当前选中的任务中存在执行的任务，请稍后重试')
   isStart.value = true
   for (const item of selectData.value) {
-    const task = tableData.value?.find(task => task._id === item);
-    if (!task) continue;
+    const task = tableData.value?.find((task) => task._id === item)
+    if (!task) continue
 
-    await startTask(task);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await startTask(task)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
   selectData.value = []
@@ -164,7 +186,9 @@ const copyHandle = async (task: Task) => {
   }, 1000)
   task.lastRunningTime = undefined
   const newTask = JSON.parse(JSON.stringify(task))
-  const { code, message } = await window.electronAPI.invoke('collection-copy', { data: toRaw(newTask) })
+  const { code, message } = await window.electronAPI.invoke('collection-copy', {
+    data: toRaw(newTask),
+  })
   await getTaskList(undefined, true)
   if (code === 200) return feedback.success('复制成功')
   feedback.error(message)
@@ -177,12 +201,18 @@ const cancelTask = async (taskId: string) => {
 }
 // 批量删除任务
 const deleteTask = async () => {
-  if (!selectData.value?.length || !tableData.value?.length) return feedback.error('请选择要删除的任务！')
-  const isAlive = tableData.value.filter(item => selectData.value?.includes(item._id!)).some(task => task.taskStatus === 'running' || task.taskStatus === 'pending')
+  if (!selectData.value?.length || !tableData.value?.length)
+    return feedback.error('请选择要删除的任务！')
+  const isAlive = tableData.value
+    .filter((item) => selectData.value?.includes(item._id!))
+    .some((task) => task.taskStatus === 'running' || task.taskStatus === 'pending')
   if (isAlive) return feedback.error('请将执行、待执行的任务终止后，在删除！')
   const res = await feedback.confirm('确定要删除吗，删除以后数据不可再恢复？')
   if (!res) return
-  const { code, message } = await window.electronAPI.invoke('collection-delete-task', toRaw(selectData.value))
+  const { code, message } = await window.electronAPI.invoke(
+    'collection-delete-task',
+    toRaw(selectData.value),
+  )
   await getTaskList(undefined, true)
   if (code === 200) {
     selectData.value = []
@@ -194,7 +224,7 @@ const deleteTask = async () => {
 const tabsRef = ref<InstanceType<typeof Tabs>>()
 const getProgress = async (data?: any) => {
   const { collectionTask, log } = data
-  let obj = tableData.value?.find(item => item._id === collectionTask._id)
+  let obj = tableData.value?.find((item) => item._id === collectionTask._id)
   if (obj) Object.assign(obj, collectionTask)
   tabsRef.value?.writeLog(collectionTask._id, log)
 }
@@ -251,83 +281,132 @@ onUnmounted(() => {
   <div class="select-goods-page">
     <a-form class="form" layout="inline">
       <a-form-item>
-        <a-input placeholder="请输入任务名称" style="width: 180px;" v-model:value="params.taskName">
+        <a-input
+          placeholder="请输入任务名称"
+          style="width: 180px"
+          v-model:value="params.taskName"
+          @pressEnter="getTaskList(false, true)"
+        >
           <template #prefix>
             <SearchOutlined />
           </template>
         </a-input>
       </a-form-item>
       <a-form-item>
-        <a-select v-model:value="params.taskStatus" style="width: 140px;" placeholder="请选择状态">
-          <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{ item.label
+        <a-select v-model:value="params.taskStatus" style="width: 140px" placeholder="请选择状态">
+          <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{
+            item.label
           }}</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item>
         <a-button type="primary" @click="getTaskList(false, true)">查询</a-button>
-        <a-button type="primary" style="margin: 0 10px;" @click="openTaskDialogHandle()">新建任务</a-button>
-        <a-button type="primary" style="margin-right:10px;" @click="batchStartHandle">批量开始</a-button>
+        <a-button type="primary" style="margin: 0 10px" @click="openTaskDialogHandle()"
+          >新建任务</a-button
+        >
+        <a-button type="primary" style="margin-right: 10px" @click="batchStartHandle"
+          >批量开始</a-button
+        >
         <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
       </a-form-item>
     </a-form>
-    <a-row style="margin-top: 20px;" class="table">
+    <a-row style="margin-top: 20px" class="table">
       <a-col :span="24">
-        <a-table :dataSource="tableData" :columns="columns" :row-selection="rowSelection" :pagination="false"
-          rowKey="_id">
+        <a-table
+          :dataSource="tableData"
+          :columns="columns"
+          :row-selection="rowSelection"
+          :pagination="false"
+          rowKey="_id"
+        >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
-              <div style="font-weight: bold; color: #000;" class="ellipsis-1">
+              <div style="font-weight: bold; color: #000" class="ellipsis-1">
                 <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === undefined">
                   <template #title>任务完成后将会自动上架商品</template>
-                  <CloudUploadOutlined style="color:#1a7aff;" />
+                  <CloudUploadOutlined style="color: #1a7aff" />
                 </a-tooltip>
                 <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === 'success'">
                   <template #title>自动上架成功，可在对用店铺查看商品信息</template>
-                  <CheckCircleOutlined style="color:#6bb64b;" />
+                  <CheckCircleOutlined style="color: #6bb64b" />
                 </a-tooltip>
-                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult && record.autoResult !== 'success'">
+                <a-tooltip
+                  v-if="
+                    record.isUseAutoUpGoods && record.autoResult && record.autoResult !== 'success'
+                  "
+                >
                   <template #title>自动上架失败：{{ record.autoResult }}</template>
-                  <CloseCircleOutlined style="color:#ff7875;" />
+                  <CloseCircleOutlined style="color: #ff7875" />
                 </a-tooltip>
                 {{ record.taskName }}
               </div>
-              <div>
-                创建时间：{{ formatDate(record.createTime) }}
-              </div>
-              <div>
-                最近执行：{{ formatDate(record.lastRunningTime) }}
-              </div>
+              <div>创建时间：{{ formatDate(record.createTime) }}</div>
+              <div>最近执行：{{ formatDate(record.lastRunningTime) }}</div>
             </template>
             <template v-if="column.key === 'status'">
-              <a-tag :color="taskStatusList.find(item => item.value === record.taskStatus)?.color">
-                {{taskStatusList.find(item => item.value === record.taskStatus)?.label || '未执行'}}
+              <a-tag
+                :color="taskStatusList.find((item) => item.value === record.taskStatus)?.color"
+              >
+                {{
+                  taskStatusList.find((item) => item.value === record.taskStatus)?.label || '未执行'
+                }}
               </a-tag>
             </template>
             <template v-if="column.key === 'progress'">
-              <div>正在处理中商品 <span style="color:#2753ed;">{{ record?.progress?.current || 0 }}</span> 个</div>
-              <div>累计已爬取商品 <span style="color: #2753ed;">{{ record?.progress?.total || 0 }}</span> 个</div>
-              <div>符合条件商品 <span style="color: #17bd3e;">{{ record?.progress?.totalCount || 0 }}</span> 个</div>
+              <div>
+                正在处理中商品
+                <span style="color: #2753ed">{{ record?.progress?.current || 0 }}</span> 个
+              </div>
+              <div>
+                累计已爬取商品
+                <span style="color: #2753ed">{{ record?.progress?.total || 0 }}</span> 个
+              </div>
+              <div>
+                符合条件商品
+                <span style="color: #17bd3e">{{ record?.progress?.totalCount || 0 }}</span> 个
+              </div>
             </template>
             <template v-if="column.key === 'action'">
-              <a-button type="link" :icon="h(CaretRightOutlined)"
+              <a-button
+                type="link"
+                :icon="h(CaretRightOutlined)"
                 v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
-                @click="startTask(record as Task, true)">开始</a-button>
-              <a-button type="link" v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
-                :icon="h(PauseCircleFilled)" @click="cancelTask(record._id)">终止</a-button>
+                @click="startTask(record as Task, true)"
+                >开始</a-button
+              >
+              <a-button
+                type="link"
+                v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
+                :icon="h(PauseCircleFilled)"
+                @click="cancelTask(record._id)"
+                >终止</a-button
+              >
               <a-tooltip placement="topRight">
                 <template #title>
                   <span>任务执行中不允许编辑</span>
                 </template>
-                <a-button type="link" :icon="h(EditOutlined)" @click="openTaskDialogHandle(record as Task)"
-                  :disabled="record.taskStatus === 'running'">编辑</a-button>
+                <a-button
+                  type="link"
+                  :icon="h(EditOutlined)"
+                  @click="openTaskDialogHandle(record as Task)"
+                  :disabled="record.taskStatus === 'running'"
+                  >编辑</a-button
+                >
               </a-tooltip>
-              <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)">复制</a-button>
+              <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)"
+                >复制</a-button
+              >
               <a-tooltip placement="topRight">
                 <template #title>
                   <span>导出符合条件的商品表格</span>
                 </template>
-                <a-button type="link" :icon="h(DownloadOutlined)" :disabled="!record?.tableFilePath"
-                  @click="exportHandle(record?.tableFilePath)">导出</a-button>
+                <a-button
+                  type="link"
+                  :icon="h(DownloadOutlined)"
+                  :disabled="!record?.tableFilePath"
+                  @click="exportHandle(record?.tableFilePath)"
+                  >导出</a-button
+                >
               </a-tooltip>
             </template>
           </template>
@@ -335,8 +414,15 @@ onUnmounted(() => {
       </a-col>
     </a-row>
     <a-row class="pagination">
-      <a-pagination v-model:current="params.pageNo" :defaultPageSize="params.pageSize" :total="total" show-less-items
-        :show-total="total => `每页10条 共${total}条记录`" :showSizeChanger="false" @change="pageChange" />
+      <a-pagination
+        v-model:current="params.pageNo"
+        :defaultPageSize="params.pageSize"
+        :total="total"
+        show-less-items
+        :show-total="(total) => `每页10条 共${total}条记录`"
+        :showSizeChanger="false"
+        @change="pageChange"
+      />
     </a-row>
     <a-row class="tabs">
       <a-col :span="24">
@@ -344,8 +430,13 @@ onUnmounted(() => {
       </a-col>
     </a-row>
   </div>
-  <TaskDialog ref="dialogRef" @refresh="getTaskList(false, true)" :logisticsSimpleList="logisticsSimpleList"
-    :shop-list="shopList" :config-list="configList" />
+  <TaskDialog
+    ref="dialogRef"
+    @refresh="getTaskList(false, true)"
+    :logisticsSimpleList="logisticsSimpleList"
+    :shop-list="shopList"
+    :config-list="configList"
+  />
 </template>
 
 <style lang="scss" scoped>

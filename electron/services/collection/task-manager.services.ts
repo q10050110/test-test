@@ -93,7 +93,6 @@ export class TaskManager {
         });
         const newTaskData = { ...taskData, _id: response.data };
         const collection = new Collection(newTaskData, this.mainWindow!);
-        this.tasks.set(collection.getTaskInfo()._id, collection);
         const taskInfo = collection.getTaskInfo();
         resolve(taskInfo._id);
       } catch (error) {
@@ -149,23 +148,14 @@ export class TaskManager {
     this.activeTasks.add(taskId);
     this.notifyTaskUpdate(taskId, 'running');
     try {
-      this.filePathList.set(taskId, {
-        filePath: await task.getTableFilePath(),
-        progress: task.getTaskInfo().progress,
-        autoResult: task.getTaskInfo().autoResult
-      })
-      await task.run();
-
+      const result = await task.run();
+      this.filePathList.set(taskId, JSON.parse(JSON.stringify(result)))
     } catch (error) {
-
+      this.filePathList.set(taskId, JSON.parse(JSON.stringify(error)))
     } finally {
       // 任务完成后清理并通知
-      this.filePathList.set(taskId, {
-        filePath: task.getTaskInfo().tableFilePath || '',
-        progress: task.getTaskInfo().progress,
-        autoResult: task.getTaskInfo().autoResult
-      })
-      this.activeTasks.delete(taskId);
+      task.clearStatus(false, true)
+      this.activeTasks.delete(taskId)
       this.notifyTaskUpdate(taskId, 'completed');
       this.tasks.delete(taskId)
       memoryMonitor.trackBusinessMetrics({
@@ -182,6 +172,7 @@ export class TaskManager {
       }
       // 处理队列中的下一个任务
       this.processNextTask();
+      log.info(this.tasks.size, '创建的任务')
     }
   }
 
@@ -233,11 +224,11 @@ export class TaskManager {
           task.progress = task.taskStatus !== 'pending' ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 } : { current: 0, total: 0, totalCount: 0 }
           task.tableFilePath = copyTask?.filePath
           task.autoResult = copyTask?.autoResult
-          const collection = new Collection(task, this.mainWindow!)
-          this.tasks.set(task._id, collection)
+          /*           const collection = new Collection(task, this.mainWindow!)
+                    this.tasks.set(task._id, collection) */
         } else {
-          const progress2 = this.tasks.get(task._id)?.getTaskInfo().progress
-          const filePath = this.tasks.get(task._id)?.getTaskInfo().tableFilePath
+          const progress2 = JSON.parse(JSON.stringify(this.tasks.get(task._id)?.getTaskInfo().progress) || "{}")
+          const filePath = this.tasks.get(task._id)?.getTaskInfo()?.tableFilePath
           if (task.taskStatus === 'running' || task.taskStatus === 'pending') {
             if (filePath && SysTemUtils.fileOperations.exists(filePath)) task.tableFilePath = filePath
             task.progress = progress2
@@ -339,7 +330,6 @@ export class TaskManager {
     for (const id of taskIds) {
       const task = this.tasks.get(id)
       const task2 = this.filePathList.get(id)
-      if (!task && !task2) continue
 
       try {
         // 从服务器删除
@@ -395,13 +385,10 @@ export class TaskManager {
         },
       });
 
-      let successCount = 0;
       for (const id of taskIds) {
         const task = this.tasks.get(id);
         const task2 = this.filePathList.get(id);
         if (!task && !task2) continue;
-
-        successCount++;
 
         try {
           const filePath = await task?.getTableFilePath() || task2?.filePath
@@ -411,7 +398,7 @@ export class TaskManager {
         }
       }
 
-      return successCount > 0;
+      return true;
     } catch (error) {
       log.error('批量删除任务失败', error);
       throw error;

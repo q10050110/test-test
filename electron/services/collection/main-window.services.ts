@@ -1,6 +1,5 @@
-import { BrowserWindow, session } from 'electron';
+import { BrowserWindow } from 'electron';
 import log from '../../log/index.js'
-import * as cheerio from 'cheerio'
 
 export class MainWindowService {
   private browserWindow: BrowserWindow | null = null
@@ -33,12 +32,6 @@ export class MainWindowService {
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
-          session: session.fromPartition(
-            `persist:collect-${Date.now()}`, // 每次独立
-            {
-              cache: false, // 采集不需要缓存，避免脏数据
-            }
-          ),
           backgroundThrottling: false
         },
       });
@@ -72,7 +65,7 @@ export class MainWindowService {
     */
   async getHTML() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
-      return { $: undefined, domain: undefined }
+      return { html: undefined, domain: '' }
     }
     const wc = this.browserWindow.webContents
     if (!this.isCheck) {
@@ -105,9 +98,8 @@ export class MainWindowService {
       'document.documentElement.outerHTML'
     )
 
-    const $ = cheerio.load(html)
     const domain = new URL(wc.getURL()).origin
-    return { $, domain }
+    return { html, domain }
   }
   /**
    * 滚动页面

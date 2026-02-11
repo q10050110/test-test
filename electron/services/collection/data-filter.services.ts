@@ -197,11 +197,6 @@ export class DataProcessService {
         const result = ('FBO,FBS').includes(item.salesSchema)
         return result
       }
-      // 最小利润率校验
-      /*       (item: any) => {
-              const result = this.checkRange(item.myProfitMargin, task.targetProfitPercent, undefined);
-              return result;
-            }, */
     ];
     const filteredData = data.filter(item => {
       const results = filters.map(filterFn => filterFn(item));

@@ -9,9 +9,10 @@ export class ParseService {
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
   }
-  async ozonListParser($: cheerio.CheerioAPI | undefined, domain: string) {
+  async ozonListParser(html: any | undefined, domain: string) {
     const data: any[] = []
-    if (!$) return []
+    if (!html) return []
+    const $ = cheerio.load(html)
     const dom = $('#contentScrollPaginator a')
     // 解析DOM，获取商品数据
     dom.each((index, element) => {
@@ -71,7 +72,8 @@ export class ParseService {
     return uniqueData
   }
 
-  async '1688Parse'($: cheerio.CheerioAPI, link: any) {
+  async '1688Parse'(html: any, link: any) {
+    const $ = cheerio.load(html)
     const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
     const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
     const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
@@ -87,5 +89,13 @@ export class ParseService {
     */
   getDataCount() {
     return this.ozonGoodsData.size
+  }
+
+  /** 
+   * 销毁实例
+    */
+  destroy() {
+    this.ozonGoodsData.clear()
+    this.windowService = null
   }
 }

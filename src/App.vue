@@ -16,18 +16,17 @@ const progress = ref<Progress>({
   percent: 0,
   total: '0',
   speed: '0',
-  downloaded: '0'
+  downloaded: '0',
 })
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
-  store.logout()
+  store.logout(false, false)
 })
 
 window.electronAPI.on('app-ready-quit', () => {
   console.log('准备退出啦~~~')
   appStore.setLoading(true)
 })
-
 
 window.electronAPI.on('update-checking', async () => {
   console.log('检测更新啦~~')
@@ -63,7 +62,6 @@ window.electronAPI.on('update-error', async (error) => {
   appStore.setUpdate('hasNew')
   cModalRef.value && cModalRef.value?.closeHandle()
 })
-
 
 window.electronAPI.on('window-close', () => {
   console.log('关闭窗口了')

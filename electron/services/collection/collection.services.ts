@@ -10,7 +10,6 @@ import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
-import { getRate } from '../../utils/index.js'
 import { autoUpGoods } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 
@@ -29,7 +28,6 @@ export class Collection {
   private isCleared = false
   private goodsData: Map<string, any> = new Map()
   private process = 0 // 正在处理的任务
-  private rate = 0 // 汇率
   private writeError = false // 写入错误
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
@@ -49,30 +47,29 @@ export class Collection {
     const safeResolve = (v: any, resolve: Function) => {
       if (settled) return
       settled = true
-      resolve(v)
+      resolve({ filePath: this.task.tableFilePath || '', progress: { ...this.task.progress, current: 0 }, autoResult: this.task.autoResult || undefined })
     }
     const safeReject = (e: any, reject: Function) => {
       if (settled) return
       settled = true
-      reject(e)
+      reject({ filePath: this.task.tableFilePath || '', progress: { ...this.task.progress, current: 0 }, autoResult: this.task.autoResult || undefined })
     }
 
     return new Promise(async (resolve, reject) => {
       try {
-        memoryMonitor.trackBusinessMetrics({
-          taskId: this.task._id,
-          taskName: this.task.taskName,
-          phase: 'start'
-        })
-        await this.resetTask()
-        if (this.task.isUseAutoUpGoods) this.rate = await getRate()
-        this.uuid = randomUUID()
         timer = setInterval(async () => {
           if (this.reason === 'cancel' || this.reason === 'failed') {
             clearInterval(timer)
             safeReject('任务已终止', reject)
           }
         }, 1000)
+        memoryMonitor.trackBusinessMetrics({
+          taskId: this.task._id,
+          taskName: this.task.taskName,
+          phase: 'start'
+        })
+        await this.resetTask()
+        this.uuid = randomUUID()
         this.updateStatus('running')
         this.outputLog('窗口创建成功，任务开始执行')
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
@@ -89,7 +86,7 @@ export class Collection {
           safeReject('任务已被终止', reject)
           return
         }
-        this.task.autoResult = await autoUpGoods(this.task, this.rate, this.goodsData)
+        if (this.task.isUseAutoUpGoods) this.task.autoResult = await autoUpGoods(this.task, this.goodsData)
         await this.reWriteTable()
         this.updateStatus('completed')
         this.outputLog('任务完成')
@@ -101,7 +98,7 @@ export class Collection {
         log.info(`ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`)
         clearInterval(timer)
         this.mainWindowService.destroy()
-        this.clearStatus(true)
+        // this.clearStatus(true)
         // 清理后手动触发 GC
         memoryMonitor.forceGC()
         safeResolve(this.task, resolve)
@@ -124,8 +121,8 @@ export class Collection {
       let scrollAttempts = 0
       const maxScrollAttempts = 10
       let bottomOutCount = 0
-      const { $, domain } = await this.mainWindowService.getHTML()
-      const goodsList = await this.parseService.ozonListParser($, domain || '')
+      const { html, domain } = await this.mainWindowService.getHTML()
+      const goodsList = await this.parseService.ozonListParser(html, domain)
 
       if (goodsList.length) this.processData(goodsList)
       while (this.targetData < targetCount) {
@@ -158,9 +155,9 @@ export class Collection {
           continue
         }
 
-        const { $, domain } = await this.mainWindowService.getHTML()
-        if (!$) return
-        const goodsList = await this.parseService.ozonListParser($, domain)
+        const { html, domain } = await this.mainWindowService.getHTML()
+        if (!html) return
+        const goodsList = await this.parseService.ozonListParser(html, domain)
         if (goodsList.length) {
           scrollAttempts = 0
           this.processData(goodsList)
@@ -355,7 +352,8 @@ export class Collection {
     if (!this.reason && this.uuid === uuid) {
       await this.reWriteTable()
       this.reason = 'failed'
-      await this.clearStatus()
+      // await this.clearStatus()
+      this.process = 0
       this.updateStatus('failed')
       this.outputLog('窗口异常关闭')
       log.info('窗口异常关闭')
@@ -416,7 +414,8 @@ export class Collection {
     if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
     this.reason = 'cancel'
     this.reWriteTable()
-    this.clearStatus(true)
+    // this.clearStatus(true)
+    this.process = 0
     this.mainWindowService.destroy()
     this.updateStatus('cancelled')
     this.outputLog('任务已取消')
@@ -438,7 +437,6 @@ export class Collection {
     this.isCleared = true
     this.process = 0
     this.windowService.destroy()
-    this.dataProcessService.destroy()
     this.windowService.destroy()
     this.excelService.destroy()
     this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)

@@ -9,10 +9,11 @@
   },
   "scripts": {
     "electron": "electron .",
-    "dev": "chcp 65001 > nul && yarn build:electron && cross-env NODE_OPTIONS='--max-old-space-size=4096' NODE_ENV=development VITE_DEV_SERVER_URL=http://localhost:3000 npm-run-all -p vite:dev electron",
+    "dev": "chcp 65001 > nul && yarn build:electron && cross-env NODE_OPTIONS='--max-old-space-size=4096' NODE_ENV=development npm-run-all -p vite:dev electron",
     "vite:dev": "vite",
     "clean": "rimraf dist dist-electron release",
-    "build": "yarn clean && yarn build-only && yarn build:electron && electron-builder",
+    "build": "yarn clean && cross-env NODE_ENV=development vite build --mode development && yarn build-only && yarn build:electron && electron-builder",
+    "build:prod": "yarn clean &&cross-env NODE_ENV=prod  vite build --mode prod && yarn build-only && yarn build:electron && electron-builder",
     "build-only": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",

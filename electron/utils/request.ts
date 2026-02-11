@@ -6,7 +6,7 @@ import { TaskManager } from '../services/collection/task-manager.services.js'
 let isTokenFailure = false
 
 const request = axios.create({
-  baseURL: process.env.NODE_ENV === 'development' ? 'https://test-plus.shopbang.cn' : 'https://test-plus.shopbang.cn',
+  baseURL: process.env.NODE_ENV === 'development' ? 'https://test-plus.shopbang.cn' : 'https://plus.shopbang.cn',
   timeout: 500000
 })
 
@@ -28,8 +28,8 @@ request.interceptors.response.use(response => {
     if (code === 401 || code === 402) {
       if (isTokenFailure) return Promise.reject(message)
       isTokenFailure = true
-      TaskManager.getInstance().stopAllTasks()
       globalBroadcast.broadcast('request', { code, message })
+      TaskManager.getInstance().stopAllTasks()
     }
     return Promise.reject(message)
   }
