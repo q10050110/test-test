@@ -43,7 +43,7 @@ export const createWindow = () => {
       nodeIntegration: false, // 禁止网页使用nodejs的API
       contextIsolation: true, // 启用上下文隔离
       preload: preloadPath,
-      webSecurity: false
+      sandbox: true,
     }
   })
 

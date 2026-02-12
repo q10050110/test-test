@@ -28,8 +28,17 @@ export class ParseService {
       const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
       // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
       const name = $(element).parent().find('a').children('div').children('span').text();
-      const rating = $(element).parent().find('.tsBodyMBold').find('.p6b3_0_6-a4').find('svg').next().text().match(/\d+\.\d+/)?.[0]
-      const reviewCountLabel = $(element).parent().find('.tsBodyMBold').find('.p6b3_0_6-a4').next().find('svg').next().text().replace(/[\s\u2009\u202F]/g, '').match(/(\d+)\s*отзывов/)?.[1] || 0;
+      const str = $(element).parent().text()
+      const ratingMatch = str.match(/\d+\.\d/)
+      const rating = ratingMatch?.[0] ?? 0
+      const cleanedStr = ratingMatch
+        ? str.replace(ratingMatch[0], '')
+        : str
+      const commentMatch = cleanedStr.match(/(\d[\d\s\u202F]*)\s*отзыв/)
+      const reviewCountLabel = commentMatch
+        ? commentMatch[1].replace(/[\s\u202F]/g, '')
+        : 0
+
       const obj = {
         href,
         price: Number(price),
@@ -37,9 +46,9 @@ export class ParseService {
         // discountLabel: isNaN(Number(discount)) ? discount : `${Number(discount).toFixed(2)}%`,
         link,
         cover,
-        name,
+        nameLabel: name,
         id,
-        rating: rating?.slice(0, 3),
+        rating: rating,
         sku: id,
         requestUrl,
         reviewCountLabel

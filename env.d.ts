@@ -4,7 +4,7 @@ interface Window {
     sendMessage: (channel: string, data: any) => void
     onMessage: (channel: string, callback: (data: any) => void) => void
     removeListener: (channel: string) => void
-    invoke: (channel: string, data: any) => Promise<any>
+    invoke: <T>(channel: string, data: any) => Promise<T>
     on: (channel: string, callback: (data: any) => void) => void
     off: (channel: string, callback: () => void) => void
   },

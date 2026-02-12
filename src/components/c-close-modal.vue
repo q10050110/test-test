@@ -1,46 +1,37 @@
 <script setup lang="ts">
-import type { Task } from '@/types/selectGoods'
-const open = ref(false)
-const desc = ref('真的真的要退出吗T_T？')
-const route = useRoute()
-const openHandle = async () => {
-  const isLogin = route.fullPath.includes('/login')
-  if (!isLogin) {
-    const data = await window.electronAPI.invoke('collection-get-all-tasks', {})
-    const isRunning = data.some((item: Task) => item.taskStatus === 'running')
-    if (isRunning) desc.value = '现在退出的话，正在进行的任务会中断哦～'
-  }
-  open.value = true
-}
-
-const cancelHandle = () => {
-  open.value = false
-  desc.value = '真的真的要退出吗T_T？'
-}
+import { useAppStore, useUserStore } from '@/stores'
+const store = useAppStore()
+const userStore = useUserStore()
 
 // 退出
 const clickHandle = () => {
-  cancelHandle()
-  window.electronAPI.sendMessage('app-quit', '')
+  store.closeOpenHandle()
+  store.closeType === 'quit'
+    ? window.electronAPI.sendMessage('app-quit', '')
+    : userStore.logout(true)
 }
-
-defineExpose({
-  openHandle,
-  cancelHandle
-})
 </script>
 
 <template>
-  <a-modal v-model:open="open" @cancel="cancelHandle" class="modal" :footer="null" style="width: 400px;">
+  <a-modal
+    v-model:open="store.closeOpen"
+    @cancel="store.closeOpenHandle()"
+    class="modal"
+    :footer="null"
+    centered
+    style="width: 400px"
+  >
     <div class="container">
       <div class="bg"></div>
       <div class="title">要退出吗？</div>
       <div class="desc">
-        {{ desc }}
+        {{ store.desc }}
       </div>
       <div class="btns">
-        <a-button type="primary" style="margin-right: 20px;" @click="clickHandle()">确认退出</a-button>
-        <a-button @click="cancelHandle">取消</a-button>
+        <a-button type="primary" style="margin-right: 20px" @click="clickHandle()"
+          >确认退出</a-button
+        >
+        <a-button @click="store.closeOpenHandle()">取消</a-button>
       </div>
     </div>
   </a-modal>
@@ -51,18 +42,18 @@ defineExpose({
   .container {
     position: relative;
     height: 200px;
-    padding-top: 70px;
+    padding-top: 60px;
     text-align: center;
     -webkit-app-region: no-drag !important;
 
     .bg {
       position: absolute;
-      background: url('@/assets/window/bg.png') no-repeat;
-      inset: 0;
+      background: url('@/assets/window/bg2.png') no-repeat;
       background-size: contain;
-      top: -84px;
-      clip-path: inset(0 0 146px 0);
-      transform: scale(1.1);
+      inset: 0;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
     .title {

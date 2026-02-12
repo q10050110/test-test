@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { useUserStore } from '@/stores';
-import LayoutHeader from './header.vue';
-import LayoutMenu from './menu.vue';
+import { useAppStore, useUserStore } from '@/stores'
+import LayoutHeader from './header.vue'
+import LayoutMenu from './menu.vue'
 
 const store = useUserStore()
+const appStore = useAppStore()
+const logoutHandle = async () => {
+  appStore.openHandle('logout')
+}
 </script>
 
 <template>
@@ -17,7 +21,7 @@ const store = useUserStore()
           <LayoutMenu />
         </div>
         <div class="user">
-          <img src="@/assets/layout/avatar.png" alt="">
+          <img src="@/assets/layout/avatar.png" alt="" />
           <div class="info">
             <a-dropdown placement="bottom">
               <div class="username">
@@ -26,7 +30,7 @@ const store = useUserStore()
               </div>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item @click="store.logout(true)">退出登录</a-menu-item>
+                  <a-menu-item @click="logoutHandle">退出登录</a-menu-item>
                 </a-menu>
               </template>
             </a-dropdown>
@@ -84,7 +88,6 @@ const store = useUserStore()
             align-items: center;
 
             .icon {
-
               &::before {
                 content: '';
                 display: inline-block;

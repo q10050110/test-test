@@ -20,7 +20,7 @@ const progress = ref<Progress>({
 })
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
-  store.logout(false, false)
+  store.logout(false)
 })
 
 window.electronAPI.on('app-ready-quit', () => {
@@ -66,7 +66,7 @@ window.electronAPI.on('update-error', async (error) => {
 
 window.electronAPI.on('window-close', () => {
   console.log('关闭窗口了')
-  cCloseModalRef.value && cCloseModalRef.value.openHandle()
+  appStore.openHandle('quit')
 })
 
 const onResize = debounce(() => {

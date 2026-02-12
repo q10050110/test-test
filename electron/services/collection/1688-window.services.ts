@@ -67,7 +67,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: true,
+          show: false,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,

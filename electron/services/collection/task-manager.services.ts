@@ -451,6 +451,7 @@ export class TaskManager {
       log.error('重置任务状态失败:', error);
     }
     this.tasks.clear()
+    this.filePathList.clear()
     log.info(this.tasks.size, '已清空所有队列');
   }
 }

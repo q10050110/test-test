@@ -180,7 +180,7 @@ export class Collection {
       let baseDataList = await this.dataProcessService.getBaseData(goodsList)
       this.outputLog(`获取商品数据中`)
       this.process += baseDataList.length
-      const filterDataList = await this.dataProcessService.filterData(baseDataList, this.task)
+      const filterDataList = !this.task.aiSelectType ? await this.dataProcessService.aiFilterData(baseDataList) : await this.dataProcessService.filterData(baseDataList, this.task)
       this.outputLog(`筛选商品条件中`)
       baseDataList.filter(item => !filterDataList.map(item => item.id).includes(item.id)).forEach(async (item, i) => {
         await new Promise(resolve => setTimeout(() => {

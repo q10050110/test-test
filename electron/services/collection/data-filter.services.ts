@@ -29,7 +29,7 @@ export class DataProcessService {
 
       if (res.data) {
         res.data.map((item: any) => ({ ...item, ...item.data })).forEach((item: any) => {
-          item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD HH:mm:ss')
+          item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD')
           item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
           item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
           item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
@@ -97,6 +97,58 @@ export class DataProcessService {
     } catch (error) {
       return []
     }
+  }
+
+  /** 
+   * AI过滤
+    */
+  async aiFilterData(data: any[]) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return [];
+    }
+
+    const filters = [
+      // 上架时间范围校验
+      (item: any) => {
+        const result = this.checkRange(item.releaseDate, undefined, 365)
+        return result
+      },
+      // 跟卖人数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sellerNumber, undefined, 30)
+        return result
+      },
+      // 月销售动态范围校验
+      (item: any) => {
+        console.log(item.salesDynamics, item.salesDynamics < 1, '不是吧哥们')
+        const result = this.checkRange(item.salesDynamics, 1)
+        return result
+      },
+      // 广告份额范围校验
+      (item: any) => {
+        const result = this.checkRange(item.drr, undefined, 15)
+        return result
+      },
+      // 销量范围校验
+      (item: any) => {
+        const rules = [
+          { max: 500, minSold: 500 },
+          { max: 1000, minSold: 150 },
+          { max: 5000, minSold: 30 },
+          { max: 10000, minSold: 15 }
+        ]
+
+        const rule = rules.find(r => item.price <= r.max)
+        return this.checkRange(item.soldCount, rule?.minSold || 5)
+      }
+    ]
+
+    const filteredData = data.filter(item => {
+      const results = filters.map(filterFn => filterFn(item));
+      const overallResult = results.every(r => r);
+      return overallResult;
+    });
+    return filteredData
   }
   /** 
    * 数据过滤

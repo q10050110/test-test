@@ -106,7 +106,7 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
   listTimer = setTimeout(() => (listTimer = undefined), 2000)
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  const data = await window.electronAPI.invoke('collection-get-all-tasks', toRaw(params.value))
+  const data = await window.electronAPI.invoke<any>('collection-get-all-tasks', toRaw(params.value))
   tableData.value = data.list
   total.value = data.total
 }
@@ -142,7 +142,7 @@ const startTask = async (task: Task, isThrottle = false) => {
   }
   const data = toRaw(task)
   if (data.progress) data.progress = toRaw(data.progress)
-  const { code, message } = await window.electronAPI.invoke('collection-create-and-start', {
+  const { code, message } = await window.electronAPI.invoke<any>('collection-create-and-start', {
     data,
     type: 'execute',
   })
@@ -186,7 +186,7 @@ const copyHandle = async (task: Task) => {
   }, 1000)
   task.lastRunningTime = undefined
   const newTask = JSON.parse(JSON.stringify(task))
-  const { code, message } = await window.electronAPI.invoke('collection-copy', {
+  const { code, message } = await window.electronAPI.invoke<any>('collection-copy', {
     data: toRaw(newTask),
   })
   await getTaskList(undefined, true)
@@ -195,7 +195,7 @@ const copyHandle = async (task: Task) => {
 }
 // 取消任务
 const cancelTask = async (taskId: string) => {
-  const { code, message } = await window.electronAPI.invoke('collection-cancel-task', taskId)
+  const { code, message } = await window.electronAPI.invoke<any>('collection-cancel-task', taskId)
   if (code === 200) return feedback.success('取消任务成功')
   feedback.error(message)
 }
@@ -209,7 +209,7 @@ const deleteTask = async () => {
   if (isAlive) return feedback.error('请将执行、待执行的任务终止后，在删除！')
   const res = await feedback.confirm('确定要删除吗，删除以后数据不可再恢复？')
   if (!res) return
-  const { code, message } = await window.electronAPI.invoke(
+  const { code, message } = await window.electronAPI.invoke<any>(
     'collection-delete-task',
     toRaw(selectData.value),
   )
@@ -232,7 +232,7 @@ const getProgress = async (data?: any) => {
 // 获取物流信息
 const logisticsSimpleList = ref<LogisticsSimpleList>([])
 const getLogisticsSimpleList = async () => {
-  const { data, code } = await window.electronAPI.invoke('get-logistics-list', {})
+  const { data, code } = await window.electronAPI.invoke<any>('get-logistics-list', {})
   if (code !== 400) return feedback.error('获取物流信息失败')
   logisticsSimpleList.value = data
 }
@@ -246,7 +246,7 @@ const formatDate = (date: string) => {
 // 获取店铺信息
 const shopList = ref<ShopList>([])
 const getShopList = async () => {
-  const { data, code } = await window.electronAPI.invoke('get-shop-list', {})
+  const { data, code } = await window.electronAPI.invoke<any>('get-shop-list', {})
   if (code !== 400) return feedback.error('获取店铺信息失败')
   shopList.value = data
 }
@@ -255,7 +255,7 @@ getShopList()
 // 获取配置信息
 const configList = ref<ConfigList>([])
 const getConfigList = async () => {
-  const { data, code } = await window.electronAPI.invoke('get-config-list', {})
+  const { data, code } = await window.electronAPI.invoke<any>('get-config-list', {})
   if (code !== 400) return feedback.error('获取配置信息失败')
   configList.value = data.data
 }

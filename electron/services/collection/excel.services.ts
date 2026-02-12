@@ -19,7 +19,7 @@ export class ExcelService {
         { header: '商品ID', key: 'id', width: 15 },
         { header: '商品链接', key: 'link', width: 30 },
         { header: '商品主图', key: 'cover', width: 20 },
-        { header: '商品名称', key: 'name', width: 30 },
+        { header: '商品名称', key: 'nameLabel', width: 30 },
         { header: '商品名称（中文）', key: 'chineseName', width: 30 },
         { header: '商品类目', key: 'category3', width: 20 },
         { header: '类目佣金（RFBS）', key: 'commissionRfbs', width: 15 },
@@ -75,7 +75,14 @@ export class ExcelService {
         { header: '对方利润（元）', key: 'otherProfit', width: 15 },
         { header: '我的售价（元）', key: 'resMoney', width: 15 },
         { header: '我的利润率（%）', key: 'myProfitPercent', width: 15 },
-        { header: '我的利润（元）', key: 'myProfit', width: 15 }
+        { header: '我的利润（元）', key: 'myProfit', width: 15 },
+        // 对方信息
+        { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
+        { header: '对万其他费用（元）', key: 'otherElsePrice', width: 15 },
+        { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
+        { header: '对方总成本（元）', key: 'otherCost', width: 15 },
+        { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
+        { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
       ];
 
       // 首先设置列定义
@@ -98,7 +105,6 @@ export class ExcelService {
         worksheet.getCell('R1').value = '销售数据';
         worksheet.getCell('AJ1').value = '尺寸重量';
         worksheet.getCell('AO1').value = '我的定价';
-
         // 合并单元格
         this.excel.mergeCells('A1:Q1');
         this.excel.mergeCells('R1:AI1');
@@ -113,6 +119,12 @@ export class ExcelService {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'fff3ca' }
+          },
+          border: {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
           }
         });
 
@@ -128,7 +140,13 @@ export class ExcelService {
           fill: {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'd9d9d9' }
+            fgColor: { argb: 'd9d9d9' },
+          },
+          border: {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
           }
         });
 

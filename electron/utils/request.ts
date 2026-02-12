@@ -13,7 +13,7 @@ const request = axios.create({
 
 request.interceptors.request.use(async config => {
   const token = operationStore.get('token')
-  if (isTokenFailure && !config.url?.includes('getUserInfo')) return Promise.reject(new Error('token失效'))
+  if (isTokenFailure && !config.url?.includes('login')) return Promise.reject(new Error('token失效'))
   if (token && config.data) config.data.token = token
   // if (config.url?.includes('goodsFilter')) console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
   return config

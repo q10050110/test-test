@@ -69,8 +69,21 @@ const initData = ref<Task>({
   followMax: undefined,
   token: '',
   unit: undefined,
+  aiSelectType: 0,
 })
-
+const tooltipLines = [
+  'A选品条件:',
+  '上架时间 < 12个月',
+  '跟卖数量 < 30',
+  '销售动态 > 0',
+  '广告份额 < 15%',
+  '月销量条件:',
+  '0 - 500卢布: >500件',
+  '501 - 1000卢布: >150件',
+  '1001 - 5000卢布: >30件',
+  '5001 - 10000卢布: >15件',
+  '10001卢布以上:>5件',
+]
 const formData = ref<Task>({ ...initData.value })
 
 const rules: Record<string, Rule[]> = {
@@ -278,7 +291,7 @@ const saveHandle = async (type: 'save' | 'execute') => {
 
     const { code, message } =
       type === 'execute'
-        ? await window.electronAPI.invoke('collection-create-and-start', { data, type })
+        ? await window.electronAPI.invoke<any>('collection-create-and-start', { data, type })
         : await window.electronAPI.invoke('collection-create', { data: data, type })
 
     if (code === 200) {
@@ -368,6 +381,27 @@ defineExpose({
                     </label>
                   </template>
                   <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required name="targetCount">
+                  <template #label>
+                    <label class="flex-center">
+                      目标数量
+                      <a-tooltip
+                        title="执行任务需要导出的商品数量，数量越大，则耗时越长。若长时间未能找到符合条件的商品，任务可能自动结束，导出的商品数量可能小于该值。"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-input-number
+                    placeholder="请输入目标数量"
+                    v-model:value="formData.targetCount"
+                    :min="1"
+                  />
                 </a-form-item>
               </a-col>
             </a-row>
@@ -537,394 +571,372 @@ defineExpose({
           <section class="form-section">
             <h3 class="section-title">选品条件</h3>
             <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item required name="targetCount">
-                  <template #label>
-                    <label class="flex-center">
-                      目标数量
-                      <a-tooltip
-                        title="执行任务需要导出的商品数量，数量越大，则耗时越长。若长时间未能找到符合条件的商品，任务可能自动结束，导出的商品数量可能小于该值。"
-                      >
+              <a-col :span="24">
+                <a-form-item label="选品方式" required>
+                  <a-radio-group v-model:value="formData.aiSelectType" style="width: 100%">
+                    <a-radio :value="0"
+                      >AI选品
+                      <a-tooltip>
+                        <template #title>
+                          <div v-for="(line, index) in tooltipLines" :key="index">{{ line }}</div>
+                        </template>
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
-                    </label>
-                  </template>
-                  <a-input-number
-                    placeholder="请输入目标数量"
-                    v-model:value="formData.targetCount"
-                    style="width: 100%"
-                    :min="1"
-                  />
-                </a-form-item>
-              </a-col>
-              <!--               <a-col :span="12">
-                <a-form-item :required="formData.isUseAutoUpGoods" name="targetProfitPercent">
-                  <template #label>
-                    <label class="flex-center">
-                      利润率大于
-                      <a-tooltip
-                        title="利润率计算公式：（1-（货源成本+国内运费+其他费用+国际物流费+平台佣金+平台配送费）/ 当前售价）* 100%。注意，部分商品的平台佣金、国际物流费用等费用，无法正常获取时，将按0元计算">
-                        <QuestionCircleOutlined class="info-icon" />
-                      </a-tooltip>
-                    </label>
-                  </template>
-                  <a-input-number placeholder="请输入利润率" v-model:value="formData.targetProfitPercent" style="width: 100%"
-                    :precision="2" />
-                </a-form-item>
-              </a-col> -->
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="品牌类型">
-                  <a-radio-group v-model:value="formData.brandType" style="width: 100%">
-                    <a-radio value="0">有品牌</a-radio>
-                    <a-radio value="1">无品牌</a-radio>
-                    <a-radio value="2">不限</a-radio>
+                    </a-radio>
+                    <a-radio :value="1">自定义</a-radio>
                   </a-radio-group>
                 </a-form-item>
               </a-col>
             </a-row>
-          </section>
-
-          <!-- 范围输入组 -->
-          <section class="form-section">
-            <h3 class="section-title">商品筛选条件</h3>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="月销量范围">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.soldCountMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.soldCountMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="月销售额范围">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.gmvSumMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-before="₽"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.gmvSumMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-before="₽"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="商品售价">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小价格"
-                      v-model:value="formData.salePriceMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-before="₽"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大价格"
-                      v-model:value="formData.salePriceMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-before="₽"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="重量范围">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小重量"
-                      v-model:value="formData.weightMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="g"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大重量"
-                      v-model:value="formData.weightMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="g"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="上架时间">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小天数"
-                      v-model:value="formData.upGoodsTimeMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大天数"
-                      v-model:value="formData.upGoodsTimeMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="月销售动态">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.monthDynamicsMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.monthDynamicsMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="广告份额">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.adFeeMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.adFeeMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="参与促销天数">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小天数"
-                      v-model:value="formData.promotionDayMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大天数"
-                      v-model:value="formData.promotionDayMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="参与促销折扣">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.promotionDiscountMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.promotionDiscountMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="促销活动的转换率">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.promotionDynamicsMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.promotionDynamicsMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="付费推广天数">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小天数"
-                      v-model:value="formData.promoteDayMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大天数"
-                      v-model:value="formData.promoteDayMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="天"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="商品卡片浏览量">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.viewsMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.viewsMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="商品卡片加购率">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.cardRateMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.cardRateMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="搜索和目录加购率">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.showRateMin"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.showRateMax"
-                      style="width: calc(50% - 8px)"
-                      :precision="2"
-                      addon-after="%"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="发货模式">
-                  <a-select
-                    placeholder="请选择发货模式"
-                    v-model:value="formData.salesSchema"
-                    style="width: 80%"
-                    allowClear
-                  >
-                    <a-select-option value="FBO">FBO</a-select-option>
-                    <a-select-option value="FBS">FBS</a-select-option>
-                    <a-select-option value="FBO,FBS">FBO | FBS</a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="跟卖人数">
-                  <div class="range-input-wrapper">
-                    <a-input-number
-                      placeholder="最小值"
-                      v-model:value="formData.followMin"
-                      style="width: calc(50% - 8px)"
-                    />
-                    <span class="separator">至</span>
-                    <a-input-number
-                      placeholder="最大值"
-                      v-model:value="formData.followMax"
-                      style="width: calc(50% - 8px)"
-                    />
-                  </div>
-                </a-form-item>
-              </a-col>
+            <a-row v-if="formData.aiSelectType === 1">
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="月销量范围">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.soldCountMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.soldCountMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="月销售额范围">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.gmvSumMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-before="₽"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.gmvSumMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-before="₽"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="商品售价">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小价格"
+                        v-model:value="formData.salePriceMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-before="₽"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大价格"
+                        v-model:value="formData.salePriceMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-before="₽"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="重量范围">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小重量"
+                        v-model:value="formData.weightMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="g"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大重量"
+                        v-model:value="formData.weightMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="g"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="上架时间">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小天数"
+                        v-model:value="formData.upGoodsTimeMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大天数"
+                        v-model:value="formData.upGoodsTimeMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="月销售动态">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.monthDynamicsMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.monthDynamicsMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="广告份额">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.adFeeMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.adFeeMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="参与促销天数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小天数"
+                        v-model:value="formData.promotionDayMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大天数"
+                        v-model:value="formData.promotionDayMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="参与促销折扣">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.promotionDiscountMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.promotionDiscountMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="促销活动的转换率">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.promotionDynamicsMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.promotionDynamicsMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="付费推广天数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小天数"
+                        v-model:value="formData.promoteDayMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大天数"
+                        v-model:value="formData.promoteDayMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="天"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="商品卡片浏览量">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.viewsMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.viewsMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="商品卡片加购率">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.cardRateMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.cardRateMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="搜索和目录加购率">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.showRateMin"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.showRateMax"
+                        style="width: calc(50% - 8px)"
+                        :precision="2"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="发货模式">
+                    <a-select
+                      placeholder="请选择发货模式"
+                      v-model:value="formData.salesSchema"
+                      style="width: 80%"
+                      allowClear
+                    >
+                      <a-select-option value="FBO">FBO</a-select-option>
+                      <a-select-option value="FBS">FBS</a-select-option>
+                      <a-select-option value="FBO,FBS">FBO | FBS</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="跟卖人数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.followMin"
+                        style="width: calc(50% - 8px)"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.followMax"
+                        style="width: calc(50% - 8px)"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="24">
+                  <a-form-item label="品牌类型">
+                    <a-radio-group v-model:value="formData.brandType" style="width: 100%">
+                      <a-radio value="0">有品牌</a-radio>
+                      <a-radio value="1">无品牌</a-radio>
+                      <a-radio value="2">不限</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
+                </a-col>
+              </a-row>
             </a-row>
           </section>
         </a-form>
@@ -1059,7 +1071,7 @@ defineExpose({
   }
 
   :deep(.ant-col) {
-    width: 100%;
+    width: 100% !important;
   }
 }
 

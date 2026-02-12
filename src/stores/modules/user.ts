@@ -30,9 +30,7 @@ export const useUserStore = defineStore('user', () => {
 
   const removeToken = async () => {
     token.value = undefined
-    await window.electronStore.delete('token')
     user.value = undefined
-    await window.electronStore.delete('user')
   }
 
   const getToken = async () => {
@@ -41,10 +39,10 @@ export const useUserStore = defineStore('user', () => {
     return token.value
   }
 
-  const logout = async (resetTask: boolean = false, isLogoutAPI = true) => {
+  const logout = async (resetTask: boolean = false) => {
     if (resetTask) await window.electronAPI.invoke('collection-cancel-all-task', {})
-    if (isLogoutAPI) await logoutAPI({ token: token.value! })
     await removeToken()
+    await logoutAPI({ token: token.value! })
     router.push(`/login?redirect=${router.currentRoute.value.path}`)
   }
 
