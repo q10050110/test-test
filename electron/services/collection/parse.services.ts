@@ -3,7 +3,7 @@ import { MainWindowService } from './main-window.services.js'
 import log from '../../log/index.js'
 
 export class ParseService {
-  protected ozonGoodsData: Map<string, any> = new Map()
+  protected ozonGoodsData: Set<string> = new Set()
   private windowService: MainWindowService | null = null
 
   constructor(windowService: MainWindowService) {
@@ -51,10 +51,9 @@ export class ParseService {
     })
 
     const uniqueData: any[] = []
-
     for (const item of data) {
       if (this.ozonGoodsData.has(item.id)) continue
-      this.ozonGoodsData.set(item.id, item)
+      this.ozonGoodsData.add(item.id)
       uniqueData.push(item)
     }
 
@@ -74,16 +73,22 @@ export class ParseService {
 
   async '1688Parse'(html: any, link: any) {
     const $ = cheerio.load(html)
-    const str = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().attr('data-renderkey')?.split('_')
-    const price1 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
-    const price2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').first().children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
-    const link1688 = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+    let str, price1, price2, link1688, cover2 = ''
+    const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')
+    goodsList.each((index, element) => {
+      const isAd = $(element).find('.mainImgIcon--Y8zt2ArJ').length > 0
+      if (isAd) return
+      str = $(element).attr('data-renderkey')?.split('_')
+      price1 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
+      price2 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
+      link1688 = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+      cover2 = $(element).find('.mainImg--GT1EYFGa').attr('src') || ''
+      return false
+    })
     const price = `${price1}${price2}`
     const sourcePrice = isNaN(Number(price)) ? 0 : price
-    const cover2 = $('.offerListLayoutWrapper--o0LXuuFm').children('div').find('.mainImg--GT1EYFGa').attr('src')
     return { link1688, sourcePrice, cover2 }
   }
-
   /** 
    * 获取商品数量
     */

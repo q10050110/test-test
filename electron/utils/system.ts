@@ -51,7 +51,7 @@ export class SysTemUtils {
    */
   static getLogDirectory(): string {
     try {
-      const installDir = dirname(process.execPath);
+      const installDir = app.getPath('userData')
       return join(installDir, 'logs');
     } catch (error) {
       console.error('获取日志目录失败:', error);

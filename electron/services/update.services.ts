@@ -82,7 +82,6 @@ export class UpdaterManager {
     })
 
     autoUpdater.on('download-progress', progress => {
-      log.info(progress, '下载进度')
       operationStore.set('update-status', 'download')
       this.send('update-download-progress', {
         percent: Math.floor(progress.percent),

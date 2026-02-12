@@ -125,7 +125,7 @@ export class MainWindowService {
             return;
           }
 
-          const duration = 600; // 滚动时长 ms
+          const duration = 3000; // 滚动时长 ms
           const startTime = performance.now();
 
           function step(now) {

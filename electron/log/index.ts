@@ -12,7 +12,7 @@ class LoggerManager {
   private logPath: string;
 
   private constructor() {
-    this.installDir = path.dirname(process.execPath);
+    this.installDir = app.getPath('userData');
     this.logPath = path.join(this.installDir, 'logs');
   }
 

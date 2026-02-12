@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useAppStore } from '@/stores';
-import type { Progress } from '@/types';
-import dayjs from 'dayjs';
+import { useAppStore } from '@/stores'
+import type { Progress } from '@/types'
+import dayjs from 'dayjs'
 defineProps<{
   progress?: Progress
 }>()
@@ -16,12 +16,11 @@ const installHandle = async () => {
   store.setUpdate('isInstall')
   await setTimeout(() => {
     window.electronAPI.sendMessage('quit-and-install-app', {})
-  }, 2000)
+  }, 500)
 }
 const closeHandle = () => {
   open.value = false
 }
-
 
 const openHandle = () => {
   open.value = true
@@ -46,10 +45,10 @@ defineExpose({
 </script>
 
 <template>
-  <a-modal v-model:open="open" @cancel="open = false" style="width: 400px;" :footer="null">
+  <a-modal v-model:open="open" @cancel="open = false" style="width: 400px" :footer="null">
     <div v-if="store.updateStatus === 'hasUpdate'">
       <div class="c-modal">
-        <div class="icon"> <img src="@/assets/window/update.png" /></div>
+        <div class="icon"><img src="@/assets/window/update.png" /></div>
         <div class="title">发现新版本</div>
         <div class="version">
           <div>V{{ store.updateInfo?.version }}可用</div>
@@ -60,7 +59,9 @@ defineExpose({
       </div>
 
       <a-row justify="center">
-        <a-button type="primary" style="margin-right: 20px;" @click="updateHandle">立即更新</a-button>
+        <a-button type="primary" style="margin-right: 20px" @click="updateHandle"
+          >立即更新</a-button
+        >
         <a-button type="default" @click="open = false">稍后再说</a-button>
       </a-row>
     </div>
@@ -81,9 +82,11 @@ defineExpose({
       </div>
     </div>
     <div v-if="store.updateStatus === 'downloaded'">
-      <img src="@/assets/window/download.png" alt="" style="margin-bottom: 20px;">
+      <img src="@/assets/window/download.png" alt="" style="margin-bottom: 20px" />
       <a-row justify="center">
-        <a-button type="primary" style="margin-right: 20px;" @click="installHandle">立即安装</a-button>
+        <a-button type="primary" style="margin-right: 20px" @click="installHandle"
+          >立即安装</a-button
+        >
         <a-button type="default" @click="open = false">稍后再说</a-button>
       </a-row>
     </div>
@@ -150,7 +153,6 @@ defineExpose({
   }
 }
 
-
 .update {
   display: flex;
   align-items: center;
@@ -184,7 +186,7 @@ defineExpose({
   @for $i from 1 through 12 {
     .loading-ring span:nth-child(#{$i}) {
       transform: rotate(#{($i - 1) * 30}deg) translate(20px);
-      animation-delay:#{($i - 1) * 0.1}s;
+      animation-delay: #{($i - 1) * 0.1}s;
     }
   }
 
@@ -253,9 +255,7 @@ defineExpose({
   }
 }
 
-
 @keyframes blink {
-
   0%,
   100% {
     opacity: 0.2;
