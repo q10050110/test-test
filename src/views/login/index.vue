@@ -59,7 +59,8 @@ const loginHandle = async () => {
   const { data, code } = await loginAPI(formData.value)
   if (code === 0) {
     changeHandle()
-    store.setToken(data.token)
+    await store.setToken(data.token)
+    await window.electronAPI.invoke('collection-cancel-all-task', {})
     feedback.success('登录成功！')
     router.push('/')
     return

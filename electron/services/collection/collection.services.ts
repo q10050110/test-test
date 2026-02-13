@@ -186,7 +186,7 @@ export class Collection {
         await new Promise(resolve => setTimeout(() => {
           if (this.reason || uuid !== this.uuid) return
           this.process--
-          this.outputLog(`完成商品${item.name}的处理`)
+          this.outputLog(`完成商品${item.nameLabel}的处理`)
           resolve(true)
         }, i * 50))
       })

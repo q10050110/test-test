@@ -28,17 +28,12 @@ export class ParseService {
       const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
       // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
       const name = $(element).parent().find('a').children('div').children('span').text();
-      const str = $(element).parent().text()
-      const ratingMatch = str.match(/\d+\.\d/)
-      const rating = ratingMatch?.[0] ?? 0
-      const cleanedStr = ratingMatch
-        ? str.replace(ratingMatch[0], '')
-        : str
-      const commentMatch = cleanedStr.match(/(\d[\d\s\u202F]*)\s*отзыв/)
-      const reviewCountLabel = commentMatch
-        ? commentMatch[1].replace(/[\s\u202F]/g, '')
+      const str = $(element).parent().find('.tsBodyMBold').text().replace(/\u202F/g, ' ')
+      const match = str.match(/\s*([0-5]\.\d{1})\s*(\d[\d\s]*)\s*/i)
+      const rating = match ? match[1] : 0
+      const reviewCountLabel = match
+        ? match[2].replace(/\s/g, '')
         : 0
-
       const obj = {
         href,
         price: Number(price),
@@ -48,12 +43,11 @@ export class ParseService {
         cover,
         nameLabel: name,
         id,
-        rating: rating,
+        rating,
         sku: id,
         requestUrl,
         reviewCountLabel
       }
-
       if (id) {
         data.push(obj)
       }
@@ -86,6 +80,7 @@ export class ParseService {
     const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')
     goodsList.each((index, element) => {
       const isAd = $(element).find('.mainImgIcon--Y8zt2ArJ').length > 0
+      console.log(isAd, '是广告吗')
       if (isAd) return
       str = $(element).attr('data-renderkey')?.split('_')
       price1 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').text()

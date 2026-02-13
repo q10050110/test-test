@@ -39,8 +39,7 @@ export const useUserStore = defineStore('user', () => {
     return token.value
   }
 
-  const logout = async (resetTask: boolean = false) => {
-    if (resetTask) await window.electronAPI.invoke('collection-cancel-all-task', {})
+  const logout = async () => {
     await removeToken()
     await logoutAPI({ token: token.value! })
     router.push(`/login?redirect=${router.currentRoute.value.path}`)

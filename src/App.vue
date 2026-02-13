@@ -4,13 +4,11 @@ import { useAppStore, useUserStore } from './stores'
 import feedback from './utils/feedback'
 import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
-import type CCloseModal from './components/c-close-modal.vue'
 import type { Progress } from './types'
 
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
-const cCloseModalRef = ref<InstanceType<typeof CCloseModal>>()
 
 const progress = ref<Progress>({
   percent: 0,
@@ -20,7 +18,7 @@ const progress = ref<Progress>({
 })
 window.electronAPI.on('request', (data) => {
   feedback.error(data.message)
-  store.logout(false)
+  store.logout()
 })
 
 window.electronAPI.on('app-ready-quit', () => {
@@ -87,7 +85,7 @@ onMounted(async () => {
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
     <c-modal ref="cModalRef" :progress="progress" />
-    <c-close-modal ref="cCloseModalRef" />
+    <c-close-modal />
   </a-config-provider>
 </template>
 

@@ -151,6 +151,7 @@ const startTask = async (task: Task, isThrottle = false) => {
 }
 // 批量开始任务
 const isStart = ref(false)
+const route = useRoute()
 const batchStartHandle = async () => {
   if (isStart.value) return feedback.error('批量执行任务中，请勿频繁点击')
   if (!selectData.value?.length || !tableData.value?.length) {
@@ -168,7 +169,7 @@ const batchStartHandle = async () => {
   for (const item of selectData.value) {
     const task = tableData.value?.find((task) => task._id === item)
     if (!task) continue
-
+    if (route.fullPath.includes('login')) return
     await startTask(task)
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }

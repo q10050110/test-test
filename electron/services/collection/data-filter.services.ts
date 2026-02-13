@@ -120,7 +120,6 @@ export class DataProcessService {
       },
       // 月销售动态范围校验
       (item: any) => {
-        console.log(item.salesDynamics, item.salesDynamics < 1, '不是吧哥们')
         const result = this.checkRange(item.salesDynamics, 1)
         return result
       },

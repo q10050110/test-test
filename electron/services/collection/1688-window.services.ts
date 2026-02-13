@@ -67,7 +67,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: false,
+          show: true,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -87,6 +87,7 @@ export class WindowService {
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
           try {
             let sortText: string | undefined;
+            sourceType = sourceType === '0' ? undefined : sourceType
             if (sourceType) {
               sortText = sourceType === '1' ? '价格' : '销量';
             }

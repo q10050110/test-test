@@ -6,9 +6,7 @@ const userStore = useUserStore()
 // 退出
 const clickHandle = () => {
   store.closeOpenHandle()
-  store.closeType === 'quit'
-    ? window.electronAPI.sendMessage('app-quit', '')
-    : userStore.logout(true)
+  store.closeType === 'quit' ? window.electronAPI.sendMessage('app-quit', '') : userStore.logout()
 }
 </script>
 
@@ -23,7 +21,9 @@ const clickHandle = () => {
   >
     <div class="container">
       <div class="bg"></div>
-      <div class="title">要退出吗？</div>
+      <div class="title">
+        {{ store.closeType === 'quit' ? '确定要退出软件吗?' : '确定要退出登录吗?' }}
+      </div>
       <div class="desc">
         {{ store.desc }}
       </div>
