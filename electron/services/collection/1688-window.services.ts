@@ -87,13 +87,12 @@ export class WindowService {
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
           try {
             let sortText: string | undefined;
-            sourceType = sourceType === '0' ? undefined : sourceType
             if (sourceType) {
               sortText = sourceType === '1' ? '价格' : '销量';
             }
             await new Promise((res) => setTimeout(res, 5000));
             // 执行排序逻辑
-            await win?.webContents.executeJavaScript(`
+            if (sourceType !== '0') await win?.webContents.executeJavaScript(`
               new Promise((resolve, reject) => {
                 const sortText = ${JSON.stringify(sortText)};
                 const list = document.querySelectorAll('.sortItem--X1Plgn6V');
