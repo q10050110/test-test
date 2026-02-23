@@ -80,7 +80,7 @@ export class ParseService {
     return uniqueData
   }
 
-  async '1688Parse'(html: any, link: any) {
+  async '1688Parse'(html: any) {
     const $ = cheerio.load(html)
     let str, price1, price2, link1688, cover2 = ''
     const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')

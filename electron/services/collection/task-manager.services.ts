@@ -296,7 +296,7 @@ export class TaskManager {
     this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId);
-      console.log(task, '看看是啥')
+
       if (!task) return reject('任务不存在');
 
       const taskInfo = task!.getTaskInfo();

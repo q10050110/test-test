@@ -28,6 +28,7 @@ export class Collection {
   private isCleared = false
   private goodsData: Map<string, any> = new Map()
   private process = 0 // 正在处理的任务
+  private goodsNum = 0 // 获取商品的数量
   private writeError = false // 写入错误
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
@@ -35,11 +36,11 @@ export class Collection {
     this.task = task
     this.mainWindow = mainWindow
     this.mainWindowService = new MainWindowService(this.closeHandle)
-    this.windowService = new WindowService()
     this.taskQueueService = new TaskQueueService(this.taskHandle)
     this.excelService = new ExcelService(task.taskName)
     this.dataProcessService = new DataProcessService()
     this.parseService = new ParseService(this.mainWindowService)
+    this.windowService = new WindowService(this.parseService)
   }
   run() {
     let timer: NodeJS.Timeout | undefined
@@ -175,22 +176,25 @@ export class Collection {
    * 处理获取到的数据
     */
   private async processData(goodsList: any[]) {
-    let uuid = this.uuid
     try {
       let baseDataList = await this.dataProcessService.getBaseData(goodsList)
       this.outputLog(`获取商品数据中`)
-      this.process += baseDataList.length
+      if (this.reason === undefined) this.process += baseDataList.length
       const filterDataList = !this.task.aiSelectType ? await this.dataProcessService.aiFilterData(baseDataList) : await this.dataProcessService.filterData(baseDataList, this.task)
       this.outputLog(`筛选商品条件中`)
-      baseDataList.filter(item => !filterDataList.map(item => item.id).includes(item.id)).forEach(async (item, i) => {
-        await new Promise(resolve => setTimeout(() => {
-          if (this.reason || uuid !== this.uuid) return
+      const data = baseDataList.filter(item => !filterDataList.map(item => item.id).includes(item.id))
+      for (const item of data) {
+        if (this.reason === undefined && this.targetData < this.task.targetCount) {
+          await new Promise(resolve => setTimeout(resolve, 50))
           this.process--
-          this.outputLog(`完成商品${item.name}的处理`)
-          resolve(true)
-        }, i * 50))
-      })
-      if (filterDataList.length) {
+          this.outputLog(`完成商品${item.nameLabel}的处理`)
+        } else {
+          log.info(this.reason)
+          this.process = 0
+          break
+        }
+      }
+      if (filterDataList.length && (this.reason !== 'cancel' && this.reason !== 'failed') && this.targetData < this.task.targetCount) {
         this.taskQueueService.addTask(filterDataList)
         this.taskQueueService.startProcessing()
         this.outputLog('处理符合筛选条件的商品中')
@@ -246,7 +250,7 @@ export class Collection {
     if (this.uuid !== uuid) return
     this.task.progress = {
       current: this.process < 0 ? 0 : this.process,
-      total: this.parseService.getDataCount(),
+      total: this.isCleared ? this.goodsNum : this.parseService.getDataCount(),
       totalCount: this.targetData
     }
 
@@ -271,6 +275,7 @@ export class Collection {
     const safeReject = (v: any, reject: Function) => {
       if (settled) return
       settled = true
+      clearInterval(timer)
       reject(v)
     }
     return new Promise(async (resolve, reject) => {
@@ -278,7 +283,6 @@ export class Collection {
         timer = setInterval(() => {
           countDown++
           if (this.reason === 'cancel' || this.reason === 'failed' || countDown >= maxTimer) {
-            clearInterval(timer)
             if (this.uuid === uuid) this.process--
             safeReject(new Error('任务超时'), reject)
           }
@@ -297,9 +301,7 @@ export class Collection {
           return
         }
         log.info(`获取1688数据:${task.id}`)
-        const $ = await this.windowService.createWindow(this.task.sourceType, task.cover)
-
-        const { link1688, sourcePrice, cover2 } = await this.parseService['1688Parse']($, task)
+        const { link1688, sourcePrice, cover2 } = await this.windowService.createWindow(this.task.sourceType, task.cover)
         if (this.reason === 'cancel' || this.reason === 'failed' || this.uuid !== uuid) {
           safeResolve(new Error('任务已被终止'))
           return
@@ -435,9 +437,12 @@ export class Collection {
     if (this.isCleared || this.uuid !== uuid) return
     this.isCleared = true
     this.process = 0
-    this.windowService.destroy()
+    this.goodsNum = this.parseService.getDataCount()
     this.windowService.destroy()
     this.excelService.destroy()
+    this.dataProcessService.destroy()
+    this.parseService.destroy()
+    this.goodsData.clear()
     this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)
     this.outputLog('清理完成')
   }

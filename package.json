@@ -8,8 +8,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "electron": "electron .",
-    "dev": "chcp 65001 > nul && yarn build:electron && cross-env NODE_OPTIONS='--max-old-space-size=4096' NODE_ENV=development npm-run-all -p vite:dev electron",
+    "electron": "electron --inspect=9229 .",
+    "dev": "chcp 65001 > nul && yarn build:electron && cross-env NODE_OPTIONS='--max-old-space-size=4096' NODE_ENV=development npm-run-all -p vite:dev \"electron --js-flags=--expose-gc\"",
     "vite:dev": "vite",
     "clean": "rimraf dist dist-electron release",
     "build": "yarn clean && vite build --mode development && yarn build-only && yarn build:electron && cross-env APP_ENV=development electron-builder",

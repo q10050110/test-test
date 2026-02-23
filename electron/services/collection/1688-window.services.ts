@@ -5,12 +5,16 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto'; // 使用 UUID 确保唯一性
 import log from "../../log/index.js";
 import { memoryMonitor } from '../memory-monitor.services.js'
+import { ParseService } from "./parse.services.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export class WindowService {
   windows: { cleanup: Function, id: string }[] = []
-  constructor() { }
+  parseService: ParseService
+  constructor(parseService: ParseService) {
+    this.parseService = parseService
+  }
 
   /**
    * 创建一个浏览器窗口并执行图片搜索任务
@@ -46,7 +50,7 @@ export class WindowService {
     };
 
     // 安全 resolve
-    const safeResolve = (value: cheerio.CheerioAPI, resolve: Function) => {
+    const safeResolve = (value: any, resolve: Function) => {
       if (settled) return;
       settled = true;
       cleanup()
@@ -115,10 +119,11 @@ export class WindowService {
             const html = await win?.webContents.executeJavaScript(
               'document.documentElement.outerHTML'
             );
+            const obj = this.parseService["1688Parse"](html)
             win?.destroy()
             // 增加延迟以确保页面稳定
             await new Promise((res) => setTimeout(res, 5000));
-            safeResolve(html, resolve);
+            safeResolve(obj, resolve);
           } catch (error) {
             safeReject(error as Error, reject);
           }
