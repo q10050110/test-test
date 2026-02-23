@@ -101,9 +101,11 @@ const rowSelection: TableProps['rowSelection'] = {
   },
 }
 let listTimer: number | undefined = undefined
-const getTaskList = async (reset?: boolean, resetPage?: boolean) => {
-  if (listTimer) return feedback.error('请勿频繁查询')
-  listTimer = setTimeout(() => (listTimer = undefined), 2000)
+const getTaskList = async (reset?: boolean, resetPage?: boolean, isThrottle: boolean = false) => {
+  if (isThrottle) {
+    if (listTimer) return feedback.error('请勿频繁查询')
+    listTimer = setTimeout(() => (listTimer = undefined), 2000)
+  }
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
   const data = await window.electronAPI.invoke<any>('collection-get-all-tasks', toRaw(params.value))
@@ -151,6 +153,7 @@ const startTask = async (task: Task, isThrottle = false) => {
 }
 // 批量开始任务
 const isStart = ref(false)
+const route = useRoute()
 const batchStartHandle = async () => {
   if (isStart.value) return feedback.error('批量执行任务中，请勿频繁点击')
   if (!selectData.value?.length || !tableData.value?.length) {
@@ -168,7 +171,7 @@ const batchStartHandle = async () => {
   for (const item of selectData.value) {
     const task = tableData.value?.find((task) => task._id === item)
     if (!task) continue
-
+    if (route.fullPath.includes('login')) return
     await startTask(task)
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
@@ -300,7 +303,7 @@ onUnmounted(() => {
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="getTaskList(false, true)">查询</a-button>
+        <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
         <a-button type="primary" style="margin: 0 10px" @click="openTaskDialogHandle()"
           >新建任务</a-button
         >

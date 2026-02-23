@@ -188,6 +188,7 @@ export class Collection {
           await new Promise(resolve => setTimeout(resolve, 50))
           this.process--
           this.outputLog(`完成商品${item.nameLabel}的处理`)
+<<<<<<< HEAD
         } else {
           log.info(this.reason)
           this.process = 0
@@ -195,6 +196,12 @@ export class Collection {
         }
       }
       if (filterDataList.length && (this.reason !== 'cancel' && this.reason !== 'failed') && this.targetData < this.task.targetCount) {
+=======
+          resolve(true)
+        }, i * 50))
+      })
+      if (filterDataList.length) {
+>>>>>>> 95f329d6445a887203568aa90fc3b3007a14844f
         this.taskQueueService.addTask(filterDataList)
         this.taskQueueService.startProcessing()
         this.outputLog('处理符合筛选条件的商品中')

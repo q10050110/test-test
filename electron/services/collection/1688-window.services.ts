@@ -96,7 +96,7 @@ export class WindowService {
             }
             await new Promise((res) => setTimeout(res, 5000));
             // 执行排序逻辑
-            await win?.webContents.executeJavaScript(`
+            if (sourceType !== '0') await win?.webContents.executeJavaScript(`
               new Promise((resolve, reject) => {
                 const sortText = ${JSON.stringify(sortText)};
                 const list = document.querySelectorAll('.sortItem--X1Plgn6V');

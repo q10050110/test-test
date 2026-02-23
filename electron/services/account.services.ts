@@ -3,6 +3,7 @@ import request from '../utils/request.js'
 import { operationStore } from '../store/index.js'
 import { SysTemUtils } from '../utils/system.js'
 import { InterfaceResult } from '../types/index.js'
+import { TaskManager } from './collection/task-manager.services.js'
 export const accountHandle = (type: 'register' | 'resetPassword') => {
   const env = SysTemUtils.getEnv() === 'development'
   const testUrl = type === 'register' ? "https://test-plus.shopbang.cn/erp/#/register" : 'https://test-plus.shopbang.cn/erp/#/forgetPassword'
@@ -33,6 +34,8 @@ export const getUserInfo = async (data: { token: string }) => {
 
 export const logout = async () => {
   try {
+    const taskInExecution = TaskManager.getInstance().getAllTasksList().some(item => item.taskStatus !== 'noExecuted')
+    if (taskInExecution) await TaskManager.getInstance().stopAllTasks()
     operationStore.delete('user')
     operationStore.delete('token')
     return await request<InterfaceResult<any>, InterfaceResult<any>>({

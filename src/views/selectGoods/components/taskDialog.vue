@@ -588,7 +588,7 @@ defineExpose({
                 </a-form-item>
               </a-col>
             </a-row>
-            <a-row v-if="formData.aiSelectType === 1">
+            <div v-if="formData.aiSelectType === 1">
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
                   <a-form-item label="月销量范围">
@@ -937,7 +937,7 @@ defineExpose({
                   </a-form-item>
                 </a-col>
               </a-row>
-            </a-row>
+            </div>
           </section>
         </a-form>
       </div>
