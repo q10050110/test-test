@@ -1,5 +1,6 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, shell } from 'electron'
 import { TaskManager } from '../services/collection/task-manager.services.js'
+import { SysTemUtils } from '../utils/system.js'
 import log from '../log/index.js'
 import {
   getShopList,
@@ -267,5 +268,13 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 获取店铺配置
   ipcMain.handle('get-config-list', async (event, params) => {
     return await getConfigList()
+  })
+
+  // 跳转EPR
+  ipcMain.on('go-erp', (event, data) => {
+    const env = SysTemUtils.getEnv() === 'development'
+    const url = env ? 'https://test-plus.shopbang.cn/erp/#/batchRecord'
+      : 'https://shopbang.cn/erp/#/batchRecord'
+    shell.openExternal(url)
   })
 }

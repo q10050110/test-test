@@ -3,7 +3,7 @@ import { loginAPI } from '@/api/login'
 import type { Login } from '@/types/login'
 import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
-import feedback from '@/utils/feedback'
+
 import { useUserStore } from '@/stores'
 import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons-vue'
 // 表单数据
@@ -61,7 +61,6 @@ const loginHandle = async () => {
     changeHandle()
     await store.setToken(data.token)
     await window.electronAPI.invoke('collection-cancel-all-task', {})
-    feedback.success('登录成功！')
     router.push('/')
     return
   }

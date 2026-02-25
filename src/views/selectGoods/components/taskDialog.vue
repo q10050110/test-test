@@ -64,26 +64,14 @@ const initData = ref<Task>({
   cardRateMax: undefined,
   showRateMin: undefined,
   showRateMax: undefined,
-  salesSchema: undefined,
+  salesSchema: 'FBO,FBS',
   followMin: undefined,
   followMax: undefined,
   token: '',
   unit: undefined,
   aiSelectType: 0,
 })
-const tooltipLines = [
-  'A选品条件:',
-  '上架时间 < 12个月',
-  '跟卖数量 < 30',
-  '销售动态 > 0',
-  '广告份额 < 15%',
-  '月销量条件:',
-  '0 - 500卢布: >500件',
-  '501 - 1000卢布: >150件',
-  '1001 - 5000卢布: >30件',
-  '5001 - 10000卢布: >15件',
-  '10001卢布以上:>5件',
-]
+const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const formData = ref<Task>({ ...initData.value })
 
 const rules: Record<string, Rule[]> = {
@@ -318,8 +306,9 @@ const changeMode = computed({
       formData.value.warehouse_id = undefined
       formData.value.client_id = undefined
       const obj = props.configList.find((item) => item.isDefault)
-      if (obj) formData.value.upDataConfigId = obj._id
+      if (obj && formData.value.isUseAutoUpGoods) formData.value.upDataConfigId = obj._id
     } else {
+      formData.value.client_id = undefined
       formData.value.upDataConfigId = undefined
     }
     mode.value = value
@@ -420,18 +409,22 @@ defineExpose({
               />
             </h3>
             <a-row :gutter="[16, 16]">
-              <a-col :span="3" class="auto-col" @click="changeMode = !changeMode">
-                <SwapOutlined />
-                <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
-              </a-col>
-              <a-row :gutter="[16, 16]" v-if="changeMode">
+              <template v-if="changeMode">
                 <a-col :span="8">
-                  <a-form-item label="选择店铺">
+                  <a-form-item>
+                    <template #label>
+                      <span>选择店铺</span>
+                      <div class="auto-col" @click="changeMode = !changeMode">
+                        <SwapOutlined />
+                        <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
+                      </div>
+                    </template>
                     <a-select
                       placeholder="请选择店铺"
                       v-model:value="formData.client_id"
                       style="width: 200px"
                       allowClear
+                      :disabled="!formData.isUseAutoUpGoods"
                     >
                       <a-select-option
                         :value="item.client_id"
@@ -450,6 +443,7 @@ defineExpose({
                       v-model:value="formData.warehouse_id"
                       style="width: 200px"
                       allowClear
+                      :disabled="!formData.isUseAutoUpGoods"
                     >
                       <a-select-option
                         :value="item.warehouse_id"
@@ -467,22 +461,35 @@ defineExpose({
                       placeholder="请输入库存"
                       type="number"
                       v-model:value="formData.stock"
+                      :disabled="!formData.isUseAutoUpGoods"
                     ></a-input>
                   </a-form-item>
                 </a-col>
-              </a-row>
-              <a-row :gutter="[16, 16]" v-else>
-                <a-select
-                  placeholder="请选择上架配置"
-                  v-model:value="formData.upDataConfigId"
-                  style="width: 200px"
-                  allowClear
-                >
-                  <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
-                    {{ item.name }}
-                  </a-select-option>
-                </a-select>
-              </a-row>
+              </template>
+              <template v-else>
+                <a-col :span="8">
+                  <a-form-item>
+                    <template #label>
+                      <span>选择上架配置</span>
+                      <div class="auto-col" @click="changeMode = !changeMode">
+                        <SwapOutlined />
+                        <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
+                      </div>
+                    </template>
+                    <a-select
+                      placeholder="请选择上架配置"
+                      v-model:value="formData.upDataConfigId"
+                      style="width: 200px"
+                      allowClear
+                      :disabled="!formData.isUseAutoUpGoods"
+                    >
+                      <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
+                        {{ item.name }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </template>
             </a-row>
           </section>
           <!-- 商品定价 -->
@@ -500,7 +507,6 @@ defineExpose({
                     placeholder="请输入利润率"
                     v-model:value="formData.myProfitPercent"
                     style="width: 100%"
-                    :precision="2"
                     addon-after="%"
                   />
                 </a-form-item>
@@ -530,7 +536,6 @@ defineExpose({
                     placeholder="请输入国内运费+代贴单"
                     v-model:value="formData.rubExpressPrice"
                     style="width: 100%"
-                    :precision="2"
                     addon-after="￥"
                   />
                 </a-form-item>
@@ -541,7 +546,6 @@ defineExpose({
                     placeholder="请输入其他费用"
                     v-model:value="formData.elsePercent"
                     style="width: 100%"
-                    :precision="2"
                     addon-after="%"
                   />
                 </a-form-item>
@@ -561,7 +565,7 @@ defineExpose({
                     </label>
                   </template>
                   <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
-                    <a-radio value="0">默认</a-radio>
+                    <a-radio value="0">综合</a-radio>
                     <a-radio value="1">价格最低</a-radio>
                     <a-radio value="2">销量最高</a-radio>
                   </a-radio-group>
@@ -600,14 +604,12 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.soldCountMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                       />
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大值"
                         v-model:value="formData.soldCountMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                       />
                     </div>
                   </a-form-item>
@@ -619,7 +621,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.gmvSumMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-before="₽"
                       />
                       <span class="separator">至</span>
@@ -627,7 +628,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.gmvSumMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-before="₽"
                       />
                     </div>
@@ -642,7 +642,6 @@ defineExpose({
                         placeholder="最小价格"
                         v-model:value="formData.salePriceMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-before="₽"
                       />
                       <span class="separator">至</span>
@@ -650,7 +649,6 @@ defineExpose({
                         placeholder="最大价格"
                         v-model:value="formData.salePriceMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-before="₽"
                       />
                     </div>
@@ -663,7 +661,6 @@ defineExpose({
                         placeholder="最小重量"
                         v-model:value="formData.weightMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="g"
                       />
                       <span class="separator">至</span>
@@ -671,7 +668,6 @@ defineExpose({
                         placeholder="最大重量"
                         v-model:value="formData.weightMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="g"
                       />
                     </div>
@@ -686,7 +682,6 @@ defineExpose({
                         placeholder="最小天数"
                         v-model:value="formData.upGoodsTimeMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                       <span class="separator">至</span>
@@ -694,7 +689,6 @@ defineExpose({
                         placeholder="最大天数"
                         v-model:value="formData.upGoodsTimeMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                     </div>
@@ -707,7 +701,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.monthDynamicsMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -715,7 +708,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.monthDynamicsMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -730,7 +722,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.adFeeMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -738,7 +729,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.adFeeMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -751,7 +741,6 @@ defineExpose({
                         placeholder="最小天数"
                         v-model:value="formData.promotionDayMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                       <span class="separator">至</span>
@@ -759,7 +748,6 @@ defineExpose({
                         placeholder="最大天数"
                         v-model:value="formData.promotionDayMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                     </div>
@@ -774,7 +762,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.promotionDiscountMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -782,7 +769,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.promotionDiscountMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -795,7 +781,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.promotionDynamicsMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -803,7 +788,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.promotionDynamicsMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -818,7 +802,6 @@ defineExpose({
                         placeholder="最小天数"
                         v-model:value="formData.promoteDayMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                       <span class="separator">至</span>
@@ -826,7 +809,6 @@ defineExpose({
                         placeholder="最大天数"
                         v-model:value="formData.promoteDayMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="天"
                       />
                     </div>
@@ -839,14 +821,12 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.viewsMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                       />
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大值"
                         v-model:value="formData.viewsMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                       />
                     </div>
                   </a-form-item>
@@ -860,7 +840,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.cardRateMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -868,7 +847,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.cardRateMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -881,7 +859,6 @@ defineExpose({
                         placeholder="最小值"
                         v-model:value="formData.showRateMin"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                       <span class="separator">至</span>
@@ -889,7 +866,6 @@ defineExpose({
                         placeholder="最大值"
                         v-model:value="formData.showRateMax"
                         style="width: calc(50% - 8px)"
-                        :precision="2"
                         addon-after="%"
                       />
                     </div>
@@ -907,7 +883,7 @@ defineExpose({
                     >
                       <a-select-option value="FBO">FBO</a-select-option>
                       <a-select-option value="FBS">FBS</a-select-option>
-                      <a-select-option value="FBO,FBS">FBO | FBS</a-select-option>
+                      <a-select-option value="FBO,FBS">FBO 或 FBS</a-select-option>
                     </a-select>
                   </a-form-item>
                 </a-col>
@@ -1083,5 +1059,6 @@ defineExpose({
   font-size: 14px;
   cursor: pointer;
   margin-top: 2px;
+  margin-left: 20px;
 }
 </style>

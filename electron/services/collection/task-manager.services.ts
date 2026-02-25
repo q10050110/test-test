@@ -15,7 +15,7 @@ export class TaskManager {
   private mainWindow: BrowserWindow | null = null
   private filePathList: Map<string, { filePath: string; progress: any; autoResult?: string }> =
     new Map()
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): TaskManager {
     if (!TaskManager.instance) {
@@ -158,7 +158,7 @@ export class TaskManager {
       const result = await task.run()
       if (task.getTaskInfo().taskStatus === 'completed')
         this.mainWindow?.webContents.send('task-completed', {
-          message: `任务：${task.getTaskInfo().taskName}已完成，可在自动化选品页面中查看结果！`,
+          message: `任务：${task.getTaskInfo().taskName}已完成`,
         })
       this.filePathList.set(taskId, JSON.parse(JSON.stringify(result)))
     } catch (error) {

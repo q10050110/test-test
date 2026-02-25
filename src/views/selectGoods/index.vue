@@ -9,9 +9,6 @@ import {
   DownloadOutlined,
   PauseCircleFilled,
   SearchOutlined,
-  CloudUploadOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
 } from '@ant-design/icons-vue'
 import TaskDialog from './components/taskDialog.vue'
 import feedback from '@/utils/feedback'
@@ -28,11 +25,6 @@ const initParams = ref({
 const params = ref({ ...initParams.value })
 
 const taskStatusList = ref([
-  {
-    label: '全部',
-    value: undefined,
-    color: '',
-  },
   {
     label: '未执行',
     value: 'noExecuted',
@@ -103,8 +95,8 @@ const rowSelection: TableProps['rowSelection'] = {
 let listTimer: number | undefined = undefined
 const getTaskList = async (reset?: boolean, resetPage?: boolean, isThrottle: boolean = false) => {
   if (isThrottle) {
-    if (listTimer) return feedback.error('请勿频繁查询')
-    listTimer = setTimeout(() => (listTimer = undefined), 2000)
+    if (listTimer) return
+    listTimer = setTimeout(() => (listTimer = undefined), 500)
   }
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
@@ -118,17 +110,6 @@ const pageChange = (page: number, pageSize: number) => {
   params.value.pageNo = page
   params.value.pageSize = pageSize
   getTaskList()
-}
-
-// 新建任务
-const dialogRef = ref<InstanceType<typeof TaskDialog>>()
-const openTaskDialogHandle = async (data?: Task) => {
-  await nextTick()
-  if (data?._id && dialogRef.value) {
-    if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
-    dialogRef.value.formData = { ...data }
-  }
-  dialogRef.value?.openDialog()
 }
 
 // 开始任务
@@ -271,6 +252,27 @@ const exportHandle = async (tableFilePath: string) => {
     feedback.error(error as string)
   }
 }
+
+// 新建任务
+const dialogRef = ref<InstanceType<typeof TaskDialog>>()
+const openTaskDialogHandle = async (data?: Task) => {
+  await nextTick()
+  if (data?._id && dialogRef.value) {
+    if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
+    dialogRef.value.formData = { ...data }
+  }
+  await getConfigList()
+  await getShopList()
+  dialogRef.value?.openDialog()
+}
+
+// 角标背景颜色
+const bgColor = (value?: string) => {
+  return value ? (value === 'success' ? '#6bb64b' : '#ff7875') : '#1a7aff'
+}
+
+const goErp = () => window.electronAPI.sendMessage('go-erp', {})
+
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
 })
@@ -289,6 +291,7 @@ onUnmounted(() => {
           style="width: 180px"
           v-model:value="params.taskName"
           @pressEnter="getTaskList(false, true)"
+          allowClear
         >
           <template #prefix>
             <SearchOutlined />
@@ -296,7 +299,12 @@ onUnmounted(() => {
         </a-input>
       </a-form-item>
       <a-form-item>
-        <a-select v-model:value="params.taskStatus" style="width: 140px" placeholder="请选择状态">
+        <a-select
+          v-model:value="params.taskStatus"
+          allowClear
+          style="width: 140px"
+          placeholder="请选择状态"
+        >
           <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{
             item.label
           }}</a-select-option>
@@ -325,22 +333,25 @@ onUnmounted(() => {
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'taskName'">
               <div style="font-weight: bold; color: #000" class="ellipsis-1">
-                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === undefined">
-                  <template #title>任务完成后将会自动上架商品</template>
-                  <CloudUploadOutlined style="color: #1a7aff" />
-                </a-tooltip>
-                <a-tooltip v-if="record.isUseAutoUpGoods && record.autoResult === 'success'">
-                  <template #title>自动上架成功，可在对用店铺查看商品信息</template>
-                  <CheckCircleOutlined style="color: #6bb64b" />
-                </a-tooltip>
-                <a-tooltip
-                  v-if="
-                    record.isUseAutoUpGoods && record.autoResult && record.autoResult !== 'success'
-                  "
+                <div
+                  class="autoUp"
+                  v-if="record.isUseAutoUpGoods"
+                  :style="{ backgroundColor: bgColor(record.autoResult) }"
+                  @click="goErp"
                 >
-                  <template #title>自动上架失败：{{ record.autoResult }}</template>
-                  <CloseCircleOutlined style="color: #ff7875" />
-                </a-tooltip>
+                  <a-tooltip v-if="record.autoResult === undefined">
+                    <template #title>任务完成后将会自动上架商品</template>
+                    <span>上架</span>
+                  </a-tooltip>
+                  <a-tooltip v-if="record.autoResult === 'success'">
+                    <template #title>自动上架成功，可前往【上品帮erp-上架记录查看】</template>
+                    <span>已上架</span>
+                  </a-tooltip>
+                  <a-tooltip v-if="record.autoResult && record.autoResult !== 'success'">
+                    <template #title>自动上架失败：{{ record.autoResult }}</template>
+                    <span>失败</span>
+                  </a-tooltip>
+                </div>
                 {{ record.taskName }}
               </div>
               <div>创建时间：{{ formatDate(record.createTime) }}</div>
@@ -468,5 +479,34 @@ onUnmounted(() => {
     background-color: #fff;
     height: 160px;
   }
+
+  .autoUp {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40px;
+    height: 40px;
+    clip-path: polygon(0 0, 0 100%, 100% 0);
+
+    span {
+      position: absolute;
+      top: 33%;
+      left: 33%;
+      display: inline-block;
+      color: #fff;
+      font-weight: 400;
+      font-size: 12px;
+      transform: translate(-50%, -50%) rotate(-45deg) scale(0.8);
+      white-space: nowrap;
+    }
+  }
+}
+
+:deep(.ant-table-cell) {
+  position: static !important;
+}
+
+:deep(.ant-table-row) {
+  position: relative;
 }
 </style>

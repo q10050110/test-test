@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores'
-import suofang from '@/assets/window/suofang.png'
-import fangda from '@/assets/window/fangda.png'
 
+import {
+  MinusOutlined,
+  CloseOutlined,
+  BorderOutlined,
+  SwitcherOutlined,
+} from '@ant-design/icons-vue'
 const store = useAppStore()
 const isMax = ref(false)
 const open = ref(false)
@@ -74,13 +78,13 @@ window.electronAPI.on('unmaximize', () => {
         </div>
       </div>
       <div class="operations">
-        <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')" />
-        <img
-          :src="isMax ? suofang : fangda"
-          alt=""
+        <MinusOutlined @click="operationHandle('hide')" />
+        <component
+          :is="isMax ? SwitcherOutlined : BorderOutlined"
           @click="operationHandle(isMax ? 'minimize' : 'maximize')"
+          style="margin: 0 10px"
         />
-        <img src="@/assets/window/guanbi.png" alt="" @click="operationHandle('close')" />
+        <CloseOutlined @click="operationHandle('close')" />
       </div>
     </div>
   </div>
@@ -148,7 +152,8 @@ window.electronAPI.on('unmaximize', () => {
     .customer-service {
       margin-right: 20px;
       position: relative;
-
+      display: flex;
+      align-items: center;
       &:hover {
         .qrcode {
           visibility: visible;
@@ -178,9 +183,8 @@ window.electronAPI.on('unmaximize', () => {
     }
 
     .operations {
-      img:nth-child(2) {
-        margin: 0 10px;
-      }
+      font-size: 18px;
+      color: #7f7f7f;
     }
   }
 }

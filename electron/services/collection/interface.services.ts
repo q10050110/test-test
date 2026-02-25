@@ -1,7 +1,7 @@
 import request from '../../utils/request.js'
 import { Task } from './type.js'
 import { operationStore } from '../../store/index.js'
-import { compressData, currencyConversion } from '../../utils/index.js'
+import { compressData } from '../../utils/index.js'
 import log from '../../log/index.js'
 export const getLogisticsList = async () => {
   try {
@@ -31,8 +31,7 @@ export const getShopList = async () => {
       data: {},
     })
     const data = res.data
-      .filter((item: any) => item.platform === 'OZON')
-      .filter((item: any) => item.account_id === user._id)
+      .filter((item: any) => item.platform === 'OZON' && item.account_id === user._id)
 
     return {
       code: 400,
@@ -50,17 +49,21 @@ export const getShopList = async () => {
 
 export const getConfigList = async () => {
   try {
+    const user = operationStore.get('user')
     const res = await request({
       url: '/api/goods/upGoodsConfig/getConfig',
       method: 'post',
       data: {},
     })
+    res.data.data = res.data.data
+      .filter((item: any) => item.platform === 'OZON' && item.user_id === user._id)
     return {
       code: 400,
       data: res.data,
       message: '获取成功',
     }
   } catch (error) {
+    console.log(error, '你失败了？')
     return {
       code: 500,
       message: '获取失败！',
@@ -119,8 +122,8 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         goods_id: item.id,
         name: item.chineseName,
         offer_id: '',
-        old_price: (item.resMoney * 1.05).toFixed(2),
-        origin_price: (item.resMoney * 1.65).toFixed(2),
+        old_price: (item.resMoney * 1.6).toFixed(2),
+        origin_price: (item.resMoney * 1.6).toFixed(2),
         price: item.resMoney,
       }))
       .filter((item) => item.price)
