@@ -30,21 +30,21 @@ export class ExcelWriter {
   private async isFileInUse(filePath: string): Promise<boolean> {
     try {
       // 尝试以写入模式打开文件
-      const fileHandle = await fsPromises.open(filePath, 'r+');
-      await fileHandle.close();
-      return false; // 能够打开说明未被占用
+      const fileHandle = await fsPromises.open(filePath, 'r+')
+      await fileHandle.close()
+      return false // 能够打开说明未被占用
     } catch (error) {
-      const err = error as NodeJS.ErrnoException;
+      const err = error as NodeJS.ErrnoException
       // 如果是 EBUSY 或 EPERM 错误，说明文件被占用
       if (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EBADF') {
-        return true;
+        return true
       }
       // 文件不存在不算被占用
       if (err.code === 'ENOENT') {
-        return false;
+        return false
       }
       // 其他错误也视为无法访问
-      return true;
+      return true
     }
   }
 
@@ -60,9 +60,7 @@ export class ExcelWriter {
       this.workbook = new ExcelJS.Workbook()
       await this.workbook.xlsx.readFile(this.filePath)
 
-      this.worksheet =
-        this.workbook.getWorksheet(this.sheetName) ||
-        this.workbook.worksheets[0]
+      this.worksheet = this.workbook.getWorksheet(this.sheetName) || this.workbook.worksheets[0]
 
       if (!this.worksheet) {
         this.worksheet = this.workbook.addWorksheet(this.sheetName)
@@ -102,10 +100,10 @@ export class ExcelWriter {
     // 创建一个独立的 promise 来处理保存逻辑
     const savePromise = this.memoryQueue.then(async () => {
       // 检查文件是否被其他进程占用
-      const isInUse = await this.isFileInUse(this.filePath);
+      const isInUse = await this.isFileInUse(this.filePath)
       if (isInUse) {
-        log.warn(`文件 ${this.filePath} 被其他进程占用，无法保存`);
-        return false;
+        log.warn(`文件 ${this.filePath} 被其他进程占用，无法保存`)
+        return false
       }
 
       for (const row of rows) {
@@ -113,17 +111,17 @@ export class ExcelWriter {
       }
 
       // 立即保存到磁盘
-      const saveResult = await this.flushToDisk();
-      return saveResult;
-    });
+      const saveResult = await this.flushToDisk()
+      return saveResult
+    })
 
     // 等待当前队列完成并返回结果
     try {
-      const result = await savePromise;
-      return result;
+      const result = await savePromise
+      return result
     } catch (error) {
-      log.error(`保存Excel数据失败:`, error);
-      return false;
+      log.error(`保存Excel数据失败:`, error)
+      return false
     }
   }
 
@@ -132,7 +130,7 @@ export class ExcelWriter {
    */
   getRealRowCount(): number {
     let count = 0
-    this.worksheet.eachRow(row => {
+    this.worksheet.eachRow((row) => {
       if (row.hasValues) count++
     })
     return count
@@ -148,7 +146,7 @@ export class ExcelWriter {
 
     if (this.saving) {
       log.warn(`已有写盘任务进行中，跳过本次 flush`)
-      return false;
+      return false
     }
 
     this.saving = true
@@ -158,8 +156,8 @@ export class ExcelWriter {
       await fsPromises.mkdir(dir, { recursive: true })
 
       // 如果写入失败，检查是否被占用
-      const writeResult = await this.writeFileWithProcessHandling(this.filePath);
-      return writeResult;
+      const writeResult = await this.writeFileWithProcessHandling(this.filePath)
+      return writeResult
     } finally {
       this.saving = false
     }
@@ -173,15 +171,18 @@ export class ExcelWriter {
       // 尝试直接写入
       await this.workbook.xlsx.writeFile(filePath)
       log.info(`Excel 写入完成: ${this.filePath}`)
-      return true;
+      return true
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EBUSY' || (error as NodeJS.ErrnoException).code === 'EPERM') {
-        log.warn(`文件 ${filePath} 被占用，无法写入`);
-        return false;
+      if (
+        (error as NodeJS.ErrnoException).code === 'EBUSY' ||
+        (error as NodeJS.ErrnoException).code === 'EPERM'
+      ) {
+        log.warn(`文件 ${filePath} 被占用，无法写入`)
+        return false
       } else {
         // 其他错误记录并抛出
-        log.error(`写入Excel文件时发生错误:`, error);
-        throw error;
+        log.error(`写入Excel文件时发生错误:`, error)
+        throw error
       }
     }
   }
@@ -208,7 +209,7 @@ export class ExcelWriter {
       font?: Partial<Font>
       fill?: Partial<Fill>
       border?: Partial<Border>
-    } & Partial<Row> = {}
+    } & Partial<Row> = {},
   ) {
     const titleRow = this.worksheet.getRow(1)
 
@@ -230,7 +231,7 @@ export class ExcelWriter {
       font?: Partial<Font>
       fill?: Partial<Fill>
       border?: Partial<Border>
-    } & Partial<Row>
+    } & Partial<Row>,
   ) {
     const row = this.worksheet.getRow(rowNumber)
 
@@ -244,9 +245,9 @@ export class ExcelWriter {
       row.border = style.border
     }
 
-    Object.keys(style).forEach(key => {
+    Object.keys(style).forEach((key) => {
       if (!['font', 'fill', 'border'].includes(key)) {
-        ; (row as any)[key] = (style as any)[key]
+        ;(row as any)[key] = (style as any)[key]
       }
     })
   }
@@ -303,64 +304,67 @@ export class ExcelWriter {
    * @param col 列号或列名
    * @param style 样式对象
    */
-  setCellStyle(row: number, col: number | string, style: {
-    font?: Partial<Font>
-    fill?: Partial<Fill>
-    border?: Partial<Border>
-  }) {
-    const cell = this.worksheet.getCell(row, col);
+  setCellStyle(
+    row: number,
+    col: number | string,
+    style: {
+      font?: Partial<Font>
+      fill?: Partial<Fill>
+      border?: Partial<Border>
+    },
+  ) {
+    const cell = this.worksheet.getCell(row, col)
 
-    if (style.font) cell.font = style.font;
-    if (style.fill) cell.fill = style.fill as any;
-    if (style.border) cell.border = style.border as any;
+    if (style.font) cell.font = style.font
+    if (style.fill) cell.fill = style.fill as any
+    if (style.border) cell.border = style.border as any
   }
 
   /**
    * 清空工作表内容（保留列定义）
    */
   clearContent() {
-    log.info(`清空工作表内容（重建工作表）`);
+    log.info(`清空工作表内容（重建工作表）`)
 
-    const sheetName = this.worksheet.name;
-    const workbook = this.workbook;
+    const sheetName = this.worksheet.name
+    const workbook = this.workbook
 
     // 删除旧工作表
-    workbook.removeWorksheet(this.worksheet.id);
+    workbook.removeWorksheet(this.worksheet.id)
 
     // 新建同名工作表
-    this.worksheet = workbook.addWorksheet(sheetName);
+    this.worksheet = workbook.addWorksheet(sheetName)
   }
 
   /**
    * 检查文件是否可写入
    */
   async checkFileStatus(): Promise<{ writable: boolean; inUse: boolean }> {
-    let inUse = false;
+    let inUse = false
     try {
-      inUse = await this.isFileInUse(this.filePath);
+      inUse = await this.isFileInUse(this.filePath)
     } catch (error) {
-      log.warn(`检查文件状态失败:`, error);
+      log.warn(`检查文件状态失败:`, error)
     }
 
     return {
       writable: !inUse,
-      inUse
-    };
+      inUse,
+    }
   }
 
   /**
    * 获取表格文件路径
-    */
+   */
   getFilePath() {
     return this.filePath
   }
 
   reset(filePath?: string) {
-
     this.workbook = new ExcelJS.Workbook()
     this.worksheet = this.workbook.addWorksheet(this.sheetName)
 
-    this.initialized = true   // 已初始化，但用的是新 workbook
+    this.initialized = true // 已初始化，但用的是新 workbook
     this.saving = false
     this.memoryQueue = Promise.resolve()
 

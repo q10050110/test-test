@@ -9,13 +9,15 @@ export const useUserStore = defineStore('user', () => {
 
   const initUser = async () => {
     const data = await window.electronStore.get('user')
-    if (data) return user.value = data
+    if (data) return (user.value = data)
     await getUser()
   }
   const getUser = async () => {
     if (!token.value) return
     const { code, data } = await getUserAPI({ token: token.value })
-    if (code === 0) { setUser(data) }
+    if (code === 0) {
+      setUser(data)
+    }
     return data
   }
 

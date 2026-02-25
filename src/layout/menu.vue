@@ -19,8 +19,8 @@ const openKeys = ref<string[]>([])
 // 递归转换菜单数据为 antd menu 格式
 const convertMenuItems = (menus: MenuItem[]): ItemType[] => {
   return menus
-    .filter(item => !item.hidden)
-    .map(item => {
+    .filter((item) => !item.hidden)
+    .map((item) => {
       const menuItem: ItemType = {
         key: item.path,
         label: item.title,
@@ -76,8 +76,14 @@ initOpenKeys()
 
 <template>
   <div class="menu-container">
-    <a-menu v-model:selectedKeys="selectedKeys" v-model:openKeys="openKeys" mode="inline" :items="menuItems"
-      @click="handleMenuClick" @openChange="handleOpenChange" />
+    <a-menu
+      v-model:selectedKeys="selectedKeys"
+      v-model:openKeys="openKeys"
+      mode="inline"
+      :items="menuItems"
+      @click="handleMenuClick"
+      @openChange="handleOpenChange"
+    />
   </div>
 </template>
 

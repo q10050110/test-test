@@ -1,5 +1,5 @@
-import router from "./router";
-import { useUserStore } from "./stores";
+import router from './router'
+import { useUserStore } from './stores'
 
 const whiteList = ['/login']
 router.beforeEach(async (to, from, next) => {
@@ -21,6 +21,4 @@ router.beforeEach(async (to, from, next) => {
   }
 })
 
-router.afterEach((to, from) => {
-
-})
+router.afterEach((to, from) => {})

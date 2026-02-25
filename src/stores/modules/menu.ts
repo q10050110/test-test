@@ -8,23 +8,23 @@ export const useMenuStore = defineStore('menu', () => {
   // 从路由配置生成菜单
   const generateMenuFromRoutes = (routes: RouteRecordRaw[]): MenuItem[] => {
     const menus: MenuItem[] = []
-    
-    routes.forEach(route => {
+
+    routes.forEach((route) => {
       if (route.children) {
-        route.children.forEach(child => {
+        route.children.forEach((child) => {
           if (child.meta?.title) {
             const menu: MenuItem = {
               title: child.meta.title as string,
               path: child.path,
               icon: child.meta.icon as string,
-              hidden: child.meta.hidden as boolean
+              hidden: child.meta.hidden as boolean,
             }
-            
+
             // 如果有子路由,递归处理
             if (child.children && child.children.length > 0) {
               menu.children = generateMenuFromRoutes([child])
             }
-            
+
             menus.push(menu)
           }
         })
@@ -33,11 +33,11 @@ export const useMenuStore = defineStore('menu', () => {
           title: route.meta.title as string,
           path: route.path,
           icon: route.meta.icon as string,
-          hidden: route.meta.hidden as boolean
+          hidden: route.meta.hidden as boolean,
         })
       }
     })
-    
+
     return menus
   }
 
@@ -45,6 +45,6 @@ export const useMenuStore = defineStore('menu', () => {
   const menuList = computed(() => generateMenuFromRoutes(asyncRoutes))
 
   return {
-    menuList
+    menuList,
   }
 })

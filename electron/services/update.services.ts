@@ -12,7 +12,7 @@ export class UpdaterManager {
   private static instance: UpdaterManager | null = null
   private win: BrowserWindow | null = null
   private isInit = false
-  protected constructor() { }
+  protected constructor() {}
   public static getInstance() {
     if (!UpdaterManager.instance) {
       UpdaterManager.instance = new UpdaterManager()
@@ -44,7 +44,7 @@ export class UpdaterManager {
         operationStore.set('update-info', {
           version: info.version,
           date: info.releaseDate,
-          size: info.files[0].size
+          size: info.files[0].size,
         })
         operationStore.set('clear-update', false)
         operationStore.set('update-status', 'hasUpdate')
@@ -54,7 +54,7 @@ export class UpdaterManager {
       this.send('update-available', {
         version: info.version,
         date: info.releaseDate,
-        size: info.files[0].size
+        size: info.files[0].size,
       })
     })
 
@@ -68,7 +68,7 @@ export class UpdaterManager {
           operationStore.set('clear-update', true)
           const updaterDir = path.join(
             process.env.LOCALAPPDATA as string,
-            `${app.getName()}-updater`
+            `${app.getName()}-updater`,
           )
           log.info('下载目录:', updaterDir)
           if (fs.existsSync(updaterDir)) {
@@ -81,13 +81,13 @@ export class UpdaterManager {
         }
     })
 
-    autoUpdater.on('download-progress', progress => {
+    autoUpdater.on('download-progress', (progress) => {
       operationStore.set('update-status', 'download')
       this.send('update-download-progress', {
         percent: Math.floor(progress.percent),
         speed: (progress.bytesPerSecond / 1024 / 1024).toFixed(1), // MB/s
         downloaded: (progress.transferred / 1024 / 1024).toFixed(1),
-        total: (progress.total / 1024 / 1024).toFixed(1)
+        total: (progress.total / 1024 / 1024).toFixed(1),
       })
     })
 
@@ -104,28 +104,28 @@ export class UpdaterManager {
     })
   }
 
-  /** 
+  /**
    * 检测是否已经下载完成
-    */
+   */
   checkForUpdatesAndNotify() {
     return autoUpdater.checkForUpdatesAndNotify()
   }
-  /** 
+  /**
    * 手动触发检测更新
-    */
+   */
   checkUpdate() {
     log.info('开始检测更新')
     return autoUpdater.checkForUpdates()
   }
 
-  /** 
+  /**
    * 开始更新
-  */
+   */
   startDownload() {
     autoUpdater.downloadUpdate()
   }
 
-  /**  
+  /**
    * 安装并重启
    */
   async quitAndInstall() {
@@ -138,8 +138,8 @@ export class UpdaterManager {
       log.error(error)
     }
   }
-  /** 
-   * 初始化  
+  /**
+   * 初始化
    */
   public async init() {
     if (this.isInit) return

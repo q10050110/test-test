@@ -6,26 +6,29 @@ import { InterfaceResult } from '../types/index.js'
 import { TaskManager } from './collection/task-manager.services.js'
 export const accountHandle = (type: 'register' | 'resetPassword') => {
   const env = SysTemUtils.getEnv() === 'development'
-  const testUrl = type === 'register' ? "https://test-plus.shopbang.cn/erp/#/register" : 'https://test-plus.shopbang.cn/erp/#/forgetPassword'
-  const prodUrl = type === 'register' ? 'https://shopbang.cn/erp/#/register' : 'https://shopbang.cn/erp/#/forgetPassword'
+  const testUrl =
+    type === 'register'
+      ? 'https://test-plus.shopbang.cn/erp/#/register'
+      : 'https://test-plus.shopbang.cn/erp/#/forgetPassword'
+  const prodUrl =
+    type === 'register'
+      ? 'https://shopbang.cn/erp/#/register'
+      : 'https://shopbang.cn/erp/#/forgetPassword'
   shell.openExternal(env ? testUrl : prodUrl)
 }
 
-export const login = async (data: {
-  phone: string
-  pwd: string
-}) => {
+export const login = async (data: { phone: string; pwd: string }) => {
   return await request<InterfaceResult<any>, InterfaceResult<any>>({
     url: '/api/user/open/loginAutoBang',
     method: 'post',
-    data
+    data,
   })
 }
 export const getUserInfo = async (data: { token: string }) => {
   const res = await request<InterfaceResult<any>, InterfaceResult<any>>({
     url: '/api/user/userBase/getUserInfo',
     method: 'post',
-    data
+    data,
   })
   if (res.code === 0) operationStore.set('user', res.data)
 
@@ -34,20 +37,21 @@ export const getUserInfo = async (data: { token: string }) => {
 
 export const logout = async () => {
   try {
-    const taskInExecution = TaskManager.getInstance().getAllTasksList().some(item => item.taskStatus !== 'noExecuted')
+    const taskInExecution = TaskManager.getInstance()
+      .getAllTasksList()
+      .some((item) => item.taskStatus !== 'noExecuted')
     if (taskInExecution) await TaskManager.getInstance().stopAllTasks()
     operationStore.delete('user')
     operationStore.delete('token')
     return await request<InterfaceResult<any>, InterfaceResult<any>>({
       url: '/api/user/userBase/logoutAuto',
-      method: 'post'
+      method: 'post',
     })
   } catch (error) {
     return {
       code: 400,
       message: error,
-      data: null
+      data: null,
     }
   }
-
 }

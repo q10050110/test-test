@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAppStore } from '@/stores';
+import { useAppStore } from '@/stores'
 import suofang from '@/assets/window/suofang.png'
 import fangda from '@/assets/window/fangda.png'
 
@@ -55,7 +55,7 @@ window.electronAPI.on('unmaximize', () => {
 <template>
   <div class="header-page">
     <div class="left">
-      <img src="@/assets/login/logo.png" alt="">
+      <img src="@/assets/login/logo.png" alt="" />
       <span class="version">V{{ store.appInfo?.version }}</span>
       <a-button type="primary" @click="checkUpdateHandle" v-if="store.updateStatus !== 'hasNew'">{{
         btnText
@@ -67,21 +67,30 @@ window.electronAPI.on('unmaximize', () => {
         <a-button type="link" @click="downloadLog">导出日志</a-button>
       </div>
       <div class="customer-service">
-        <img src="@/assets/window/lianxikefu.png" alt="">
+        <img src="@/assets/window/lianxikefu.png" alt="" />
         联系客服
         <div class="qrcode">
-          <img src="@/assets/window/qrcode.png" alt="">
+          <img src="@/assets/window/qrcode.png" alt="" />
         </div>
       </div>
       <div class="operations">
-        <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')">
-        <img :src="isMax ? suofang : fangda" alt="" @click="
-          operationHandle(isMax ? 'minimize' : 'maximize')">
-        <img src="@/assets/window/guanbi.png" alt="" @click="operationHandle('close')">
+        <img src="@/assets/window/suoxiao.png" alt="" @click="operationHandle('hide')" />
+        <img
+          :src="isMax ? suofang : fangda"
+          alt=""
+          @click="operationHandle(isMax ? 'minimize' : 'maximize')"
+        />
+        <img src="@/assets/window/guanbi.png" alt="" @click="operationHandle('close')" />
       </div>
     </div>
   </div>
-  <a-modal v-model:open="open" @cancel="cancelHandle" class="modal" :footer="null" style="width: 400px;">
+  <a-modal
+    v-model:open="open"
+    @cancel="cancelHandle"
+    class="modal"
+    :footer="null"
+    style="width: 400px"
+  >
     <div class="container">
       <div class="bg"></div>
       <div class="title">要退出吗？</div>
@@ -89,7 +98,7 @@ window.electronAPI.on('unmaximize', () => {
         {{ desc }}
       </div>
       <div class="btns">
-        <a-button type="primary" style="margin-right: 20px;" @click="clickHandle">确认退出</a-button>
+        <a-button type="primary" style="margin-right: 20px" @click="clickHandle">确认退出</a-button>
         <a-button @click="cancelHandle">取消</a-button>
       </div>
     </div>
@@ -177,7 +186,6 @@ window.electronAPI.on('unmaximize', () => {
 }
 
 .modal {
-
   .container {
     position: relative;
     height: 200px;

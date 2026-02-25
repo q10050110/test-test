@@ -1,30 +1,31 @@
-import { BrowserWindow } from 'electron';
-import { Collection } from './collection.services.js';
-import log from '../../log/index.js';
-import request from '../../utils/request.js';
+import { BrowserWindow } from 'electron'
+import { Collection } from './collection.services.js'
+import log from '../../log/index.js'
+import request from '../../utils/request.js'
 import { Task } from './type.js'
 import { SysTemUtils } from '../../utils/system.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 
 export class TaskManager {
-  private static instance: TaskManager;
-  private tasks: Map<string, Collection> = new Map();
-  private activeTasks: Set<string> = new Set();
-  private maxConcurrentTasks = 2;
-  private taskQueue: string[] = [];
-  private mainWindow: BrowserWindow | null = null;
-  private filePathList: Map<string, { filePath: string, progress: any, autoResult?: string }> = new Map()
-  private constructor() { }
+  private static instance: TaskManager
+  private tasks: Map<string, Collection> = new Map()
+  private activeTasks: Set<string> = new Set()
+  private maxConcurrentTasks = 2
+  private taskQueue: string[] = []
+  private mainWindow: BrowserWindow | null = null
+  private filePathList: Map<string, { filePath: string; progress: any; autoResult?: string }> =
+    new Map()
+  private constructor() {}
 
   public static getInstance(): TaskManager {
     if (!TaskManager.instance) {
-      TaskManager.instance = new TaskManager();
+      TaskManager.instance = new TaskManager()
     }
-    return TaskManager.instance;
+    return TaskManager.instance
   }
 
   setMainWindow(window: BrowserWindow) {
-    this.mainWindow = window;
+    this.mainWindow = window
   }
 
   /**
@@ -32,7 +33,7 @@ export class TaskManager {
    */
   addTask(taskData: Task): Promise<string> {
     return new Promise(async (resolve, reject) => {
-      let collection: Collection | null = null;
+      let collection: Collection | null = null
 
       if (taskData._id) {
         try {
@@ -44,12 +45,15 @@ export class TaskManager {
               taskId: taskData._id,
             },
           })
-          collection = new Collection({ ...response.data, _id: response.data.taskId }, this.mainWindow!);
-          this.tasks.set(collection.getTaskInfo()._id, collection);
+          collection = new Collection(
+            { ...response.data, _id: response.data.taskId },
+            this.mainWindow!,
+          )
+          this.tasks.set(collection.getTaskInfo()._id, collection)
         } catch (error) {
-          log.error('更新任务数据失败', error);
-          reject(error);
-          return;
+          log.error('更新任务数据失败', error)
+          reject(error)
+          return
         }
       } else {
         // 新任务，需要生成ID并补充信息
@@ -58,29 +62,32 @@ export class TaskManager {
             url: '/api/auto/autoTask/createTask',
             method: 'post',
             data: taskData,
-          });
+          })
 
-          collection = new Collection({ ...response.data, _id: response.data.taskId }, this.mainWindow!);
-          this.tasks.set(collection.getTaskInfo()._id, collection);
+          collection = new Collection(
+            { ...response.data, _id: response.data.taskId },
+            this.mainWindow!,
+          )
+          this.tasks.set(collection.getTaskInfo()._id, collection)
         } catch (error) {
-          reject(error);
-          return;
+          reject(error)
+          return
         }
       }
 
       if (!collection) {
-        reject('创建任务时，Collection 未正确初始化');
-        return;
+        reject('创建任务时，Collection 未正确初始化')
+        return
       }
 
-      const taskInfo = collection.getTaskInfo();
-      resolve(taskInfo._id);
-    });
+      const taskInfo = collection.getTaskInfo()
+      resolve(taskInfo._id)
+    })
   }
 
-  /** 
+  /**
    * 复制任务
-    */
+   */
   copyTask(taskData: Task): Promise<string> {
     return new Promise(async (resolve, reject) => {
       try {
@@ -88,16 +95,16 @@ export class TaskManager {
           url: '/api/auto/autoTask/copyTask',
           method: 'post',
           data: {
-            taskId: taskData._id
+            taskId: taskData._id,
           },
-        });
-        const newTaskData = { ...taskData, _id: response.data };
-        const collection = new Collection(newTaskData, this.mainWindow!);
-        const taskInfo = collection.getTaskInfo();
-        resolve(taskInfo._id);
+        })
+        const newTaskData = { ...taskData, _id: response.data }
+        const collection = new Collection(newTaskData, this.mainWindow!)
+        const taskInfo = collection.getTaskInfo()
+        resolve(taskInfo._id)
       } catch (error) {
-        reject(error);
-        return;
+        reject(error)
+        return
       }
     })
   }
@@ -107,49 +114,52 @@ export class TaskManager {
   startTaskById(taskId: string): Promise<boolean> {
     this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
-      const task = this.tasks.get(taskId);
+      const task = this.tasks.get(taskId)
       if (!task) {
-        reject('任务不存在');
-        return;
+        reject('任务不存在')
+        return
       }
       // 检查任务是否允许重新执行
-      const taskInfo = task.getTaskInfo();
+      const taskInfo = task.getTaskInfo()
       if (taskInfo.taskStatus === 'running') {
-        reject('任务已在运行中');
-        return;
+        reject('任务已在运行中')
+        return
       }
 
       if (this.activeTasks.size < this.maxConcurrentTasks) {
-        this.executeTask(taskId);
+        this.executeTask(taskId)
       } else {
         task.updateStatus('pending')
         task.outputLog('pending')
         if (!this.taskQueue.includes(taskId)) this.taskQueue.push(taskId)
       }
-      resolve(true);
-    });
+      resolve(true)
+    })
   }
 
   /**
    * 实际执行任务
    */
   private async executeTask(taskId: string) {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
+    const task = this.tasks.get(taskId)
+    if (!task) return
 
     // 记录任务开始前的内存
     memoryMonitor.trackBusinessMetrics({
       taskCount: this.tasks.size,
       activeTaskCount: this.activeTasks.size,
-      queueSize: this.taskQueue.length
+      queueSize: this.taskQueue.length,
     })
 
     // 添加到活动任务并立即通知
-    this.activeTasks.add(taskId);
-    this.notifyTaskUpdate(taskId, 'running');
+    this.activeTasks.add(taskId)
+    this.notifyTaskUpdate(taskId, 'running')
     try {
-      const result = await task.run();
-      if (task.getTaskInfo().taskStatus === 'completed') this.mainWindow?.webContents.send('task-completed', { message: `任务：${task.getTaskInfo().taskName}已完成，可在自动化选品页面中查看结果！` })
+      const result = await task.run()
+      if (task.getTaskInfo().taskStatus === 'completed')
+        this.mainWindow?.webContents.send('task-completed', {
+          message: `任务：${task.getTaskInfo().taskName}已完成，可在自动化选品页面中查看结果！`,
+        })
       this.filePathList.set(taskId, JSON.parse(JSON.stringify(result)))
     } catch (error) {
       this.filePathList.set(taskId, JSON.parse(JSON.stringify(error)))
@@ -157,13 +167,13 @@ export class TaskManager {
       // 任务完成后清理并通知
       task.clearStatus(false, true)
       this.activeTasks.delete(taskId)
-      this.notifyTaskUpdate(taskId, 'completed');
+      this.notifyTaskUpdate(taskId, 'completed')
       this.tasks.delete(taskId)
       memoryMonitor.trackBusinessMetrics({
         taskCount: this.tasks.size,
         activeTaskCount: this.activeTasks.size,
         queueSize: this.taskQueue.length,
-        filePathListSize: this.filePathList.size
+        filePathListSize: this.filePathList.size,
       })
       // 内存压力大时，触发GC
       const usage = process.memoryUsage()
@@ -172,7 +182,7 @@ export class TaskManager {
         memoryMonitor.forceGC()
       }
       // 处理队列中的下一个任务
-      this.processNextTask();
+      this.processNextTask()
       log.info(this.tasks.size, '创建的任务')
     }
   }
@@ -182,9 +192,9 @@ export class TaskManager {
    */
   private async processNextTask() {
     if (this.taskQueue.length > 0 && this.activeTasks.size < this.maxConcurrentTasks) {
-      const nextTaskId = this.taskQueue.shift();
+      const nextTaskId = this.taskQueue.shift()
       if (nextTaskId) {
-        this.executeTask(nextTaskId);
+        this.executeTask(nextTaskId)
       }
     }
   }
@@ -193,19 +203,19 @@ export class TaskManager {
    * 获取任务信息
    */
   getTask(taskId: string) {
-    const task = this.tasks.get(taskId);
-    return task ? task.getTaskInfo() : null;
+    const task = this.tasks.get(taskId)
+    return task ? task.getTaskInfo() : null
   }
 
   /**
    * 获取任务列表（包括状态）
    */
   getAllTasksList() {
-    const taskList: Task[] = [];
+    const taskList: Task[] = []
     for (const [_, collection] of this.tasks) {
-      taskList.push(collection.getTaskInfo());
+      taskList.push(collection.getTaskInfo())
     }
-    return taskList;
+    return taskList
   }
 
   /**
@@ -217,34 +227,40 @@ export class TaskManager {
         url: '/api/auto/autoTask/getTaskList',
         method: 'post',
         data: params,
-      });
+      })
 
       for (let task of data.list) {
         const copyTask = this.filePathList.get(task._id)
         if (!this.tasks.has(task._id)) {
-          task.progress = task.taskStatus !== 'pending' ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 } : { current: 0, total: 0, totalCount: 0 }
+          task.progress =
+            task.taskStatus !== 'pending'
+              ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+              : { current: 0, total: 0, totalCount: 0 }
           task.tableFilePath = copyTask?.filePath
           task.autoResult = copyTask?.autoResult
           /*           const collection = new Collection(task, this.mainWindow!)
                     this.tasks.set(task._id, collection) */
         } else {
-          const progress2 = JSON.parse(JSON.stringify(this.tasks.get(task._id)?.getTaskInfo().progress) || "{}")
+          const progress2 = JSON.parse(
+            JSON.stringify(this.tasks.get(task._id)?.getTaskInfo().progress) || '{}',
+          )
           const filePath = this.tasks.get(task._id)?.getTaskInfo()?.tableFilePath
           if (task.taskStatus === 'running' || task.taskStatus === 'pending') {
-            if (filePath && SysTemUtils.fileOperations.exists(filePath)) task.tableFilePath = filePath
+            if (filePath && SysTemUtils.fileOperations.exists(filePath))
+              task.tableFilePath = filePath
             task.progress = progress2
           } else {
             task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
             task.autoResult = copyTask?.autoResult
-            if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath)) task.tableFilePath = copyTask.filePath
+            if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath))
+              task.tableFilePath = copyTask.filePath
           }
         }
-
       }
-      return data;
+      return data
     } catch (error) {
-      log.error('获取任务列表失败', error);
-      throw error;
+      log.error('获取任务列表失败', error)
+      throw error
     }
   }
 
@@ -253,41 +269,41 @@ export class TaskManager {
    */
   cancelTask(taskId: string): Promise<boolean> {
     return new Promise(async (resolve, reject) => {
-      const task = this.tasks.get(taskId);
+      const task = this.tasks.get(taskId)
       if (!task) {
-        reject('任务不存在');
-        return;
+        reject('任务不存在')
+        return
       }
 
       try {
         // 从任务队列中移除
-        const queueIndex = this.taskQueue.indexOf(taskId);
+        const queueIndex = this.taskQueue.indexOf(taskId)
         if (queueIndex > -1) {
-          this.taskQueue.splice(queueIndex, 1);
+          this.taskQueue.splice(queueIndex, 1)
         }
 
         // 如果任务在执行中，调用取消方法
         if (this.activeTasks.has(taskId)) {
-          await task.cancel();
-          this.activeTasks.delete(taskId);
+          await task.cancel()
+          this.activeTasks.delete(taskId)
         } else {
           // 如果任务不在执行中，直接更新状态
-          task.updateStatus('cancelled');
+          task.updateStatus('cancelled')
           task.outputLog('取消任务')
         }
 
         // 通知状态更新
-        this.notifyTaskUpdate(taskId, 'cancelled');
+        this.notifyTaskUpdate(taskId, 'cancelled')
 
         // 处理队列中的下一个任务
-        this.processNextTask();
+        this.processNextTask()
 
-        resolve(true);
+        resolve(true)
       } catch (error) {
-        log.error('取消任务失败', error);
-        reject(error);
+        log.error('取消任务失败', error)
+        reject(error)
       }
-    });
+    })
   }
 
   /**
@@ -296,16 +312,16 @@ export class TaskManager {
   reExecuteTask(taskId: string): Promise<boolean> {
     this.refreshTaskQueue()
     return new Promise(async (resolve, reject) => {
-      const task = this.tasks.get(taskId);
+      const task = this.tasks.get(taskId)
 
-      if (!task) return reject('任务不存在');
+      if (!task) return reject('任务不存在')
 
-      const taskInfo = task!.getTaskInfo();
+      const taskInfo = task!.getTaskInfo()
       // 只有已完成、失败或已取消的任务才能重新执行
       if (['completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
         // 立即更新状态并通知
         if (this.activeTasks.size < this.maxConcurrentTasks) {
-          this.executeTask(taskId);
+          this.executeTask(taskId)
         } else {
           if (this.taskQueue.includes(taskId)) return
           task.updateStatus('pending')
@@ -313,20 +329,20 @@ export class TaskManager {
           this.filePathList.delete(taskId)
           this.taskQueue.push(taskId)
         }
-        resolve(true);
+        resolve(true)
       } else {
-        reject('任务状态不允许重新执行');
+        reject('任务状态不允许重新执行')
       }
       resolve(true)
-    });
+    })
   }
 
   /**
    * 删除任务
    */
   async deleteTask(taskId: string | string[]): Promise<boolean> {
-    const taskIds = Array.isArray(taskId) ? taskId : [taskId];
-    let successCount = 0;
+    const taskIds = Array.isArray(taskId) ? taskId : [taskId]
+    let successCount = 0
 
     for (const id of taskIds) {
       const task = this.tasks.get(id)
@@ -338,26 +354,26 @@ export class TaskManager {
           url: '/api/auto/autoTask/deleteTask', // 或者使用批量删除接口
           method: 'post',
           data: { taskId: id },
-        });
+        })
 
-        successCount++;
+        successCount++
 
         try {
-          const filePath = await task?.getTableFilePath() || task2?.filePath
+          const filePath = (await task?.getTableFilePath()) || task2?.filePath
           await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
       } catch (error) {
-        log.error(`删除任务 ${id} 失败`, error);
+        log.error(`删除任务 ${id} 失败`, error)
       }
     }
 
     // 如果是批量删除，检查是否有部分成功
     if (Array.isArray(taskId)) {
-      return successCount > 0;
+      return successCount > 0
     } else {
-      return successCount === 1;
+      return successCount === 1
     }
   }
 
@@ -366,9 +382,9 @@ export class TaskManager {
    */
   private notifyTaskUpdate(taskId: string, status: string) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const task = this.getTask(taskId);
+      const task = this.getTask(taskId)
       if (task) {
-        this.mainWindow.webContents.send('task-status-update', { task, status });
+        this.mainWindow.webContents.send('task-status-update', { task, status })
       }
     }
   }
@@ -384,25 +400,25 @@ export class TaskManager {
         data: {
           taskIds: taskIds,
         },
-      });
+      })
 
       for (const id of taskIds) {
-        const task = this.tasks.get(id);
-        const task2 = this.filePathList.get(id);
-        if (!task && !task2) continue;
+        const task = this.tasks.get(id)
+        const task2 = this.filePathList.get(id)
+        if (!task && !task2) continue
 
         try {
-          const filePath = await task?.getTableFilePath() || task2?.filePath
+          const filePath = (await task?.getTableFilePath()) || task2?.filePath
           await SysTemUtils.fileOperations.deleteFile(filePath!)
         } catch (error) {
           log.error('删除任务文件失败', error)
         }
       }
 
-      return true;
+      return true
     } catch (error) {
-      log.error('批量删除任务失败', error);
-      throw error;
+      log.error('批量删除任务失败', error)
+      throw error
     }
   }
 
@@ -431,28 +447,29 @@ export class TaskManager {
   }
 
   /**
- * 终止所有任务（切换登录时调用）
- */
+   * 终止所有任务（切换登录时调用）
+   */
   async stopAllTasks(): Promise<void> {
     // 首先清空任务队列
     this.taskQueue = []
 
     // 取消所有活跃任务
-    for (const taskId of [...this.activeTasks]) { // 使用副本避免迭代时修改
+    for (const taskId of [...this.activeTasks]) {
+      // 使用副本避免迭代时修改
       try {
         await this.cancelTask(taskId)
       } catch (error) {
-        log.error(`取消活跃任务 ${taskId} 失败:`, error);
+        log.error(`取消活跃任务 ${taskId} 失败:`, error)
       }
     }
 
     try {
       await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
     } catch (error) {
-      log.error('重置任务状态失败:', error);
+      log.error('重置任务状态失败:', error)
     }
     this.tasks.clear()
     this.filePathList.clear()
-    log.info(this.tasks.size, '已清空所有队列');
+    log.info(this.tasks.size, '已清空所有队列')
   }
 }

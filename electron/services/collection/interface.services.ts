@@ -1,8 +1,8 @@
-import request from "../../utils/request.js"
-import { Task } from "./type.js"
+import request from '../../utils/request.js'
+import { Task } from './type.js'
 import { operationStore } from '../../store/index.js'
 import { compressData, currencyConversion } from '../../utils/index.js'
-import log from "../../log/index.js"
+import log from '../../log/index.js'
 export const getLogisticsList = async () => {
   try {
     const res = await request({
@@ -28,20 +28,22 @@ export const getShopList = async () => {
     const res = await request({
       url: '/api/other/shop/getShopList',
       method: 'post',
-      data: {}
+      data: {},
     })
-    const data = res.data.filter((item: any) => item.platform === 'OZON').filter((item: any) => item.account_id === user._id)
+    const data = res.data
+      .filter((item: any) => item.platform === 'OZON')
+      .filter((item: any) => item.account_id === user._id)
 
     return {
       code: 400,
       data,
-      message: '获取成功'
+      message: '获取成功',
     }
   } catch (error) {
     console.log(error, '你失败了？')
     return {
       code: 500,
-      message: '获取失败！'
+      message: '获取失败！',
     }
   }
 }
@@ -51,43 +53,45 @@ export const getConfigList = async () => {
     const res = await request({
       url: '/api/goods/upGoodsConfig/getConfig',
       method: 'post',
-      data: {}
+      data: {},
     })
     return {
       code: 400,
       data: res.data,
-      message: '获取成功'
+      message: '获取成功',
     }
   } catch (error) {
     return {
       code: 500,
-      message: '获取失败！'
+      message: '获取失败！',
     }
   }
 }
 
-
 /**
  * 批量上架接口
-  */
+ */
 export const batchUpGoods = async (data: any) => {
   try {
-    const res = await request<{ code: number, data: null, message: string }, { code: number, data: null, message: string }>({
+    const res = await request<
+      { code: number; data: null; message: string },
+      { code: number; data: null; message: string }
+    >({
       url: '/api/goods/batchUpGoods/ozon/batchCreateGoods',
       method: 'post',
-      data
+      data,
     })
 
     return res
   } catch (error) {
     console.log(error, '你失败了？')
-    return error as { code: number, data: null, message: string }
+    return error as { code: number; data: null; message: string }
   }
 }
 
 /**
  * 自动上架
-  */
+ */
 export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   if (goodsData.size === 0) return '没有可上架的商品'
   const source = Array.from(goodsData.values())
@@ -105,24 +109,27 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
     stock: task.stock,
     up_goods_type: 0,
     use_pack: true,
-    warehouse_id: task.warehouse_id
+    warehouse_id: task.warehouse_id,
   }
 
   while (source.length > 0) {
-    const chunk = source.splice(0, 100).map(item => ({
-      goods_id: item.id,
-      name: item.chineseName,
-      offer_id: '',
-      old_price: (item.resMoney * 1.05).toFixed(2),
-      origin_price: (item.resMoney * 1.65).toFixed(2),
-      price: item.resMoney
-    })).filter(item => item.price)
+    const chunk = source
+      .splice(0, 100)
+      .map((item) => ({
+        goods_id: item.id,
+        name: item.chineseName,
+        offer_id: '',
+        old_price: (item.resMoney * 1.05).toFixed(2),
+        origin_price: (item.resMoney * 1.65).toFixed(2),
+        price: item.resMoney,
+      }))
+      .filter((item) => item.price)
 
     log.info(chunk, '批量上架的商品')
 
     const params = {
       ...baseParams,
-      goods: compressData(chunk)
+      goods: compressData(chunk),
     }
     try {
       const res = await batchUpGoods(params)

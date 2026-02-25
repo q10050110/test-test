@@ -4,13 +4,13 @@ const codeMap = {
   RUB: '₽',
   EUR: '€',
   BYN: 'YN',
-  KZT: '₸'
+  KZT: '₸',
 }
 
 export const getShopCurCode = (code: keyof typeof codeMap) => {
   function getCurrencyName(code: keyof typeof codeMap): string {
-    return codeMap[code];
+    return codeMap[code]
   }
 
-  return getCurrencyName(code);
-};
+  return getCurrencyName(code)
+}

@@ -26,11 +26,8 @@ class Feedback {
 
   /* ================= confirm ================= */
 
-  confirm(
-    content: string,
-    options?: Partial<ModalFuncProps>
-  ): Promise<boolean> {
-    return new Promise(resolve => {
+  confirm(content: string, options?: Partial<ModalFuncProps>): Promise<boolean> {
+    return new Promise((resolve) => {
       Modal.confirm({
         title: options?.title ?? '提示',
         content,
@@ -43,7 +40,7 @@ class Feedback {
         onCancel() {
           resolve(false)
         },
-        ...options
+        ...options,
       })
     })
   }
@@ -54,13 +51,13 @@ class Feedback {
     description: string,
     type: 'success' | 'info' | 'warning' | 'error' = 'info',
     title = '提示',
-    placement: NotificationPlacement = 'topRight'
+    placement: NotificationPlacement = 'topRight',
   ) {
     notification[type]({
       message: title,
       description,
       duration: 3,
-      placement
+      placement,
     })
   }
 

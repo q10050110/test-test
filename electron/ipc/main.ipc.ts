@@ -16,5 +16,3 @@ export const resisterAllIpc = (win: BrowserWindow) => {
     globalBroadcast.broadcast('connect', '广播连接状态测试')
   }, 2000)
 }
-
-

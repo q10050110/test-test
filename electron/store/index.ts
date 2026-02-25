@@ -7,12 +7,12 @@ interface Info {
 export const store = new Store<Info>({
   name: 'store',
   defaults: {
-    token: ''
-  }
+    token: '',
+  },
 })
 
 export const operationStore = {
   get: (key: string) => (store as any).get(key),
   set: (key: string, data: any) => (store as any).set(key, data),
-  delete: (key: string) => (store as any).delete(key)
+  delete: (key: string) => (store as any).delete(key),
 }

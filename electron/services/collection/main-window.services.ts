@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron'
 import log from '../../log/index.js'
 
 export class MainWindowService {
@@ -8,10 +8,10 @@ export class MainWindowService {
   constructor(closeHandle: () => void) {
     this.closeHandle = closeHandle
   }
-  /** 
+  /**
    * 创建采集窗口
-  */
-  createCollectionWindow(url: string,) {
+   */
+  createCollectionWindow(url: string) {
     return new Promise((resolve, reject) => {
       let settled = false
       const safeResolve = (v: any) => {
@@ -32,37 +32,37 @@ export class MainWindowService {
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
-          backgroundThrottling: false
+          backgroundThrottling: false,
         },
-      });
+      })
 
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()
         }
         safeReject('页面加载超时')
-      }, 100000);
+      }, 100000)
 
       // 监听页面加载完成事件
       this.browserWindow.webContents.once('dom-ready', async () => {
-        log.info('页面 DOM 已准备就绪');
+        log.info('页面 DOM 已准备就绪')
         clearTimeout(timeoutId)
-        await new Promise(resolve => setTimeout(resolve, 3000))
+        await new Promise((resolve) => setTimeout(resolve, 3000))
         safeResolve(this.browserWindow)
-      });
+      })
 
       // 监听窗口关闭事件
       this.browserWindow.once('closed', () => {
         this.closeHandle && this.closeHandle()
-      });
+      })
 
-      this.browserWindow.loadURL(url);
+      this.browserWindow.loadURL(url)
     })
   }
 
   /**
    * 获取页面
-    */
+   */
   async getHTML() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
       return { html: undefined, domain: '' }
@@ -91,19 +91,17 @@ export class MainWindowService {
         })()
       `)
       log.info('点击结果:', result)
-      if (result?.ok) await new Promise(resolve => setTimeout(resolve, 2000))
+      if (result?.ok) await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
-    const html = await wc.executeJavaScript(
-      'document.documentElement.outerHTML'
-    )
+    const html = await wc.executeJavaScript('document.documentElement.outerHTML')
 
     const domain = new URL(wc.getURL()).origin
     return { html, domain }
   }
   /**
    * 滚动页面
-    */
+   */
   async scrollPage() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return false
 
@@ -152,9 +150,9 @@ export class MainWindowService {
     }
   }
 
-  /** 
+  /**
    * 获取跟卖数据
-    */
+   */
   async getSellingData(requestUrl: string) {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return
     try {
@@ -162,7 +160,7 @@ export class MainWindowService {
             fetch(${JSON.stringify(requestUrl)}, { credentials: 'include' })
             .then(response => response.json())
             .then(data => ({ success: true, data: data }))
-          `);
+          `)
       return response
     } catch (error) {
       return false

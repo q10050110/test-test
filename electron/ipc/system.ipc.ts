@@ -6,16 +6,16 @@ export const windowIpc = (win: BrowserWindow) => {
     switch (data) {
       case 'hide':
         SysTemUtils.appOperations.minimizeToTray(win)
-        break;
+        break
       case 'close':
         SysTemUtils.appOperations.quit(win)
-        break;
+        break
       case 'maximize':
         SysTemUtils.appOperations.maximize(win)
-        break;
+        break
       default:
         SysTemUtils.appOperations.unmaximize(win)
-        break;
+        break
     }
   })
 
@@ -28,8 +28,8 @@ export const windowIpc = (win: BrowserWindow) => {
   })
 
   ipcMain.handle('export-all-logs', async () => {
-    return await SysTemUtils.logOperations.exportAllLogs();
-  });
+    return await SysTemUtils.logOperations.exportAllLogs()
+  })
 
   ipcMain.on('check-update-app', async () => {
     UpdaterManager.getInstance().checkUpdate()

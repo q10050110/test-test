@@ -16,24 +16,36 @@ export class ParseService {
     const dom = $('#contentScrollPaginator a')
     // 解析DOM，获取商品数据
     dom.each((index, element) => {
-      const href = $(element).attr('href');
-      const cover = $(element).find('img')?.attr('src');
-      const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1];
+      const href = $(element).attr('href')
+      const cover = $(element).find('img')?.attr('src')
+      const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
       const queryUrl = encodeURIComponent(
-        `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`
-      );
-      const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`;
-      const link = `https://www.ozon.ru/product/${id}`;
-      const price = $(element).parent().find('.tsHeadline500Medium').text().trim().replace(/[\s\u2009₽]/g, '');
-      const oPrice = $(element).parent().find('.tsBodyControl400Small').text().match(/[\d\s\u2009]+(?=₽)/)?.[0]?.replace(/[\s\u2009]/g, '');
+        `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`,
+      )
+      const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
+      const link = `https://www.ozon.ru/product/${id}`
+      const price = $(element)
+        .parent()
+        .find('.tsHeadline500Medium')
+        .text()
+        .trim()
+        .replace(/[\s\u2009₽]/g, '')
+      const oPrice = $(element)
+        .parent()
+        .find('.tsBodyControl400Small')
+        .text()
+        .match(/[\d\s\u2009]+(?=₽)/)?.[0]
+        ?.replace(/[\s\u2009]/g, '')
       // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
-      const name = $(element).parent().find('a').children('div').children('span').text();
-      const str = $(element).parent().find('.tsBodyMBold').text().replace(/\u202F/g, ' ')
+      const name = $(element).parent().find('a').children('div').children('span').text()
+      const str = $(element)
+        .parent()
+        .find('.tsBodyMBold')
+        .text()
+        .replace(/\u202F/g, ' ')
       const match = str.match(/\s*([0-5]\.\d{1})\s*(\d[\d\s]*)\s*/i)
       const rating = match ? match[1] : 0
-      const reviewCountLabel = match
-        ? match[2].replace(/\s/g, '')
-        : 0
+      const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
       const obj = {
         href,
         price: Number(price),
@@ -46,7 +58,7 @@ export class ParseService {
         rating,
         sku: id,
         requestUrl,
-        reviewCountLabel
+        reviewCountLabel,
       }
       if (id) {
         data.push(obj)
@@ -76,7 +88,11 @@ export class ParseService {
 
   async '1688Parse'(html: any) {
     const $ = cheerio.load(html)
-    let str, price1, price2, link1688, cover2 = ''
+    let str,
+      price1,
+      price2,
+      link1688,
+      cover2 = ''
     const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')
     goodsList.each((index, element) => {
       const isAd = $(element).find('.mainImgIcon--Y8zt2ArJ').length > 0
@@ -92,16 +108,16 @@ export class ParseService {
     const sourcePrice = isNaN(Number(price)) ? 0 : price
     return { link1688, sourcePrice, cover2 }
   }
-  /** 
+  /**
    * 获取商品数量
-    */
+   */
   getDataCount() {
     return this.ozonGoodsData.size
   }
 
-  /** 
+  /**
    * 销毁实例
-    */
+   */
   destroy() {
     this.ozonGoodsData.clear()
     this.windowService = null

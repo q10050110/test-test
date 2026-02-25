@@ -44,7 +44,7 @@ export const createWindow = () => {
       contextIsolation: true, // 启用上下文隔离
       preload: preloadPath,
       sandbox: true,
-    }
+    },
   })
 
   log.info('BrowserWindow 实例创建成功')
@@ -118,37 +118,36 @@ export const createWindow = () => {
 
   // 加载页面
   if (SysTemUtils.getEnv() === 'development') {
-    const devUrl = app.isPackaged ? path.join(__dirname, '../../dist/index.html') : 'http://localhost:3000/login'
+    const devUrl = app.isPackaged
+      ? path.join(__dirname, '../../dist/index.html')
+      : 'http://localhost:3000/login'
     log.info(`开发环境: 加载 URL - ${devUrl}`)
-    mainWindow.loadURL(devUrl).catch(err => {
+    mainWindow.loadURL(devUrl).catch((err) => {
       log.error('加载开发服务器失败:', err)
     })
   } else {
     const indexPath = path.join(__dirname, '../../dist/index.html')
     log.info(`生产环境: 加载文件 - ${indexPath}`)
-    mainWindow.loadFile(indexPath).catch(err => {
+    mainWindow.loadFile(indexPath).catch((err) => {
       log.error('加载 index.html 失败:', err)
     })
   }
 
-  mainWindow.webContents.session.on(
-    'will-download',
-    (event, item, webContents) => {
-      // 用户最终选择的保存路径
+  mainWindow.webContents.session.on('will-download', (event, item, webContents) => {
+    // 用户最终选择的保存路径
+    const savePath = item.getSavePath()
+
+    item.on('updated', () => {
       const savePath = item.getSavePath()
+      if (savePath) {
+        log.info('用户保存路径：', savePath)
+      }
+    })
 
-      item.on('updated', () => {
-        const savePath = item.getSavePath()
-        if (savePath) {
-          log.info('用户保存路径：', savePath)
-        }
-      })
-
-      item.once('done', (event, state) => {
-        log.info(`下载完成：${state}`, savePath)
-      })
-    }
-  )
+    item.once('done', (event, state) => {
+      log.info(`下载完成：${state}`, savePath)
+    })
+  })
 
   mainWindow.on('close', (event) => {
     event.preventDefault()

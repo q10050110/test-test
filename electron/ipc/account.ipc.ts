@@ -6,12 +6,18 @@ export const accountIpc = (win: BrowserWindow) => {
     accountHandle(args)
   })
 
-  ipcMain.handle('login', async (event, data: {
-    phone: string
-    pwd: string
-  }) => {
-    return await login(data)
-  })
+  ipcMain.handle(
+    'login',
+    async (
+      event,
+      data: {
+        phone: string
+        pwd: string
+      },
+    ) => {
+      return await login(data)
+    },
+  )
 
   ipcMain.handle('getUserInfo', async (event, data: { token: string }) => {
     return await getUserInfo(data)

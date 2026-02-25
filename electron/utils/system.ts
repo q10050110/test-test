@@ -1,16 +1,38 @@
-import { app, dialog, shell, clipboard, nativeImage, screen, powerMonitor, systemPreferences, Notification, Tray, Menu, BrowserWindow } from 'electron'
+import {
+  app,
+  dialog,
+  shell,
+  clipboard,
+  nativeImage,
+  screen,
+  powerMonitor,
+  systemPreferences,
+  Notification,
+  Tray,
+  Menu,
+  BrowserWindow,
+} from 'electron'
 import { join, dirname, basename } from 'path'
-import { rmSync, unlinkSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, copyFileSync } from 'fs'
+import {
+  rmSync,
+  unlinkSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  statSync,
+  readdirSync,
+  copyFileSync,
+} from 'fs'
 import log from '../log/index.js'
 /**
  * Electron 系统级能力封装
  */
 export class SysTemUtils {
-  /** 
+  /**
    * 获取环境变量
-    */
+   */
   static getEnv() {
-
     if (!app.isPackaged) return 'development'
     try {
       const packagePath = join(app.getAppPath(), 'package.json')
@@ -42,7 +64,7 @@ export class SysTemUtils {
     return {
       platform: process.platform,
       arch: process.arch,
-      versions: process.versions
+      versions: process.versions,
     }
   }
 
@@ -52,10 +74,10 @@ export class SysTemUtils {
   static getLogDirectory(): string {
     try {
       const installDir = app.getPath('userData')
-      return join(installDir, 'logs');
+      return join(installDir, 'logs')
     } catch (error) {
-      console.error('获取日志目录失败:', error);
-      return '';
+      console.error('获取日志目录失败:', error)
+      return ''
     }
   }
 
@@ -68,20 +90,20 @@ export class SysTemUtils {
      */
     getLogFiles: (): string[] => {
       try {
-        const logDir = SysTemUtils.getLogDirectory();
+        const logDir = SysTemUtils.getLogDirectory()
         if (!logDir || !existsSync(logDir)) {
-          return [];
+          return []
         }
 
-        const files = readdirSync(logDir);
+        const files = readdirSync(logDir)
         // 过滤出日志文件（匹配 YYYY-MM-DD.log 格式）
         return files
-          .filter(file => /^\d{4}-\d{2}-\d{2}\.log$/.test(file))
-          .map(file => join(logDir, file))
-          .sort((a, b) => basename(b).localeCompare(basename(a))); // 按日期降序排列
+          .filter((file) => /^\d{4}-\d{2}-\d{2}\.log$/.test(file))
+          .map((file) => join(logDir, file))
+          .sort((a, b) => basename(b).localeCompare(basename(a))) // 按日期降序排列
       } catch (error) {
-        console.error('获取日志文件列表失败:', error);
-        return [];
+        console.error('获取日志文件列表失败:', error)
+        return []
       }
     },
 
@@ -89,28 +111,28 @@ export class SysTemUtils {
      * 获取日志文件大小
      */
     getLogFileSizes: (): { filePath: string; size: number; sizeFormatted: string }[] => {
-      const logFiles = SysTemUtils.logOperations.getLogFiles();
-      return logFiles.map(filePath => {
+      const logFiles = SysTemUtils.logOperations.getLogFiles()
+      return logFiles.map((filePath) => {
         try {
-          const stats = statSync(filePath);
-          const size = stats.size;
-          const sizeFormatted = SysTemUtils.logOperations.formatFileSize(size);
-          return { filePath, size, sizeFormatted };
+          const stats = statSync(filePath)
+          const size = stats.size
+          const sizeFormatted = SysTemUtils.logOperations.formatFileSize(size)
+          return { filePath, size, sizeFormatted }
         } catch (error) {
-          return { filePath, size: 0, sizeFormatted: '0 B' };
+          return { filePath, size: 0, sizeFormatted: '0 B' }
         }
-      });
+      })
     },
 
     /**
      * 格式化文件大小
      */
     formatFileSize: (bytes: number): string => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      if (bytes === 0) return '0 B'
+      const k = 1024
+      const sizes = ['B', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     },
 
     /**
@@ -119,35 +141,35 @@ export class SysTemUtils {
     exportSingleLog: async (sourcePath: string, targetPath?: string): Promise<boolean> => {
       try {
         if (!existsSync(sourcePath)) {
-          console.error('源日志文件不存在:', sourcePath);
-          return false;
+          console.error('源日志文件不存在:', sourcePath)
+          return false
         }
 
         // 如果没有指定目标路径，则让用户选择
         if (!targetPath) {
-          const fileName = basename(sourcePath);
+          const fileName = basename(sourcePath)
           targetPath = await SysTemUtils.dialogOperations.selectSavePath({
             title: '导出日志文件',
             defaultPath: fileName,
             filters: [
               { name: '日志文件', extensions: ['log'] },
-              { name: '所有文件', extensions: ['*'] }
-            ]
-          });
+              { name: '所有文件', extensions: ['*'] },
+            ],
+          })
 
           if (!targetPath) {
-            console.log('用户取消了日志导出');
-            return false;
+            console.log('用户取消了日志导出')
+            return false
           }
         }
 
         // 复制文件
-        copyFileSync(sourcePath, targetPath);
-        console.log(`日志文件已导出至: ${targetPath}`);
-        return true;
+        copyFileSync(sourcePath, targetPath)
+        console.log(`日志文件已导出至: ${targetPath}`)
+        return true
       } catch (error) {
-        console.error('导出单个日志文件失败:', error);
-        return false;
+        console.error('导出单个日志文件失败:', error)
+        return false
       }
     },
 
@@ -156,51 +178,54 @@ export class SysTemUtils {
      */
     exportAllLogs: async (targetDir?: string): Promise<boolean> => {
       try {
-        const logFiles = SysTemUtils.logOperations.getLogFiles();
+        const logFiles = SysTemUtils.logOperations.getLogFiles()
         if (logFiles.length === 0) {
-          console.log('没有找到日志文件');
-          return false;
+          console.log('没有找到日志文件')
+          return false
         }
 
         // 如果没有指定目标目录，则让用户选择
         if (!targetDir) {
           const selectedDir = await dialog.showOpenDialog({
             properties: ['openDirectory'],
-            title: '选择导出目录'
-          });
+            title: '选择导出目录',
+          })
 
           if (selectedDir.canceled || !selectedDir.filePaths[0]) {
-            console.log('用户取消了日志导出');
-            return false;
+            console.log('用户取消了日志导出')
+            return false
           }
 
-          targetDir = selectedDir.filePaths[0];
+          targetDir = selectedDir.filePaths[0]
         }
 
         // 创建日志导出子目录
-        const exportDir = join(targetDir, `logs_export_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`);
+        const exportDir = join(
+          targetDir,
+          `logs_export_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`,
+        )
         if (!existsSync(exportDir)) {
-          mkdirSync(exportDir, { recursive: true });
+          mkdirSync(exportDir, { recursive: true })
         }
 
         // 复制所有日志文件
-        let successCount = 0;
+        let successCount = 0
         for (const logFile of logFiles) {
           try {
-            const fileName = basename(logFile);
-            const targetPath = join(exportDir, fileName);
-            copyFileSync(logFile, targetPath);
-            successCount++;
+            const fileName = basename(logFile)
+            const targetPath = join(exportDir, fileName)
+            copyFileSync(logFile, targetPath)
+            successCount++
           } catch (error) {
-            console.error(`复制日志文件失败 ${logFile}:`, error);
+            console.error(`复制日志文件失败 ${logFile}:`, error)
           }
         }
 
-        console.log(`成功导出 ${successCount}/${logFiles.length} 个日志文件到: ${exportDir}`);
-        return successCount > 0;
+        console.log(`成功导出 ${successCount}/${logFiles.length} 个日志文件到: ${exportDir}`)
+        return successCount > 0
       } catch (error) {
-        console.error('导出所有日志文件失败:', error);
-        return false;
+        console.error('导出所有日志文件失败:', error)
+        return false
       }
     },
 
@@ -209,61 +234,66 @@ export class SysTemUtils {
      */
     exportRecentLogs: async (days: number, targetDir?: string): Promise<boolean> => {
       try {
-        const allLogFiles = SysTemUtils.logOperations.getLogFiles();
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
+        const allLogFiles = SysTemUtils.logOperations.getLogFiles()
+        const cutoffDate = new Date()
+        cutoffDate.setDate(cutoffDate.getDate() - days)
 
-        const recentLogFiles = allLogFiles.filter(filePath => {
-          const fileName = basename(filePath);
-          const dateStr = fileName.split('.')[0]; // 移除 .log 后缀
-          const fileDate = new Date(dateStr);
-          return fileDate >= cutoffDate;
-        });
+        const recentLogFiles = allLogFiles.filter((filePath) => {
+          const fileName = basename(filePath)
+          const dateStr = fileName.split('.')[0] // 移除 .log 后缀
+          const fileDate = new Date(dateStr)
+          return fileDate >= cutoffDate
+        })
 
         if (recentLogFiles.length === 0) {
-          console.log(`最近 ${days} 天内没有找到日志文件`);
-          return false;
+          console.log(`最近 ${days} 天内没有找到日志文件`)
+          return false
         }
 
         // 如果没有指定目标目录，则让用户选择
         if (!targetDir) {
           const selectedDir = await dialog.showOpenDialog({
             properties: ['openDirectory'],
-            title: `导出最近 ${days} 天的日志`
-          });
+            title: `导出最近 ${days} 天的日志`,
+          })
 
           if (selectedDir.canceled || !selectedDir.filePaths[0]) {
-            console.log('用户取消了日志导出');
-            return false;
+            console.log('用户取消了日志导出')
+            return false
           }
 
-          targetDir = selectedDir.filePaths[0];
+          targetDir = selectedDir.filePaths[0]
         }
 
         // 创建日志导出子目录
-        const exportDir = join(targetDir, `recent_logs_export_${days}_days_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`);
+        const exportDir = join(
+          targetDir,
+          `recent_logs_export_${days}_days_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}`,
+        )
         if (!existsSync(exportDir)) {
-          mkdirSync(exportDir, { recursive: true });
+          mkdirSync(exportDir, { recursive: true })
         }
 
         // 复制最近的日志文件
-        let successCount = 0;
+        let successCount = 0
         for (const logFile of recentLogFiles) {
           try {
-            const fileName = basename(logFile);
-            const targetPath = join(exportDir, fileName);
-            copyFileSync(logFile, targetPath);
-            successCount++;
+            const fileName = basename(logFile)
+            const targetPath = join(exportDir, fileName)
+            copyFileSync(logFile, targetPath)
+            successCount++
           } catch (error) {
-            console.error(`复制日志文件失败 ${logFile}:`, error);
+            console.error(`复制日志文件失败 ${logFile}:`, error)
           }
         }
 
-        console.log(`成功导出最近 ${days} 天的 ${successCount}/${recentLogFiles.length} 个日志文件到: ${exportDir}`);
-        return successCount > 0;
+        console.log(
+          `成功导出最近 ${days} 天的 ${successCount}/${recentLogFiles.length} 个日志文件到: ${exportDir}`,
+        )
+        return successCount > 0
       } catch (error) {
-        console.error(`导出最近 ${days} 天的日志失败:`, error);
-        return false;
+        console.error(`导出最近 ${days} 天的日志失败:`, error)
+        return false
       }
     },
 
@@ -273,19 +303,19 @@ export class SysTemUtils {
     readLogContent: (filePath: string): string | null => {
       try {
         if (!existsSync(filePath)) {
-          return null;
+          return null
         }
-        return readFileSync(filePath, 'utf-8');
+        return readFileSync(filePath, 'utf-8')
       } catch (error) {
-        console.error('读取日志文件失败:', error);
-        return null;
+        console.error('读取日志文件失败:', error)
+        return null
       }
-    }
+    },
   }
 
   /**
-  * 文件操作
-  */
+   * 文件操作
+   */
   static fileOperations = {
     /**
      * 读取文件
@@ -320,8 +350,8 @@ export class SysTemUtils {
       }
     },
     /**
-   * 检查文件是否存在
-   */
+     * 检查文件是否存在
+     */
     exists: (filePath: string): boolean => {
       return existsSync(filePath)
     },
@@ -354,9 +384,9 @@ export class SysTemUtils {
       }
     },
     /**
-    * 删除文件夹
-    * @param filePath 文件路径
-    */
+     * 删除文件夹
+     * @param filePath 文件路径
+     */
     deleteFolder: (filePath: string) => {
       try {
         if (existsSync(filePath)) {
@@ -368,8 +398,8 @@ export class SysTemUtils {
     },
   }
   /**
-  * 对话框操作
-  */
+   * 对话框操作
+   */
   static dialogOperations = {
     /**
      * 显示消息框
@@ -381,12 +411,12 @@ export class SysTemUtils {
         type: 'info',
         title,
         message,
-        buttons: ['确定']
+        buttons: ['确定'],
       })
     },
     /**
-  * 显示确认对话框
-  */
+     * 显示确认对话框
+     */
     showConfirmDialog: async (title: string, message: string): Promise<boolean> => {
       const result = await dialog.showMessageBox({
         type: 'question',
@@ -394,7 +424,7 @@ export class SysTemUtils {
         message,
         buttons: ['确定', '取消'],
         defaultId: 0, // 默认选中第一个按钮
-        cancelId: 1   // 点击 ESC 或关闭按钮时，相当于点击第二个按钮
+        cancelId: 1, // 点击 ESC 或关闭按钮时，相当于点击第二个按钮
       })
 
       // 返回 true 表示点击了"确定"，false 表示点击了"取消"或关闭按钮
@@ -406,26 +436,28 @@ export class SysTemUtils {
     selectFile: async (options?: Electron.OpenDialogOptions) => {
       const defaultOptions: Electron.OpenDialogOptions = {
         properties: ['openFile'],
-        filters: [{
-          name: 'All Files',
-          extensions: ['*']
-        }]
+        filters: [
+          {
+            name: 'All Files',
+            extensions: ['*'],
+          },
+        ],
       }
 
       const result = await dialog.showOpenDialog({ ...defaultOptions, ...options })
       return result.filePaths
     },
     /**
-    * 选择保存路径
-    */
+     * 选择保存路径
+     */
     selectSavePath: async (options?: Electron.SaveDialogOptions) => {
       const result = await dialog.showSaveDialog(options || {})
       return result.filePath
-    }
+    },
   }
   /**
-  * 剪贴板操作
-  */
+   * 剪贴板操作
+   */
   static clipboardOperations = {
     /**
      * 写入文本到剪贴板
@@ -467,17 +499,17 @@ export class SysTemUtils {
      */
     readImage: (): Electron.NativeImage => {
       return clipboard.readImage()
-    }
+    },
   }
   /**
-     * 屏幕操作
-     */
+   * 屏幕操作
+   */
   static screenOperations = {
     /**
      * 获取屏幕尺寸
      */
     getScreenSize: () => {
-      const primaryDisplay = screen.getPrimaryDisplay();
+      const primaryDisplay = screen.getPrimaryDisplay()
       return primaryDisplay.size
     },
 
@@ -501,26 +533,26 @@ export class SysTemUtils {
     onDisplayChanged: (callback: () => void) => {
       screen.on('display-metrics-changed', callback)
       return () => screen.removeListener('display-metrics-changed', callback)
-    }
+    },
   }
   /**
- * 电源监控
- */
+   * 电源监控
+   */
   static powerOperations = {
     /**
      * 监听系统挂起
      */
     onSuspend: (callback: () => void) => {
-      powerMonitor.on('suspend', callback);
-      return () => powerMonitor.removeListener('suspend', callback);
+      powerMonitor.on('suspend', callback)
+      return () => powerMonitor.removeListener('suspend', callback)
     },
 
     /**
      * 监听系统恢复
      */
     onResume: (callback: () => void) => {
-      powerMonitor.on('resume', callback);
-      return () => powerMonitor.removeListener('resume', callback);
+      powerMonitor.on('resume', callback)
+      return () => powerMonitor.removeListener('resume', callback)
     },
 
     /**
@@ -535,30 +567,30 @@ export class SysTemUtils {
      * 检查是否正在充电
      */
     isCharging: (): boolean => {
-      return !powerMonitor.isOnBatteryPower();
-    }
+      return !powerMonitor.isOnBatteryPower()
+    },
   }
   /**
- * 系统通知
- */
+   * 系统通知
+   */
   static notificationOperations = {
     /**
      * 显示通知
      */
     showNotification: (options: Electron.NotificationConstructorOptions) => {
       if (Notification.isSupported()) {
-        const notification = new Notification(options);
-        notification.show();
-        return notification;
+        const notification = new Notification(options)
+        notification.show()
+        return notification
       } else {
-        console.warn('系统不支持通知');
-        return null;
+        console.warn('系统不支持通知')
+        return null
       }
-    }
-  };
+    },
+  }
   /**
-  * 系统托盘
-  */
+   * 系统托盘
+   */
   static trayOperations = {
     /**
      * 创建系统托盘
@@ -566,24 +598,24 @@ export class SysTemUtils {
     createTray: (
       iconPath: string,
       tooltip: string,
-      menuItems?: Array<{ label: string, click: () => void }>
+      menuItems?: Array<{ label: string; click: () => void }>,
     ) => {
-      const tray = new Tray(iconPath);
-      tray.setToolTip(tooltip);
+      const tray = new Tray(iconPath)
+      tray.setToolTip(tooltip)
 
       if (menuItems && menuItems.length > 0) {
         const contextMenu = Menu.buildFromTemplate(
-          menuItems.map(item => ({
+          menuItems.map((item) => ({
             label: item.label,
-            click: item.click
-          }))
-        );
-        tray.setContextMenu(contextMenu);
+            click: item.click,
+          })),
+        )
+        tray.setContextMenu(contextMenu)
       }
 
-      return tray;
-    }
-  };
+      return tray
+    },
+  }
   /**
    * 外部链接操作
    */
@@ -593,11 +625,11 @@ export class SysTemUtils {
      */
     openExternal: async (url: string) => {
       try {
-        await shell.openExternal(url);
-        return true;
+        await shell.openExternal(url)
+        return true
       } catch (error) {
-        console.error('打开外部链接失败:', error);
-        return false;
+        console.error('打开外部链接失败:', error)
+        return false
       }
     },
 
@@ -606,11 +638,11 @@ export class SysTemUtils {
      */
     openPath: async (path: string) => {
       try {
-        await shell.openPath(path);
-        return true;
+        await shell.openPath(path)
+        return true
       } catch (error) {
-        console.error('打开路径失败:', error);
-        return false;
+        console.error('打开路径失败:', error)
+        return false
       }
     },
 
@@ -618,12 +650,12 @@ export class SysTemUtils {
      * 在文件管理器中显示文件
      */
     showItemInFolder: (fullPath: string) => {
-      shell.showItemInFolder(fullPath);
-    }
-  };
+      shell.showItemInFolder(fullPath)
+    },
+  }
   /**
-  * 应用控制
-  */
+   * 应用控制
+   */
   static appOperations = {
     /**
      * 退出应用
@@ -638,8 +670,8 @@ export class SysTemUtils {
      * 重启应用
      */
     relaunch: () => {
-      app.relaunch();
-      app.exit(0);
+      app.relaunch()
+      app.exit(0)
     },
 
     /**
@@ -650,14 +682,14 @@ export class SysTemUtils {
       win.minimize()
     },
     /**
-    * 最大化
-    */
+     * 最大化
+     */
     maximize: (win: BrowserWindow) => {
       win.maximize()
     },
     /**
-    * 还原
-    */
+     * 还原
+     */
     unmaximize: (win: BrowserWindow) => {
       win.unmaximize()
     },

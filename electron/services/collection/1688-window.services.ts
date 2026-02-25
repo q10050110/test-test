@@ -1,16 +1,16 @@
-import path from "path";
-import * as cheerio from 'cheerio';
-import { BrowserWindow, ipcMain } from "electron";
-import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto'; // 使用 UUID 确保唯一性
-import log from "../../log/index.js";
+import path from 'path'
+import * as cheerio from 'cheerio'
+import { BrowserWindow, ipcMain } from 'electron'
+import { fileURLToPath } from 'url'
+import { randomUUID } from 'crypto' // 使用 UUID 确保唯一性
+import log from '../../log/index.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
-import { ParseService } from "./parse.services.js";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { ParseService } from './parse.services.js'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 export class WindowService {
-  windows: { cleanup: Function, id: string }[] = []
+  windows: { cleanup: Function; id: string }[] = []
   parseService: ParseService
   constructor(parseService: ParseService) {
     this.parseService = parseService
@@ -25,45 +25,45 @@ export class WindowService {
   createWindow(sourceType: string, cover: string): Promise<any> {
     memoryMonitor.trackBusinessMetrics({
       windowCount: this.windows.length,
-      action: 'create-window'
+      action: 'create-window',
     })
-    const winId = randomUUID(); // 使用 UUID 确保唯一性
-    let win: BrowserWindow | null = null;
-    let settled = false;
+    const winId = randomUUID() // 使用 UUID 确保唯一性
+    let win: BrowserWindow | null = null
+    let settled = false
     let timer: NodeJS.Timeout | undefined = undefined
     // 清理资源
     const cleanup = () => {
       if (win && !win.isDestroyed()) {
-        win.removeAllListeners();
-        win.destroy();
+        win.removeAllListeners()
+        win.destroy()
       }
 
       // 移除当前窗口的 IPC 监听器
-      ipcMain.removeAllListeners(`result-page-${winId}`);
+      ipcMain.removeAllListeners(`result-page-${winId}`)
       if (timer) {
         clearTimeout(timer)
         timer = undefined
       }
-      this.windows = this.windows.filter(w => w.id !== winId)
+      this.windows = this.windows.filter((w) => w.id !== winId)
       win = null
       settled = true
-    };
+    }
 
     // 安全 resolve
     const safeResolve = (value: any, resolve: Function) => {
-      if (settled) return;
-      settled = true;
+      if (settled) return
+      settled = true
       cleanup()
-      resolve(value);
-    };
+      resolve(value)
+    }
 
     // 安全 reject
     const safeReject = (error: Error, reject: Function) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject({ error: error || '未知错误', winId });
-    };
+      if (settled) return
+      settled = true
+      cleanup()
+      reject({ error: error || '未知错误', winId })
+    }
 
     return new Promise(async (resolve, reject) => {
       try {
@@ -80,23 +80,27 @@ export class WindowService {
             additionalArguments: [`--winId=${winId}`],
             backgroundThrottling: false,
           },
-        });
+        })
 
-        timer = setTimeout(() => {
-          safeReject(new Error('1688采集超时'), reject)
-        }, 1000 * 60 * 2)
+        timer = setTimeout(
+          () => {
+            safeReject(new Error('1688采集超时'), reject)
+          },
+          1000 * 60 * 2,
+        )
 
         this.windows.push({ cleanup, id: winId })
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
           try {
-            let sortText: string | undefined;
+            let sortText: string | undefined
             if (sourceType) {
-              sortText = sourceType === '1' ? '价格' : '销量';
+              sortText = sourceType === '1' ? '价格' : '销量'
             }
-            await new Promise((res) => setTimeout(res, 5000));
+            await new Promise((res) => setTimeout(res, 5000))
             // 执行排序逻辑
-            if (sourceType !== '0') await win?.webContents.executeJavaScript(`
+            if (sourceType !== '0')
+              await win?.webContents.executeJavaScript(`
               new Promise((resolve, reject) => {
                 const sortText = ${JSON.stringify(sortText)};
                 const list = document.querySelectorAll('.sortItem--X1Plgn6V');
@@ -113,27 +117,27 @@ export class WindowService {
                   reject(error);
                 }
               });
-            `);
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            `)
+            await new Promise((resolve) => setTimeout(resolve, 2000))
             // 获取页面 HTML 并解析
             const html = await win?.webContents.executeJavaScript(
-              'document.documentElement.outerHTML'
-            );
-            const obj = this.parseService["1688Parse"](html)
+              'document.documentElement.outerHTML',
+            )
+            const obj = this.parseService['1688Parse'](html)
             win?.destroy()
             // 增加延迟以确保页面稳定
-            await new Promise((res) => setTimeout(res, 5000));
-            safeResolve(obj, resolve);
+            await new Promise((res) => setTimeout(res, 5000))
+            safeResolve(obj, resolve)
           } catch (error) {
-            safeReject(error as Error, reject);
+            safeReject(error as Error, reject)
           }
-        });
+        })
 
         // 加载目标页面
-        win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?');
+        win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
 
         // 等待页面加载完成并增加延迟
-        await new Promise((res) => setTimeout(res, 2000));
+        await new Promise((res) => setTimeout(res, 2000))
 
         // 执行图片上传和搜索逻辑
         await win?.webContents?.executeJavaScript(`
@@ -196,19 +200,19 @@ export class WindowService {
               reject(error);
             }
           });
-        `);
+        `)
       } catch (error) {
         log.error('1688图片搜索失败', error)
-        safeReject(error as Error, reject);
+        safeReject(error as Error, reject)
       }
-    });
+    })
   }
 
   /**
    * 销毁实例
-    */
+   */
   destroy() {
-    this.windows.forEach(win => win.cleanup())
+    this.windows.forEach((win) => win.cleanup())
     this.windows = []
   }
 }

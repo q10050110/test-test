@@ -9,24 +9,27 @@ export const useAppStore = defineStore('app', () => {
   const closeType = ref<'quit' | 'logout'>('quit')
   const desc = ref('真的真的要退出吗T_T？')
   const updateInfo = ref<Version>()
-  const updateStatus = ref<'hasUpdate' | 'hasNew' | 'download' | 'downloaded' | 'isInstall'>('hasNew')
+  const updateStatus = ref<'hasUpdate' | 'hasNew' | 'download' | 'downloaded' | 'isInstall'>(
+    'hasNew',
+  )
   const theme = ref({
     token: {
-      fontSize: 16
-    }
+      fontSize: 16,
+    },
   })
   const initAppInfo = async () => {
     appInfo.value = await window.electronAPI.invoke('app', {})
-    if (updateStatus.value !== 'isInstall') updateStatus.value = await window.electronStore.get('update-status') || 'hasNew'
-    updateInfo.value = await window.electronStore.get('update-info') || {}
+    if (updateStatus.value !== 'isInstall')
+      updateStatus.value = (await window.electronStore.get('update-status')) || 'hasNew'
+    updateInfo.value = (await window.electronStore.get('update-info')) || {}
   }
 
-  const setLoading = (value: boolean) => loading.value = value
+  const setLoading = (value: boolean) => (loading.value = value)
 
+  const setTheme = (data: any) => (theme.value = data)
 
-  const setTheme = (data: any) => theme.value = data
-
-  const setUpdate = (value: 'hasUpdate' | 'hasNew' | 'download' | 'downloaded' | 'isInstall') => updateStatus.value = value
+  const setUpdate = (value: 'hasUpdate' | 'hasNew' | 'download' | 'downloaded' | 'isInstall') =>
+    (updateStatus.value = value)
   const setRootFontSize = () => {
     const baseWidth = 1300
     const baseFontSize = 16
@@ -36,12 +39,11 @@ export const useAppStore = defineStore('app', () => {
     console.log('fontSize', fontSize)
     setTheme({
       token: {
-        fontSize: Math.max(12, fontSize)
-      }
+        fontSize: Math.max(12, fontSize),
+      },
     })
     document.documentElement.style.fontSize = fontSize + 'px'
   }
-
 
   const openHandle = async (eventType: 'quit' | 'logout' = 'quit') => {
     const data = await window.electronAPI.invoke<any>('collection-get-all-tasks', {})
@@ -71,6 +73,6 @@ export const useAppStore = defineStore('app', () => {
     setUpdate,
     initAppInfo,
     openHandle,
-    closeOpenHandle
+    closeOpenHandle,
   }
 })

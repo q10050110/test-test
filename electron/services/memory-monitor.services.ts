@@ -21,12 +21,12 @@ export class MemoryMonitorService {
 
   // 内存阈值配置
   private thresholds = {
-    heap: 800,      // 堆内存阈值 (MB)
-    rss: 1200,      // 常驻内存阈值 (MB)
-    external: 300   // 外部内存阈值 (MB)
+    heap: 800, // 堆内存阈值 (MB)
+    rss: 1200, // 常驻内存阈值 (MB)
+    external: 300, // 外部内存阈值 (MB)
   }
 
-  private constructor() { }
+  private constructor() {}
 
   static getInstance(): MemoryMonitorService {
     if (!MemoryMonitorService.instance) {
@@ -87,7 +87,7 @@ export class MemoryMonitorService {
         heapUsed: heapUsedMB,
         heapTotal: heapTotalMB,
         rss: rssMB,
-        external: externalMB
+        external: externalMB,
       })
 
       // 限制历史记录数量
@@ -98,8 +98,8 @@ export class MemoryMonitorService {
       // 输出日志
       log.info(
         `[MemoryMonitor] Heap: ${heapUsedMB.toFixed(2)}/${heapTotalMB.toFixed(2)}MB | ` +
-        `RSS: ${rssMB.toFixed(2)}MB | ` +
-        `External: ${externalMB.toFixed(2)}MB`
+          `RSS: ${rssMB.toFixed(2)}MB | ` +
+          `External: ${externalMB.toFixed(2)}MB`,
       )
 
       // 获取所有 Electron 进程信息
@@ -107,7 +107,6 @@ export class MemoryMonitorService {
 
       // 检查阈值并触发警告
       this.checkThresholds(heapUsedMB, rssMB, externalMB)
-
     } catch (error) {
       log.error('[MemoryMonitor] 检查内存失败', error)
     }
@@ -126,16 +125,17 @@ export class MemoryMonitorService {
 
       log.info(
         `[MemoryMonitor] Electron 进程数: ${metrics.length}, ` +
-        `总内存: ${totalMemoryMB.toFixed(2)}MB`
+          `总内存: ${totalMemoryMB.toFixed(2)}MB`,
       )
 
       // 详细进程信息（可选）
-      metrics.forEach(m => {
+      metrics.forEach((m) => {
         const memMB = (m.memory?.workingSetSize || 0) / 1024
-        if (memMB > 50) { // 只记录超过 50MB 的进程
+        if (memMB > 50) {
+          // 只记录超过 50MB 的进程
           log.info(
             `  - PID ${m.pid} [${m.type}]: ${memMB.toFixed(2)}MB ` +
-            `(CPU: ${m.cpu.percentCPUUsage.toFixed(1)}%)`
+              `(CPU: ${m.cpu.percentCPUUsage.toFixed(1)}%)`,
           )
         }
       })
@@ -186,7 +186,7 @@ export class MemoryMonitorService {
         const freed = before - after
         log.info(
           `[MemoryMonitor] GC 完成，释放: ${freed > 0 ? freed.toFixed(2) : 0}MB ` +
-          `(${before.toFixed(2)}MB → ${after.toFixed(2)}MB)`
+            `(${before.toFixed(2)}MB → ${after.toFixed(2)}MB)`,
         )
       }, 100)
     } else {
@@ -204,7 +204,7 @@ export class MemoryMonitorService {
       heapTotal: (usage.heapTotal / 1024 / 1024).toFixed(2) + 'MB',
       rss: (usage.rss / 1024 / 1024).toFixed(2) + 'MB',
       external: (usage.external / 1024 / 1024).toFixed(2) + 'MB',
-      arrayBuffers: (usage.arrayBuffers / 1024 / 1024).toFixed(2) + 'MB'
+      arrayBuffers: (usage.arrayBuffers / 1024 / 1024).toFixed(2) + 'MB',
     }
   }
 
@@ -226,7 +226,7 @@ export class MemoryMonitorService {
       rssGrowth: `${(last.rss - first.rss).toFixed(2)}MB`,
       externalGrowth: `${(last.external - first.external).toFixed(2)}MB`,
       samples: this.memoryHistory.length,
-      avgHeap: `${(this.memoryHistory.reduce((sum, h) => sum + h.heapUsed, 0) / this.memoryHistory.length).toFixed(2)}MB`
+      avgHeap: `${(this.memoryHistory.reduce((sum, h) => sum + h.heapUsed, 0) / this.memoryHistory.length).toFixed(2)}MB`,
     }
   }
 
@@ -242,7 +242,7 @@ export class MemoryMonitorService {
       current,
       trend,
       thresholds: this.thresholds,
-      history: this.memoryHistory.slice(-10) // 最近 10 条记录
+      history: this.memoryHistory.slice(-10), // 最近 10 条记录
     }
 
     log.info('[MemoryMonitor] 内存报告:', JSON.stringify(report, null, 2))

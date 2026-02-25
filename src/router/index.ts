@@ -6,10 +6,7 @@ import selectGoods from './modules/selectGoods'
 /**
  * 公共路由(无需权限)
  */
-export const constantRoutes: RouteRecordRaw[] = [
-  { path: '/', redirect: '/selectGoods' },
-  Login
-]
+export const constantRoutes: RouteRecordRaw[] = [{ path: '/', redirect: '/selectGoods' }, Login]
 
 /**
  * 动态路由(需要权限)
@@ -19,10 +16,8 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/',
     component: Layout,
-    children: [
-      selectGoods
-    ]
-  }
+    children: [selectGoods],
+  },
 ]
 
 const router = createRouter({
@@ -31,4 +26,3 @@ const router = createRouter({
 })
 
 export default router
-

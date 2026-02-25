@@ -1,13 +1,13 @@
-import { ExcelWriter } from '../../utils/excel.js';
-import { join } from 'path';
-import { SysTemUtils } from '../../utils/system.js';
+import { ExcelWriter } from '../../utils/excel.js'
+import { join } from 'path'
+import { SysTemUtils } from '../../utils/system.js'
 import log from '../../log/index.js'
-const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel');
+const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
 export class ExcelService {
   private excel: ExcelWriter | null = null
   private isInit: boolean = false
   constructor(tableName: string) {
-    this.excel = new ExcelWriter(join(excelDir, `${tableName}.xlsx`));
+    this.excel = new ExcelWriter(join(excelDir, `${tableName}.xlsx`))
   }
   // 初始化表格
   async initTable() {
@@ -83,33 +83,33 @@ export class ExcelService {
         { header: '对方总成本（元）', key: 'otherCost', width: 15 },
         { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
         { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
-      ];
+      ]
 
       // 首先设置列定义
-      await this.excel.init();
+      await this.excel.init()
 
       // 检查是否已有列定义（即是否已有表头）
-      const worksheet = this.excel.getWorksheet();
-      const hasHeaders = worksheet.getRow(1).values && worksheet.getRow(1).values.length;
+      const worksheet = this.excel.getWorksheet()
+      const hasHeaders = worksheet.getRow(1).values && worksheet.getRow(1).values.length
 
       if (!hasHeaders) {
         // 没有表头，设置列定义和表头
-        this.excel.setColumns(columns);
+        this.excel.setColumns(columns)
 
         // 在第一行插入主类别标题
-        const mainCategoryRowValues = Array(columns.length).fill('');
-        worksheet.spliceRows(1, 0, mainCategoryRowValues);
+        const mainCategoryRowValues = Array(columns.length).fill('')
+        worksheet.spliceRows(1, 0, mainCategoryRowValues)
 
         // 设置主类别标题
-        worksheet.getCell('A1').value = '基础信息';
-        worksheet.getCell('R1').value = '销售数据';
-        worksheet.getCell('AJ1').value = '尺寸重量';
-        worksheet.getCell('AO1').value = '我的定价';
+        worksheet.getCell('A1').value = '基础信息'
+        worksheet.getCell('R1').value = '销售数据'
+        worksheet.getCell('AJ1').value = '尺寸重量'
+        worksheet.getCell('AO1').value = '我的定价'
         // 合并单元格
-        this.excel.mergeCells('A1:Q1');
-        this.excel.mergeCells('R1:AI1');
-        this.excel.mergeCells('AJ1:AN1');
-        this.excel.mergeCells('AO1:BA1');
+        this.excel.mergeCells('A1:Q1')
+        this.excel.mergeCells('R1:AI1')
+        this.excel.mergeCells('AJ1:AN1')
+        this.excel.mergeCells('AO1:BA1')
 
         // 设置表头样式 - 只设置第1行（主类别标题）
         this.excel.setRowStyle(1, {
@@ -118,21 +118,21 @@ export class ExcelService {
           fill: {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'fff3ca' }
+            fgColor: { argb: 'fff3ca' },
           },
           border: {
             top: { style: 'thin' },
             left: { style: 'thin' },
             bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          }
-        });
+            right: { style: 'thin' },
+          },
+        })
 
         // 设置第2行作为具体列标题行
-        const headerRow = worksheet.getRow(2);
+        const headerRow = worksheet.getRow(2)
         columns.forEach((col, index) => {
-          headerRow.getCell(index + 1).value = col.header;
-        });
+          headerRow.getCell(index + 1).value = col.header
+        })
 
         this.excel.setRowStyle(2, {
           font: { bold: true, size: 10 },
@@ -146,17 +146,17 @@ export class ExcelService {
             top: { style: 'thin' },
             left: { style: 'thin' },
             bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          }
-        });
+            right: { style: 'thin' },
+          },
+        })
 
-        log.info('Excel 表头初始化完成');
+        log.info('Excel 表头初始化完成')
         this.isInit = true
       } else {
-        log.info('Excel 表头已存在，跳过初始化');
+        log.info('Excel 表头已存在，跳过初始化')
       }
     } catch (error) {
-      log.error('初始化 Excel 表头失败:', error);
+      log.error('初始化 Excel 表头失败:', error)
     }
   }
 

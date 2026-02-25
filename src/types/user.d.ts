@@ -1,4 +1,4 @@
-export type platform = 'OZON' | "WB"
+export type platform = 'OZON' | 'WB'
 
 export type User = {
   _id: string

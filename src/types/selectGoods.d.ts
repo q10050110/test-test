@@ -1,4 +1,4 @@
-export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export type Task = {
   _id?: string
@@ -58,9 +58,9 @@ export type Task = {
   followMin?: number
   followMax?: number
   token?: string
-  log?: { taskLog: string, date: string }[],
+  log?: { taskLog: string; date: string }[]
   tableFilePath?: string
-  unit?: string,
+  unit?: string
   aiSelectType: number
 }
 
@@ -77,7 +77,6 @@ export type LogisticsSimple = {
 
 export type LogisticsSimpleList = LogisticsSimple[]
 
-
 export type Warehouse = {
   name: string
   warehouse_id: number
@@ -90,12 +89,11 @@ export type Shop = {
   currency_code: string
   platform: string
   shop_name: string
-  status: number,
+  status: number
   warehouse: Warehouse[]
 }
 
 export type ShopList = Shop[]
-
 
 export type ShopData = {
   client_id: string
