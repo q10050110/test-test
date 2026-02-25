@@ -16,11 +16,9 @@ export const useAppStore = defineStore('app', () => {
     }
   })
   const initAppInfo = async () => {
-    if (appInfo.value) return
     appInfo.value = await window.electronAPI.invoke('app', {})
-    updateStatus.value = await window.electronStore.get('update-status') || 'hasNew'
+    if (updateStatus.value !== 'isInstall') updateStatus.value = await window.electronStore.get('update-status') || 'hasNew'
     updateInfo.value = await window.electronStore.get('update-info') || {}
-
   }
 
   const setLoading = (value: boolean) => loading.value = value

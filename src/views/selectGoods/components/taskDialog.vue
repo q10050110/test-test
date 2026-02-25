@@ -431,6 +431,7 @@ defineExpose({
                       placeholder="请选择店铺"
                       v-model:value="formData.client_id"
                       style="width: 200px"
+                      allowClear
                     >
                       <a-select-option
                         :value="item.client_id"
@@ -448,6 +449,7 @@ defineExpose({
                       placeholder="请选择仓库"
                       v-model:value="formData.warehouse_id"
                       style="width: 200px"
+                      allowClear
                     >
                       <a-select-option
                         :value="item.warehouse_id"
@@ -474,6 +476,7 @@ defineExpose({
                   placeholder="请选择上架配置"
                   v-model:value="formData.upDataConfigId"
                   style="width: 200px"
+                  allowClear
                 >
                   <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
                     {{ item.name }}

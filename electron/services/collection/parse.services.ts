@@ -80,7 +80,6 @@ export class ParseService {
     const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')
     goodsList.each((index, element) => {
       const isAd = $(element).find('.mainImgIcon--Y8zt2ArJ').length > 0
-      console.log(isAd, '是广告吗')
       if (isAd) return
       str = $(element).attr('data-renderkey')?.split('_')
       price1 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').text()

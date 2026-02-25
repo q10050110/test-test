@@ -144,17 +144,14 @@ class ElectronApp {
       log.info('应用准备就绪，开始创建窗口');
       // 记录重启次数
       const restartCount = this.getRestartCount();
-      memoryMonitor.start(5000)
+      memoryMonitor.start(600000)
       if (restartCount > 0) {
         log.info(`当前为第 ${restartCount} 次重启`);
       }
 
       try {
         const isExecuteClose = operationStore.get('is-execute-close')
-        if (!isExecuteClose) {
-          new CloseProcessService().run()
-          operationStore.set('is-execute-close', true)
-        }
+        if (!isExecuteClose) new CloseProcessService().run()
         operationStore.set('is-execute-close', false)
         createWindow();
         log.info('主窗口创建成功');

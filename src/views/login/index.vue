@@ -101,14 +101,14 @@ const operationHandle = (type: 'hide' | 'close') => {
           <a-form :model="formData" ref="formRef" :rules="rules">
             <a-form-item name="phone">
               <a-input
-                v-model:value="formData.phone"
+                v-model:value.trim="formData.phone"
                 @pressEnter="loginHandle"
                 placeholder="请输入手机号"
               ></a-input>
             </a-form-item>
             <a-form-item name="pwd">
               <a-input
-                v-model:value="formData.pwd"
+                v-model:value.trim="formData.pwd"
                 @pressEnter="loginHandle"
                 placeholder="请输入密码"
                 :type="passwordVisible ? 'text' : 'password'"

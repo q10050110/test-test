@@ -149,6 +149,7 @@ export class TaskManager {
     this.notifyTaskUpdate(taskId, 'running');
     try {
       const result = await task.run();
+      if (task.getTaskInfo().taskStatus === 'completed') this.mainWindow?.webContents.send('task-completed', { message: `任务：${task.getTaskInfo().taskName}已完成，可在自动化选品页面中查看结果！` })
       this.filePathList.set(taskId, JSON.parse(JSON.stringify(result)))
     } catch (error) {
       this.filePathList.set(taskId, JSON.parse(JSON.stringify(error)))

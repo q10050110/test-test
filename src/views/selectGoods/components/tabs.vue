@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Task, TaskStatus } from '@/types/selectGoods';
-import { DesktopOutlined } from '@ant-design/icons-vue';
+import type { Task, TaskStatus } from '@/types/selectGoods'
+import { DesktopOutlined } from '@ant-design/icons-vue'
 // 标签页
 const activeKey = ref()
 const taskStackList = ref<Task[]>([])
@@ -17,7 +17,7 @@ const scrollToBottom = async (taskId: string) => {
   if (logContainer) {
     logContainer.scrollTo({
       top: logContainer.scrollHeight,
-      behavior: 'smooth'
+      behavior: 'smooth',
     })
   }
 }
@@ -27,12 +27,12 @@ const getTaskStackList = (data?: any) => {
   if (!task || !status) return
 
   if (status === 'running') {
-    if (!taskStackList.value.map(item => item._id).includes(task._id)) {
+    if (!taskStackList.value.map((item) => item._id).includes(task._id)) {
       taskStackList.value.unshift(task)
       activeKey.value = task._id
     }
   } else {
-    taskStackList.value = taskStackList.value.filter(item => item._id !== task._id)
+    taskStackList.value = taskStackList.value.filter((item) => item._id !== task._id)
     activeKey.value = taskStackList.value?.[0]?._id
   }
 }
@@ -46,8 +46,8 @@ onUnmounted(() => {
 })
 
 // 写入日志内容
-const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
-  const obj = taskStackList.value.find(item => item._id === taskId)
+const writeLog = (taskId: string, data: { taskLog: string; date: string }) => {
+  const obj = taskStackList.value.find((item) => item._id === taskId)
   if (obj) {
     if (!obj.log) obj.log = []
     obj.log.push(data)
@@ -55,10 +55,8 @@ const writeLog = (taskId: string, data: { taskLog: string, date: string }) => {
   }
 }
 
-
-
 defineExpose({
-  writeLog
+  writeLog,
 })
 </script>
 
@@ -66,7 +64,7 @@ defineExpose({
   <div class="container">
     <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
       <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
-        <div class="log-container" :ref="el => setLogRef(el as HTMLElement, item._id as string)">
+        <div class="log-container" :ref="(el) => setLogRef(el as HTMLElement, item._id as string)">
           <div v-for="(log, i) in item.log" :key="i" class="log-item">
             {{ log.date }}
             <DesktopOutlined />
@@ -75,16 +73,13 @@ defineExpose({
         </div>
       </a-tab-pane>
     </a-tabs>
-    <div v-else>
-      当前没有在执行的任务
-    </div>
+    <div v-else>当前没有在执行的任务</div>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .log-container {
-  height: 100px;
-  padding-bottom: 10px;
+  height: 80px;
   overflow-y: auto;
 }
 

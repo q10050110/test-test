@@ -1,5 +1,5 @@
 import { message as AntMessage, Modal, notification } from 'ant-design-vue'
-import type { ModalFuncProps } from 'ant-design-vue'
+import type { ModalFuncProps, NotificationPlacement } from 'ant-design-vue'
 
 class Feedback {
   /* ================= message ================= */
@@ -53,12 +53,14 @@ class Feedback {
   notify(
     description: string,
     type: 'success' | 'info' | 'warning' | 'error' = 'info',
-    title = '提示'
+    title = '提示',
+    placement: NotificationPlacement = 'topRight'
   ) {
     notification[type]({
       message: title,
       description,
-      duration: 3
+      duration: 3,
+      placement
     })
   }
 

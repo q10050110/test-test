@@ -5,7 +5,7 @@ import feedback from './utils/feedback'
 import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
 import type { Progress } from './types'
-
+import dingMp3 from '@/assets/window/ding.mp3'
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
@@ -21,6 +21,12 @@ window.electronAPI.on('request', (data) => {
   store.logout()
 })
 
+window.electronAPI.on('task-completed', (data) => {
+  feedback.notify(data.message, 'success')
+  const audio = new Audio(dingMp3)
+  audio.play()
+})
+
 window.electronAPI.on('app-ready-quit', () => {
   console.log('准备退出啦~~~')
   appStore.setLoading(true)
@@ -33,11 +39,10 @@ window.electronAPI.on('update-checking', async () => {
 window.electronAPI.on('update-available', async () => {
   console.log('发现新版本啦~~')
   await nextTick()
-  await appStore.initAppInfo()
+  if (appStore.updateStatus !== 'isInstall') await appStore.initAppInfo()
   if (appStore.updateStatus !== 'downloaded' && appStore.updateStatus !== 'isInstall')
     appStore.setUpdate('hasUpdate')
-  console.log(appStore.updateStatus)
-  cModalRef.value && cModalRef.value.openHandle()
+  if (appStore.updateStatus !== 'isInstall') cModalRef.value && cModalRef.value.openHandle()
 })
 
 window.electronAPI.on('update-not-available', () => {
@@ -52,13 +57,15 @@ window.electronAPI.on('update-download-progress', (data: Progress) => {
 window.electronAPI.on('update-downloaded', async () => {
   console.log('更新完成啦~~')
   await nextTick()
-  appStore.setUpdate('downloaded')
-  cModalRef.value && cModalRef.value.openHandle()
+  if (appStore.updateStatus !== 'isInstall') {
+    appStore.setUpdate('downloaded')
+    cModalRef.value && cModalRef.value.openHandle()
+  }
 })
 
 window.electronAPI.on('update-error', async (error) => {
   await nextTick()
-  appStore.setUpdate('hasNew')
+  appStore.setUpdate('hasUpdate')
   cModalRef.value && cModalRef.value?.closeHandle()
 })
 
