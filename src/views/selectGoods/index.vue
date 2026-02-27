@@ -217,7 +217,7 @@ const getProgress = async (data?: any) => {
 const logisticsSimpleList = ref<LogisticsSimpleList>([])
 const getLogisticsSimpleList = async () => {
   const { data, code } = await window.electronAPI.invoke<any>('get-logistics-list', {})
-  if (code !== 400) return feedback.error('获取物流信息失败')
+  if (code !== 400) return
   logisticsSimpleList.value = data
 }
 getLogisticsSimpleList()
@@ -231,7 +231,7 @@ const formatDate = (date: string) => {
 const shopList = ref<ShopList>([])
 const getShopList = async () => {
   const { data, code } = await window.electronAPI.invoke<any>('get-shop-list', {})
-  if (code !== 400) return feedback.error('获取店铺信息失败')
+  if (code !== 400) return
   shopList.value = data
 }
 getShopList()
@@ -240,7 +240,7 @@ getShopList()
 const configList = ref<ConfigList>([])
 const getConfigList = async () => {
   const { data, code } = await window.electronAPI.invoke<any>('get-config-list', {})
-  if (code !== 400) return feedback.error('获取配置信息失败')
+  if (code !== 400) return
   configList.value = data.data
 }
 getConfigList()

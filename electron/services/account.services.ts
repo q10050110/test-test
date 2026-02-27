@@ -18,11 +18,20 @@ export const accountHandle = (type: 'register' | 'resetPassword') => {
 }
 
 export const login = async (data: { phone: string; pwd: string }) => {
-  return await request<InterfaceResult<any>, InterfaceResult<any>>({
-    url: '/api/user/open/loginAutoBang',
-    method: 'post',
-    data,
-  })
+  try {
+    return await request<InterfaceResult<any>, InterfaceResult<any>>({
+      url: '/api/user/open/loginAutoBang',
+      method: 'post',
+      data,
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null
+    }
+  }
+
 }
 export const getUserInfo = async (data: { token: string }) => {
   const res = await request<InterfaceResult<any>, InterfaceResult<any>>({

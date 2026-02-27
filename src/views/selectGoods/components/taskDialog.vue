@@ -425,6 +425,7 @@ defineExpose({
                       style="width: 200px"
                       allowClear
                       :disabled="!formData.isUseAutoUpGoods"
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
                     >
                       <a-select-option
                         :value="item.client_id"
@@ -444,6 +445,7 @@ defineExpose({
                       style="width: 200px"
                       allowClear
                       :disabled="!formData.isUseAutoUpGoods"
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
                     >
                       <a-select-option
                         :value="item.warehouse_id"
@@ -457,12 +459,12 @@ defineExpose({
                 </a-col>
                 <a-col :span="8">
                   <a-form-item label="库存">
-                    <a-input
+                    <a-input-number
                       placeholder="请输入库存"
-                      type="number"
                       v-model:value="formData.stock"
                       :disabled="!formData.isUseAutoUpGoods"
-                    ></a-input>
+                      :min="0"
+                    ></a-input-number>
                   </a-form-item>
                 </a-col>
               </template>
@@ -482,6 +484,7 @@ defineExpose({
                       style="width: 200px"
                       allowClear
                       :disabled="!formData.isUseAutoUpGoods"
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
                     >
                       <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
                         {{ item.name }}
@@ -517,6 +520,7 @@ defineExpose({
                     placeholder="请选择物流"
                     v-model:value="formData.internalExpress"
                     allowClear
+                    :get-popup-container="(triggerNode) => triggerNode.parentNode"
                   >
                     <a-select-option
                       :value="item.value"
@@ -880,6 +884,7 @@ defineExpose({
                       v-model:value="formData.salesSchema"
                       style="width: 80%"
                       allowClear
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
                     >
                       <a-select-option value="FBO">FBO</a-select-option>
                       <a-select-option value="FBS">FBS</a-select-option>

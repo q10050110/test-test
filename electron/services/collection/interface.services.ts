@@ -39,7 +39,6 @@ export const getShopList = async () => {
       message: '获取成功',
     }
   } catch (error) {
-    console.log(error, '你失败了？')
     return {
       code: 500,
       message: '获取失败！',
@@ -63,7 +62,6 @@ export const getConfigList = async () => {
       message: '获取成功',
     }
   } catch (error) {
-    console.log(error, '你失败了？')
     return {
       code: 500,
       message: '获取失败！',
@@ -86,9 +84,12 @@ export const batchUpGoods = async (data: any) => {
     })
 
     return res
-  } catch (error) {
-    console.log(error, '你失败了？')
-    return error as { code: number; data: null; message: string }
+  } catch (error: any) {
+    return {
+      code: 500,
+      message: error?.response?.data?.message || '系统繁忙',
+      data: null
+    }
   }
 }
 
@@ -120,7 +121,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       .splice(0, 100)
       .map((item) => ({
         goods_id: item.id,
-        name: item.chineseName,
+        name: item.nameLabel,
         offer_id: '',
         old_price: (item.resMoney * 1.6).toFixed(2),
         origin_price: (item.resMoney * 1.6).toFixed(2),

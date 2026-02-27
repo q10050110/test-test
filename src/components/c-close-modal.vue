@@ -53,7 +53,7 @@ const clickHandle = () => {
       inset: 0;
       top: -120px;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translateX(-50%) scale(0.8);
     }
 
     .title {

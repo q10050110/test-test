@@ -6,6 +6,7 @@ import type { Rule } from 'ant-design-vue/es/form'
 
 import { useUserStore } from '@/stores'
 import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import feedback from '@/utils/feedback'
 // 表单数据
 const formData = ref<Login>({
   phone: '',
@@ -55,8 +56,15 @@ const store = useUserStore()
 const loading = ref(false)
 const loginHandle = async () => {
   await formRef.value?.validate()
+  if (rememberPassword.value) {
+    await window.electronStore.set('loginInfo', {
+      phone: formData.value.phone,
+      pwd: formData.value.pwd,
+      rememberPassword: rememberPassword.value,
+    })
+  }
   loading.value = true
-  const { data, code } = await loginAPI(formData.value)
+  const { data, code, message } = await loginAPI(formData.value)
   if (code === 0) {
     changeHandle()
     await store.setToken(data.token)
@@ -64,6 +72,7 @@ const loginHandle = async () => {
     router.push('/')
     return
   }
+  feedback.error(message)
   loading.value = false
 }
 // 跳转上品帮注册&忘记密码外链
