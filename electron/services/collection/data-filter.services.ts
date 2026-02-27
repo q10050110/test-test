@@ -3,7 +3,7 @@ import { Task } from './type.js'
 import dayjs from 'dayjs'
 export class DataProcessService {
   private data: Map<string, any> = new Map()
-  constructor() {}
+  constructor() { }
   /**
    * 获取基础数据
    */
@@ -121,7 +121,7 @@ export class DataProcessService {
       },
       // 月销售动态范围校验
       (item: any) => {
-        const result = this.checkRange(item.salesDynamics, 1)
+        const result = item.salesDynamics > 0
         return result
       },
       // 广告份额范围校验
@@ -138,8 +138,8 @@ export class DataProcessService {
           { max: 10000, minSold: 15 },
         ]
 
-        const rule = rules.find((r) => item.price <= r.max)
-        return this.checkRange(item.soldCount, rule?.minSold || 5)
+        const rule = rules.find((r) => Number(item.price) <= r.max)
+        return this.checkRange(item.soldCount, (rule?.minSold || 5) + 1)
       },
     ]
 
