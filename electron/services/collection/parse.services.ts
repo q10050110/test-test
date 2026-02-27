@@ -75,6 +75,7 @@ export class ParseService {
     for (const item of uniqueData) {
       const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
+        item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
         item.sellerNumber =
           JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
             ?.sellers?.length || 0

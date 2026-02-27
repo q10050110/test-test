@@ -62,6 +62,8 @@ export type Task = {
   tableFilePath?: string
   unit?: string
   aiSelectType: number
+  expendType: boolean
+  expendShopCount?: number
 }
 
 export type TaskList = {

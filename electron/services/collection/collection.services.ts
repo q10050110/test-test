@@ -83,7 +83,20 @@ export class Collection {
         this.outputLog('窗口创建成功，任务开始执行')
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
         this.outputLog('页面解析成功，开始获取商品列表')
-        await this.getHtmlData(this.task.targetCount)
+        await this.getHtmlData(this.task.targetCount || Infinity)
+        if (true) {
+          const goodsList = Array.from(this.goodsData.values())
+          console.log(goodsList, '看看是啥')
+          for (const item of goodsList) {
+            if (this.targetData > (this.task.targetCount || Infinity)) break
+            for (const sellers of item?.sellers?.sellers) {
+              this.reason = undefined
+              if (this.targetData > (this.task.targetCount || Infinity)) break
+              await this.mainWindowService.changeUrl(sellers.link, true)
+              await this.getHtmlData(this.task.targetCount || Infinity)
+            }
+          }
+        }
         memoryMonitor.trackBusinessMetrics({
           taskId: this.task._id,
           phase: 'collected',
@@ -101,6 +114,7 @@ export class Collection {
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
+        console.log(error, '你出啥毛病了？')
         if (this.reason) return
         this.updateStatus('failed')
         this.outputLog(`采集失败：${error}`)
@@ -202,7 +216,7 @@ export class Collection {
         (item) => !filterDataList.map((item) => item.id).includes(item.id),
       )
       for (const item of data) {
-        if (this.reason === undefined && this.targetData < this.task.targetCount) {
+        if (this.reason === undefined && this.targetData < (this.task.targetCount || Infinity)) {
           await new Promise((resolve) => setTimeout(resolve, 50))
           this.process--
           this.outputLog(`完成商品${item.nameLabel}的处理`)
@@ -216,7 +230,7 @@ export class Collection {
         filterDataList.length &&
         this.reason !== 'cancel' &&
         this.reason !== 'failed' &&
-        this.targetData < this.task.targetCount
+        this.targetData < (this.task.targetCount || Infinity)
       ) {
         this.taskQueueService.addTask(filterDataList)
         this.taskQueueService.startProcessing()
@@ -319,7 +333,7 @@ export class Collection {
           }
         }
 
-        if (this.targetData >= this.task.targetCount && this.uuid === uuid) {
+        if (this.targetData >= (this.task.targetCount || Infinity) && this.uuid === uuid) {
           safeResolve('任务已完成')
           return
         }
@@ -367,7 +381,7 @@ export class Collection {
     this.isWrite = true
     while (this.writeQueue.length) {
       if (
-        this.targetData < this.task.targetCount &&
+        this.targetData < (this.task.targetCount || Infinity) &&
         (this.reason === 'success' || this.reason === undefined) &&
         this.uuid === uuid
       ) {
@@ -410,7 +424,7 @@ export class Collection {
       if (
         this.reason === 'cancel' ||
         this.reason === 'failed' ||
-        this.targetData >= this.task.targetCount
+        this.targetData >= (this.task.targetCount || Infinity)
       )
         return
       await new Promise((resolve) => setTimeout(resolve, 1000))

@@ -3,7 +3,7 @@ import { Task } from './type.js'
 import dayjs from 'dayjs'
 export class DataProcessService {
   private data: Map<string, any> = new Map()
-  constructor() {}
+  constructor() { }
   /**
    * 获取基础数据
    */
@@ -60,6 +60,7 @@ export class DataProcessService {
    */
   async getChineseName(text: string) {
     try {
+      console.log(text, '你的名字！！！')
       const res = await request({
         url: '/api/other/fanyi/translateText',
         method: 'post',
@@ -93,7 +94,7 @@ export class DataProcessService {
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
       if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-      item.chineseName = await this.getChineseName(item.name)
+      item.chineseName = await this.getChineseName(item.nameLabel)
       return [item]
     } catch (error) {
       return []

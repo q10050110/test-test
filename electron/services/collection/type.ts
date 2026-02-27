@@ -19,7 +19,7 @@ export interface Task {
   rubExpressPrice?: number
   elsePercent?: number
   sourceType: '1' | '2'
-  targetCount: number
+  targetCount?: number
   targetProfitPercent: number
   brandType?: string
   soldCountMin?: number
@@ -59,6 +59,8 @@ export interface Task {
   unit?: '¥' | '$' | '₽' | '€' | 'YN' | '₸'
   autoResult?: string
   aiSelectType: number
+  expendType: boolean
+  expendShopCount?: number
 }
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined

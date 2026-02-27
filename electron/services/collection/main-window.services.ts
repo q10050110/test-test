@@ -166,6 +166,55 @@ export class MainWindowService {
       return false
     }
   }
+
+  /**
+   * 改变当前窗口 URL
+   */
+  async changeUrl(url: string, waitForLoad = true) {
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+      throw new Error('窗口不存在或已销毁')
+    }
+    console.log('改变当前窗口URL')
+    const win = this.browserWindow
+
+    if (!waitForLoad) {
+      await win.loadURL(url)
+      return true
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+
+      const safeResolve = (v: any) => {
+        if (settled) return
+        settled = true
+        resolve(v)
+      }
+
+      const safeReject = (e: any) => {
+        if (settled) return
+        settled = true
+        reject(e)
+      }
+
+      const timeout = setTimeout(() => {
+        safeReject('URL 切换超时')
+      }, 60000)
+
+      win.webContents.once('did-finish-load', () => {
+        clearTimeout(timeout)
+        safeResolve(true)
+      })
+
+      win.webContents.once('did-fail-load', (_, errorCode, errorDesc) => {
+        clearTimeout(timeout)
+        safeReject(`加载失败: ${errorDesc} (${errorCode})`)
+      })
+
+      win.loadURL(url)
+    })
+  }
+
   /**
    * 关闭采集窗口
    */
