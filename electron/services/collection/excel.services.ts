@@ -83,6 +83,7 @@ export class ExcelService {
         { header: '对方总成本（元）', key: 'otherCost', width: 15 },
         { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
         { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
+        { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 }
       ]
 
       // 首先设置列定义
