@@ -82,12 +82,11 @@ export const batchUpGoods = async (data: any) => {
       method: 'post',
       data,
     })
-
     return res
   } catch (error: any) {
     return {
       code: 500,
-      message: error?.response?.data?.message || '系统繁忙',
+      message: error,
       data: null
     }
   }
@@ -114,6 +113,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
     up_goods_type: 0,
     use_pack: true,
     warehouse_id: task.warehouse_id,
+    total_num: goodsData.size
   }
 
   while (source.length > 0) {
@@ -135,11 +135,10 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       ...baseParams,
       goods: compressData(chunk),
     }
-    try {
-      const res = await batchUpGoods(params)
-      if (res?.code !== 0) result.push(res?.message || res)
-    } catch (error) {
-      result.push(error)
+    const res = await batchUpGoods(params)
+    if (res?.code !== 0) {
+      result.push(res?.message)
+      if (res?.message === '帮豆数量不足，请充值') break
     }
   }
   return result.length ? result.join(',') : 'success'
