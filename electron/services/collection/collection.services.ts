@@ -105,6 +105,7 @@ export class Collection {
         this.updateStatus('failed')
         this.outputLog(`采集失败：${error}`)
       } finally {
+        log.info(this.goodsData, '商品数据啦啦啦')
         log.info(
           `ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`,
         )
@@ -406,7 +407,7 @@ export class Collection {
    * 等待任务结束
    */
   private async waitForAllTasks(): Promise<void> {
-    while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount()) {
+    while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount() || this.isWrite) {
       if (
         this.reason === 'cancel' ||
         this.reason === 'failed' ||

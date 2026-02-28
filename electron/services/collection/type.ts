@@ -62,3 +62,33 @@ export interface Task {
 }
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined
+
+
+export type ShopData = {
+  client_id: string
+  name: string
+  stock: number
+  warehouseId: string
+}
+
+export type Config = {
+  brands: number
+  createTime: string
+  imgOrder: number
+  imgWaterMark: string
+  infringement: boolean
+  isCustomPrice: boolean
+  isCustomWaterMark: boolean
+  isDefault: boolean
+  is_ai: boolean
+  name: string
+  offerIdPrefix: string
+  platform: string
+  shopData: ShopData[]
+  user_id: string
+  _id: string
+  cropPrice: number
+  price: number
+}
+
+export type ConfigList = Config[]

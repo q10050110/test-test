@@ -1,8 +1,10 @@
 import request from '../../utils/request.js'
-import { Task } from './type.js'
+import { Config, ConfigList, Task } from './type.js'
 import { operationStore } from '../../store/index.js'
 import { compressData } from '../../utils/index.js'
 import log from '../../log/index.js'
+
+let configList: ConfigList = []
 export const getLogisticsList = async () => {
   try {
     const res = await request({
@@ -56,6 +58,7 @@ export const getConfigList = async () => {
     })
     res.data.data = res.data.data
       .filter((item: any) => item.platform === 'OZON' && item.user_id === user._id)
+    configList = res.data.data
     return {
       code: 400,
       data: res.data,
@@ -99,17 +102,19 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   if (goodsData.size === 0) return '没有可上架的商品'
   const source = Array.from(goodsData.values())
   const result = []
+  let config: Config | undefined
+  if (task.upDataConfigId) config = configList?.find(item => item._id === task.upDataConfigId)
   const baseParams = {
     client_id: task.client_id,
     upDataConfigId: task.upDataConfigId,
-    watermark_id: undefined,
+    watermark_id: config ? config?.imgWaterMark : undefined,
     collect_ids: [],
-    has_brand: 126745801,
-    img_order_type: 0,
-    is_ai: false,
+    has_brand: config ? config?.brands : 126745801,
+    img_order_type: config ? config.imgOrder : 0,
+    is_ai: config ? config?.is_ai : false,
     is_compress: true,
-    is_down_fx: false,
-    stock: task.stock,
+    is_down_fx: config ? config?.infringement : false,
+    stock: config ? undefined : task.stock,
     up_goods_type: 0,
     use_pack: true,
     warehouse_id: task.warehouse_id,
@@ -123,9 +128,9 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         goods_id: item.id,
         name: item.nameLabel,
         offer_id: '',
-        old_price: (item.resMoney * 1.6).toFixed(2),
-        origin_price: (item.resMoney * 1.6).toFixed(2),
-        price: item.resMoney,
+        old_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
+        origin_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
+        price: config?.price ? (item.resMoney * config.price / 100).toFixed(2) : item.resMoney,
       }))
       .filter((item) => item.price)
 

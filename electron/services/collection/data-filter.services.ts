@@ -93,7 +93,7 @@ export class DataProcessService {
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
       if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-      item.chineseName = await this.getChineseName(item.name)
+      item.chineseName = await this.getChineseName(item.nameLabel)
       return [item]
     } catch (error) {
       return []
