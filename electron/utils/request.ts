@@ -46,7 +46,7 @@ request.interceptors.response.use(
     return response.data
   },
   (error) => {
-    log.error(`接口报错：${error?.message || error}`)
+    log.error(`${error?.config?.url}接口报错：${error?.message || error}`)
     return Promise.reject(error)
   },
 )

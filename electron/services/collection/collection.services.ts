@@ -105,7 +105,22 @@ export class Collection {
         this.updateStatus('failed')
         this.outputLog(`采集失败：${error}`)
       } finally {
-        log.info(this.goodsData, '商品数据啦啦啦')
+        if (this.task.taskStatus === 'running') {
+          switch (this.reason) {
+            case 'cancel':
+              this.updateStatus('cancelled')
+              this.outputLog('任务已取消')
+              break;
+            case 'failed':
+              this.updateStatus('failed')
+              this.outputLog('任务失败')
+              break;
+            default:
+              this.updateStatus('completed')
+              this.outputLog('任务成功')
+              break;
+          }
+        }
         log.info(
           `ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`,
         )
@@ -231,10 +246,10 @@ export class Collection {
    * 更改任务状态
    */
   async updateStatus(status: TaskStatus) {
-    if (status === 'pending') this.resetTask()
     let uuid = this.uuid
     if (this.task.taskStatus === status || uuid !== this.uuid) return
     try {
+      log.info(`${this.task.taskName}任务状态已更新：${status}`)
       this.task.taskStatus = status
       await this.syncStatusToServer(status)
     } catch (error) {
@@ -375,7 +390,7 @@ export class Collection {
         const data = this.writeQueue.shift()
         const result = await this.excelService.saveExcel(data)
         this.goodsData.set(data[0]?.id, data?.[0])
-        this.targetData++
+        if (data.length) this.targetData++
         this.process--
         if (!result) this.writeError = true
         if (!this.task.tableFilePath)

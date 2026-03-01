@@ -470,6 +470,5 @@ export class TaskManager {
     }
     this.tasks.clear()
     this.filePathList.clear()
-    log.info(this.tasks.size, '已清空所有队列')
   }
 }
