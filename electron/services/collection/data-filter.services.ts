@@ -38,6 +38,7 @@ export class DataProcessService {
             item.discount = item?.discount?.toFixed(2)
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.goods_id) this.data.set(item.goods_id, item)
+            if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
           })
       }
 
@@ -92,7 +93,6 @@ export class DataProcessService {
       let item = res.data[0]
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
-      if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
       item.chineseName = await this.getChineseName(item.nameLabel)
       return [item]
     } catch (error) {
