@@ -60,7 +60,7 @@ export interface Task {
   autoResult?: string
   aiSelectType: number
   expendType: boolean
-  expendShopCount?: number
+  expendShopCount: number
 }
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined

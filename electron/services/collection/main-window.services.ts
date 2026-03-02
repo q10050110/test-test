@@ -35,7 +35,7 @@ export class MainWindowService {
           backgroundThrottling: false,
         },
       })
-
+      this.browserWindow.webContents.openDevTools()
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()

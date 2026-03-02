@@ -60,7 +60,6 @@ export class DataProcessService {
    */
   async getChineseName(text: string) {
     try {
-      console.log(text, '你的名字！！！')
       const res = await request({
         url: '/api/other/fanyi/translateText',
         method: 'post',

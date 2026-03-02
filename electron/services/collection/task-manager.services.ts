@@ -183,7 +183,6 @@ export class TaskManager {
       }
       // 处理队列中的下一个任务
       this.processNextTask()
-      log.info(this.tasks.size, '创建的任务')
     }
   }
 
@@ -470,6 +469,5 @@ export class TaskManager {
     }
     this.tasks.clear()
     this.filePathList.clear()
-    log.info(this.tasks.size, '已清空所有队列')
   }
 }

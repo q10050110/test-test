@@ -32,6 +32,7 @@ export class Collection {
   private writeError = false // 写入错误
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
+  private expendShopCount = 0
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -84,14 +85,22 @@ export class Collection {
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
         this.outputLog('页面解析成功，开始获取商品列表')
         await this.getHtmlData(this.task.targetCount || Infinity)
-        if (true) {
+        if (this.task.expendType && this.targetData < (this.task.targetCount || Infinity)) {
           const goodsList = Array.from(this.goodsData.values())
-          console.log(goodsList, '看看是啥')
           for (const item of goodsList) {
-            if (this.targetData > (this.task.targetCount || Infinity)) break
-            for (const sellers of item?.sellers?.sellers) {
+            let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
+            if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) break
+            console.log(item, '让我看看是啥！！')
+            const data = item?.sellers?.sellers.filter((item: any) => {
+              item.ratingCount = item?.rating?.totalScore
+              item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
+              return item.priceNumber > 4
+            }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount)
+            console.log(data, '店铺数据排序以后得')
+            for (const sellers of data) {
+              this.expendShopCount++
               this.reason = undefined
-              if (this.targetData > (this.task.targetCount || Infinity)) break
+              if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) break
               await this.mainWindowService.changeUrl(sellers.link, true)
               await this.getHtmlData(this.task.targetCount || Infinity)
             }

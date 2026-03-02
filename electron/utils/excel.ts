@@ -170,7 +170,6 @@ export class ExcelWriter {
     try {
       // 尝试直接写入
       await this.workbook.xlsx.writeFile(filePath)
-      log.info(`Excel 写入完成: ${this.filePath}`)
       return true
     } catch (error) {
       if (
@@ -247,7 +246,7 @@ export class ExcelWriter {
 
     Object.keys(style).forEach((key) => {
       if (!['font', 'fill', 'border'].includes(key)) {
-        ;(row as any)[key] = (style as any)[key]
+        ; (row as any)[key] = (style as any)[key]
       }
     })
   }
