@@ -110,7 +110,7 @@ export class ExcelService {
         this.excel.mergeCells('A1:Q1')
         this.excel.mergeCells('R1:AI1')
         this.excel.mergeCells('AJ1:AN1')
-        this.excel.mergeCells('AO1:BA1')
+        this.excel.mergeCells('AO1:BB1')
 
         // 设置表头样式 - 只设置第1行（主类别标题）
         this.excel.setRowStyle(1, {
