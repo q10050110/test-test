@@ -1,4 +1,5 @@
 import log from 'electron-log'
+import os from 'os'
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -123,6 +124,19 @@ class LoggerManager {
     log.info(`安装目录: ${this.installDir}`)
     log.info(`日志目录: ${this.logPath}`)
     log.info(`环境: ${SysTemUtils.getEnv() || 'production'}`)
+    log.info('='.repeat(80))
+    log.info('设备信息')
+    log.info(`主机名: ${os.hostname()}`)
+    log.info(`系统类型: ${os.type()}`)
+    log.info(`系统平台: ${os.platform()}`)
+    log.info(`系统版本: ${os.release()}`)
+    log.info(`CPU架构: ${os.arch()}`)
+    log.info(`CPU型号: ${os.cpus()[0]?.model}`)
+    log.info(`CPU核心数: ${os.cpus().length}`)
+    log.info(`总内存: ${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)} GB`)
+    log.info(`空闲内存: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)} GB`)
+    log.info(`用户目录: ${os.homedir()}`)
+    log.info(`临时目录: ${os.tmpdir()}`)
     log.info('='.repeat(80))
   }
 

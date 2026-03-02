@@ -35,9 +35,9 @@ request.interceptors.response.use(
     if (code !== 0) {
       log.error(`URL：${response.config.url},失败原因：${message}`)
       if (code === 401 || code === 402) {
+        globalBroadcast.broadcast('request', { code, message })
         if (isTokenFailure) return Promise.reject(message)
         isTokenFailure = true
-        globalBroadcast.broadcast('request', { code, message })
         TaskManager.getInstance().stopAllTasks()
       }
       return Promise.reject(message)
@@ -46,7 +46,8 @@ request.interceptors.response.use(
     return response.data
   },
   (error) => {
-    log.error(`${error?.config?.url}接口报错：${error?.message || error}`)
+    log.error(`${error?.config?.url || error}接口报错：${error?.config?.message || error}`)
+    if (error.code === 'ENOTFOUND') return Promise.reject('当前网络不可用')
     return Promise.reject(error)
   },
 )

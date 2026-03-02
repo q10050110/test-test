@@ -16,7 +16,7 @@ const formRef = ref<FormInstance>()
 const rules: Record<string, Rule[]> = {
   phone: [
     { required: true, message: '请输入手机号', trigger: ['blur', 'change'] },
-    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: ['blur', 'change'] },
+    // { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: ['blur', 'change'] },
   ],
   pwd: [
     { required: true, message: '请输入密码', trigger: ['blur', 'change'] },

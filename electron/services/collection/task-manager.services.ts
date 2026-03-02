@@ -183,7 +183,6 @@ export class TaskManager {
       }
       // 处理队列中的下一个任务
       this.processNextTask()
-      log.info(this.tasks.size, '创建的任务')
     }
   }
 

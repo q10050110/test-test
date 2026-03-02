@@ -127,7 +127,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       .map((item) => ({
         goods_id: item.id,
         name: item.nameLabel,
-        offer_id: '',
+        offer_id: config?.offerIdPrefix ? config.offerIdPrefix : '',
         old_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         origin_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         price: config?.price ? (item.resMoney * config.price / 100).toFixed(2) : item.resMoney,
