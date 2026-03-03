@@ -35,9 +35,9 @@ request.interceptors.response.use(
     if (code !== 0) {
       log.error(`URL：${response.config.url},失败原因：${message}`)
       if (code === 401 || code === 402) {
-        globalBroadcast.broadcast('request', { code, message })
         if (isTokenFailure) return Promise.reject(message)
         isTokenFailure = true
+        globalBroadcast.broadcast('request', { code, message })
         TaskManager.getInstance().stopAllTasks()
       }
       return Promise.reject(message)

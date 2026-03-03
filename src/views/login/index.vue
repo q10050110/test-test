@@ -15,7 +15,7 @@ const formData = ref<Login>({
 const formRef = ref<FormInstance>()
 const rules: Record<string, Rule[]> = {
   phone: [
-    { required: true, message: '请输入手机号', trigger: ['blur', 'change'] },
+    { required: true, message: '请输入您的手机号/子账号', trigger: ['blur', 'change'] },
     // { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: ['blur', 'change'] },
   ],
   pwd: [
@@ -111,7 +111,7 @@ const operationHandle = (type: 'hide' | 'close') => {
               <a-input
                 v-model:value.trim="formData.phone"
                 @pressEnter="loginHandle"
-                placeholder="请输入手机号"
+                placeholder="请输入您的手机号/子账号"
               ></a-input>
             </a-form-item>
             <a-form-item name="pwd">

@@ -305,7 +305,7 @@ export class Collection {
    * 处理单个任务
    */
   taskHandle = async (task: any) => {
-    log.info(`开始处理商品:${task.id}`)
+    log.info(`${this.task.taskName}-开始处理商品:${task.id}`)
     let timer: NodeJS.Timeout | undefined
     let maxTimer = 120
     let countDown = 0
@@ -339,7 +339,7 @@ export class Collection {
           safeResolve('任务已完成')
           return
         }
-        log.info(`获取1688数据:${task.id}`)
+        log.info(`${this.task.taskName}-获取1688数据:${task.id}`)
         const { link1688, sourcePrice, cover2 } = await this.windowService.createWindow(
           this.task.sourceType,
           task.cover,
@@ -357,7 +357,7 @@ export class Collection {
           rubExpressPrice: this.task.rubExpressPrice,
           internalExpress: this.task.internalExpress,
         }
-        log.info(`获取1688数据完成:${task.id}`)
+        log.info(`${this.task.taskName}-获取1688数据完成:${task.id}`)
         let detailData = await this.dataProcessService.getDetailData({
           taskId: this.task._id,
           reqDatas: [task],
@@ -366,7 +366,7 @@ export class Collection {
         this.writeQueue.push(detailData)
         this.writeTable()
         safeResolve('单个商品处理完成')
-        log.info(`商品处理完成:${task.id}`)
+        log.info(`${this.task.taskName}-商品处理完成:${task.id}`)
       } catch (error) {
         log.error(error, '单个商品任务失败')
         safeReject(new Error('单个商品任务失败'), reject)

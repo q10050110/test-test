@@ -12,7 +12,7 @@ import {
   Menu,
   BrowserWindow,
 } from 'electron'
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, extname } from 'path'
 import {
   rmSync,
   unlinkSync,
@@ -25,6 +25,7 @@ import {
   copyFileSync,
 } from 'fs'
 import log from '../log/index.js'
+import dayjs from 'dayjs'
 /**
  * Electron 系统级能力封装
  */
@@ -368,6 +369,34 @@ export class SysTemUtils {
       } catch (error) {
         console.error('获取文件信息失败：', error)
         return null
+      }
+    },
+    /** 
+     * 拷贝文件
+     * @param filePath 文件路径 
+      */
+    copyFile: async (filePath: string) => {
+      const ext = extname(filePath)
+      const originName = basename(filePath, ext)
+      const newName = `${originName}_${dayjs().format('YYYYMMDDHHmmss')}${ext}`
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog({
+        title: '保存文件',
+        defaultPath: join(app.getPath('desktop'), newName),
+        filters: [
+          { name: 'Excel 文件', extensions: ['xlsx'] }
+        ]
+      })
+      console.log(canceled, filePath, '看看是啥')
+      if (canceled || !savePath) return
+      try {
+        if (existsSync(filePath)) {
+          copyFileSync(filePath, savePath)
+          log.info(savePath, '文件保存成功')
+        } else {
+          return Promise.reject('文件不存在')
+        }
+      } catch (error) {
+        console.error('拷贝文件失败：', error)
       }
     },
     /**
