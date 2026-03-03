@@ -25,8 +25,8 @@ export class ExcelService {
         { header: '类目佣金（RFBS）', key: 'commissionRfbs', width: 15 },
         { header: '类目佣金（FBP）', key: 'commissionFbp', width: 15 },
         { header: '品牌', key: 'brand', width: 20 },
-        { header: '销售价格（卢布）', key: 'price', width: 15 },
-        { header: '原价（卢布）', key: 'oPrice', width: 15 },
+        { header: '销售价格（₽）', key: 'price', width: 15 },
+        { header: '原价（₽）', key: 'oPrice', width: 15 },
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCountLabel', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },
@@ -35,10 +35,10 @@ export class ExcelService {
         { header: '发货模式', key: 'salesSchema', width: 15 },
 
         // 销售数据
-        { header: '月销售额(卢布)', key: 'gmvSum', width: 15 },
+        { header: '月销售额(₽)', key: 'gmvSum', width: 15 },
         { header: '月销售动态(%)', key: 'salesDynamics', width: 15 },
         { header: '月销量(件)', key: 'soldCount', width: 10 },
-        { header: '平均日销售额(卢布)', key: 'avgGmvOnAccDays', width: 15 },
+        { header: '平均日销售额(₽)', key: 'avgGmvOnAccDays', width: 15 },
         { header: '平均日销量(件)', key: 'avgOrdersOnAccDays', width: 10 },
         { header: '搜索和目录浏览量', key: 'sessionCountSearch', width: 15 },
         { header: '商品卡片浏览量', key: 'sessionCount', width: 15 },
@@ -49,8 +49,8 @@ export class ExcelService {
         { header: '参与促销折扣(%)', key: 'discount', width: 15 },
         { header: '促销活动的转化率(%)', key: 'promoRevenueShare', width: 15 },
         { header: '付费推广天数', key: 'daysWithTrafarets', width: 12 },
-        { header: '平均价格(卢布)', key: 'avgPrice', width: 15 },
-        { header: '已错过销售(卢布)', key: 'sumMissedGmv', width: 15 },
+        { header: '平均价格(₽)', key: 'avgPrice', width: 15 },
+        { header: '已错过销售(₽)', key: 'sumMissedGmv', width: 15 },
         { header: '商品可用性(%)', key: 'accessibility', width: 15 },
 
         // 物流信息
@@ -77,13 +77,13 @@ export class ExcelService {
         { header: '我的利润率（%）', key: 'myProfitPercent', width: 15 },
         { header: '我的利润（元）', key: 'myProfit', width: 15 },
         // 对方信息
-        { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
-        { header: '对万其他费用（元）', key: 'otherElsePrice', width: 15 },
-        { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
-        { header: '对方总成本（元）', key: 'otherCost', width: 15 },
-        { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
-        { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
-        { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 }
+        /*         { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
+                { header: '对万其他费用（元）', key: 'otherElsePrice', width: 15 },
+                { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
+                { header: '对方总成本（元）', key: 'otherCost', width: 15 },
+                { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
+                { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
+                { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 } */
       ]
 
       // 首先设置列定义
