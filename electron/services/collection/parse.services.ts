@@ -5,7 +5,7 @@ import log from '../../log/index.js'
 export class ParseService {
   protected ozonGoodsData: Set<string> = new Set()
   private windowService: MainWindowService | null = null
-
+  guessLikeList: Set<string> = new Set()
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
   }
@@ -13,6 +13,7 @@ export class ParseService {
     const data: any[] = []
     if (!html) return []
     const $ = cheerio.load(html)
+    const likeDom = $('[data-widget="skuGrid"] a')
     const dom = $('#contentScrollPaginator a')
     // 解析DOM，获取商品数据
     dom.each((index, element) => {
@@ -63,6 +64,17 @@ export class ParseService {
       if (id) {
         data.push(obj)
       }
+    })
+
+    // 获取猜你喜欢数据
+    likeDom.each((index, element) => {
+      const href = $(element).attr('href')
+      const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
+      const queryUrl = encodeURIComponent(
+        `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`,
+      )
+      const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
+      this.guessLikeList.add(requestUrl)
     })
 
     const uniqueData: any[] = []
@@ -121,6 +133,7 @@ export class ParseService {
    */
   destroy() {
     this.ozonGoodsData.clear()
+    this.guessLikeList.clear()
     this.windowService = null
   }
 }

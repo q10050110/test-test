@@ -85,34 +85,14 @@ export class Collection {
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
         this.outputLog('页面解析成功，开始获取商品列表')
         await this.getHtmlData(this.task.targetCount || Infinity)
-        if (this.task.expendType && this.targetData < (this.task.targetCount || Infinity)) {
-          const goodsList = Array.from(this.goodsData.values())
-          for (const item of goodsList) {
-            let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
-            if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) break
-            console.log(item, '让我看看是啥！！')
-            const data = item?.sellers?.sellers.filter((item: any) => {
-              item.ratingCount = item?.rating?.totalScore
-              item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
-              return item.priceNumber > 4
-            }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount)
-            console.log(data, '店铺数据排序以后得')
-            for (const sellers of data) {
-              this.expendShopCount++
-              this.reason = undefined
-              if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) break
-              await this.mainWindowService.changeUrl(sellers.link, true)
-              await this.getHtmlData(this.task.targetCount || Infinity)
-            }
-          }
-        }
+        await this.waitForAllTasks()
+        await this.expendShop()
         memoryMonitor.trackBusinessMetrics({
           taskId: this.task._id,
           phase: 'collected',
           goodsDataSize: this.goodsData.size,
           parseServiceDataSize: this.parseService.getDataCount(),
         })
-        await this.waitForAllTasks()
         if (this.reason !== 'success') {
           safeReject('任务已被终止', reject)
           return
@@ -149,6 +129,53 @@ export class Collection {
     })
   }
 
+  /** 
+   * 拓店模式
+    */
+  async expendShop() {
+    const expendShopHandle = async (goodsList: any[]) => {
+      for (const item of goodsList) {
+        let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
+        if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+        const data = item?.sellers?.sellers?.filter((item: any) => {
+          item.ratingCount = item?.rating?.totalScore
+          item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
+          return item.ratingCount > 4
+        }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount) || []
+        console.log(data, '让我看看是啥')
+        for (const sellers of data) {
+          this.expendShopCount++
+          this.reason = undefined
+          if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+          await this.mainWindowService.changeUrl(sellers.link, true)
+          await this.getHtmlData(this.task.targetCount || Infinity)
+        }
+      }
+    }
+    // 先用当前店铺中出售商品的跟卖店家
+    if (this.task.expendType && this.targetData < (this.task.targetCount || Infinity)) {
+      const goodsList = Array.from(this.goodsData.values())
+      const res = await expendShopHandle(goodsList)
+      if (res) return
+    }
+
+    // 如果当前店铺跟卖店家还不满足终止条件那就用猜你喜欢的跟卖店铺
+    const guessLikeList = Array.from(this.parseService.guessLikeList.values())
+    const sellersList = []
+    for (const url of guessLikeList) {
+      const response = await this.mainWindowService.getSellingData(url)
+      const sellers = {
+        sellers: []
+      }
+      if (response?.success) {
+        sellers.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        sellersList.push(sellers)
+      } else {
+        log.error('获取跟卖数据失败')
+      }
+    }
+    await expendShopHandle(sellersList)
+  }
   /**
    * 获取页面数据
    */

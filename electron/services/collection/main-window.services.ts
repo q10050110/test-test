@@ -171,6 +171,7 @@ export class MainWindowService {
    * 改变当前窗口 URL
    */
   async changeUrl(url: string, waitForLoad = true) {
+    console.log(url, '新窗口地址')
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
       throw new Error('窗口不存在或已销毁')
     }
