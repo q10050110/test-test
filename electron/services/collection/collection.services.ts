@@ -135,33 +135,30 @@ export class Collection {
    * 拓店模式
     */
   async expendShop() {
-    if (!this.task.expendType) return
-    this.outputLog('拓店模式开启中，请稍等！')
+    if (!this.task.expendType || this.targetData >= (this.task.targetCount || Infinity)) return
     const expendShopHandle = async (goodsList: any[]) => {
       for (const item of goodsList) {
         let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
         if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
         const data = item?.sellers?.sellers?.filter((item: any) => {
           item.ratingCount = item?.rating?.totalScore
-          item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
+          item.priceNumber = item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')
           return item.ratingCount > 4
         }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount) || []
-        console.log(data, '让我看看是啥')
         for (const sellers of data) {
-          this.expendShopCount++
           this.reason = undefined
           if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+          this.expendShopCount++
+          this.outputLog('拓店模式开启中，请稍等！')
           await this.mainWindowService.changeUrl(sellers.link, true)
           await this.getHtmlData(this.task.targetCount || Infinity)
         }
       }
     }
     // 先用当前店铺中出售商品的跟卖店家
-    if (this.targetData < (this.task.targetCount || Infinity)) {
-      const goodsList = Array.from(this.goodsData.values())
-      const res = await expendShopHandle(goodsList)
-      if (res) return
-    }
+    const goodsList = Array.from(this.goodsData.values())
+    const res = await expendShopHandle(goodsList)
+    if (res) return
 
     // 如果当前店铺跟卖店家还不满足终止条件那就用猜你喜欢的跟卖店铺
     const guessLikeList = Array.from(this.parseService.guessLikeList.values())
