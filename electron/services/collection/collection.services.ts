@@ -53,6 +53,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
+        upGoodsList: this.goodsData.values()
       })
     }
     const safeReject = (e: any, reject: Function) => {
@@ -62,6 +63,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
+        upGoodsList: Array.from(this.goodsData.values())
       })
     }
 
@@ -133,10 +135,12 @@ export class Collection {
    * 拓店模式
     */
   async expendShop() {
+    if (!this.task.expendType) return
+    this.outputLog('拓店模式开启中，请稍等！')
     const expendShopHandle = async (goodsList: any[]) => {
       for (const item of goodsList) {
         let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
-        if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+        if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
         const data = item?.sellers?.sellers?.filter((item: any) => {
           item.ratingCount = item?.rating?.totalScore
           item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
@@ -146,14 +150,14 @@ export class Collection {
         for (const sellers of data) {
           this.expendShopCount++
           this.reason = undefined
-          if (this.targetData > (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+          if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
           await this.mainWindowService.changeUrl(sellers.link, true)
           await this.getHtmlData(this.task.targetCount || Infinity)
         }
       }
     }
     // 先用当前店铺中出售商品的跟卖店家
-    if (this.task.expendType && this.targetData < (this.task.targetCount || Infinity)) {
+    if (this.targetData < (this.task.targetCount || Infinity)) {
       const goodsList = Array.from(this.goodsData.values())
       const res = await expendShopHandle(goodsList)
       if (res) return

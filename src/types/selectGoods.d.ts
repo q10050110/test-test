@@ -64,6 +64,7 @@ export type Task = {
   aiSelectType: number
   expendType: boolean
   expendShopCount?: number
+  autoResult?: string
 }
 
 export type TaskList = {
