@@ -165,12 +165,14 @@ export class Collection {
         if (scrollAttempts >= maxScrollAttempts) {
           if (!this.reason) this.reason = 'success'
           this.outputLog('尝试获取商品达到最大次数')
+          log.info(`${this.task.taskName}-10次无法获取到商品数据，结束任务`)
           return
         }
 
         if (bottomOutCount >= 3) {
           if (!this.reason) this.reason = 'success'
           this.outputLog('已滚动至页面底部')
+          log.info(`${this.task.taskName}-滚动至底部3次，结束任务`)
           return
         }
 
@@ -223,7 +225,6 @@ export class Collection {
           this.process--
           this.outputLog(`完成商品${item.nameLabel}的处理`)
         } else {
-          log.info(this.reason)
           this.process = 0
           break
         }
@@ -249,8 +250,8 @@ export class Collection {
     let uuid = this.uuid
     if (this.task.taskStatus === status || uuid !== this.uuid) return
     try {
-      log.info(`${this.task.taskName}任务状态已更新：${status}`)
       this.task.taskStatus = status
+      log.info(`${this.task.taskName}任务状态已更新：${status}`)
       await this.syncStatusToServer(status)
     } catch (error) {
       log.error('更新任务状态失败', error)
@@ -339,7 +340,6 @@ export class Collection {
           safeResolve('任务已完成')
           return
         }
-        log.info(`${this.task.taskName}-获取1688数据:${task.id}`)
         const { link1688, sourcePrice, cover2 } = await this.windowService.createWindow(
           this.task.sourceType,
           task.cover,
@@ -357,16 +357,13 @@ export class Collection {
           rubExpressPrice: this.task.rubExpressPrice,
           internalExpress: this.task.internalExpress,
         }
-        log.info(`${this.task.taskName}-获取1688数据完成:${task.id}`)
         let detailData = await this.dataProcessService.getDetailData({
           taskId: this.task._id,
           reqDatas: [task],
         })
-        log.info(`获取详细数据:${task.id}`)
         this.writeQueue.push(detailData)
         this.writeTable()
         safeResolve('单个商品处理完成')
-        log.info(`${this.task.taskName}-商品处理完成:${task.id}`)
       } catch (error) {
         log.error(error, '单个商品任务失败')
         safeReject(new Error('单个商品任务失败'), reject)
@@ -415,7 +412,7 @@ export class Collection {
       this.process = 0
       this.updateStatus('failed')
       this.outputLog('窗口异常关闭')
-      log.info('窗口异常关闭')
+      log.error('窗口异常关闭')
     }
   }
   /**
