@@ -5,7 +5,7 @@ import log from '../../log/index.js'
 export class ParseService {
   protected ozonGoodsData: Set<string> = new Set()
   private windowService: MainWindowService | null = null
-
+  guessLikeList: Set<string> = new Set()
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
   }
@@ -64,6 +64,19 @@ export class ParseService {
         data.push(obj)
       }
     })
+    if (!this.guessLikeList.size) {
+      const likeDom = $('[data-widget="skuGrid"] a')
+      // 获取猜你喜欢数据
+      likeDom.each((index, element) => {
+        const href = $(element).attr('href')
+        const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
+        const queryUrl = encodeURIComponent(
+          `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`,
+        )
+        const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
+        this.guessLikeList.add(requestUrl)
+      })
+    }
 
     const uniqueData: any[] = []
     for (const item of data) {
@@ -75,6 +88,7 @@ export class ParseService {
     for (const item of uniqueData) {
       const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
+        item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
         item.sellerNumber =
           JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
             ?.sellers?.length || 0
@@ -120,6 +134,7 @@ export class ParseService {
    */
   destroy() {
     this.ozonGoodsData.clear()
+    this.guessLikeList.clear()
     this.windowService = null
   }
 }

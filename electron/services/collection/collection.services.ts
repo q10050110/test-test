@@ -32,6 +32,7 @@ export class Collection {
   private writeError = false // 写入错误
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
+  private expendShopCount = 0
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -52,6 +53,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
+        upGoodsList: this.goodsData.values()
       })
     }
     const safeReject = (e: any, reject: Function) => {
@@ -61,6 +63,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
+        upGoodsList: Array.from(this.goodsData.values())
       })
     }
 
@@ -83,14 +86,15 @@ export class Collection {
         this.outputLog('窗口创建成功，任务开始执行')
         await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
         this.outputLog('页面解析成功，开始获取商品列表')
-        await this.getHtmlData(this.task.targetCount)
+        await this.getHtmlData(this.task.targetCount || Infinity)
+        await this.waitForAllTasks()
+        await this.expendShop()
         memoryMonitor.trackBusinessMetrics({
           taskId: this.task._id,
           phase: 'collected',
           goodsDataSize: this.goodsData.size,
           parseServiceDataSize: this.parseService.getDataCount(),
         })
-        await this.waitForAllTasks()
         if (this.reason !== 'success') {
           safeReject('任务已被终止', reject)
           return
@@ -101,6 +105,7 @@ export class Collection {
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
+        console.log(error, '你出啥毛病了？')
         if (this.reason) return
         this.updateStatus('failed')
         this.outputLog(`采集失败：${error}`)
@@ -142,6 +147,55 @@ export class Collection {
     })
   }
 
+  /** 
+   * 拓店模式
+    */
+  async expendShop() {
+    if (!this.task.expendType) return
+    this.outputLog('拓店模式开启中，请稍等！')
+    const expendShopHandle = async (goodsList: any[]) => {
+      for (const item of goodsList) {
+        let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
+        if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+        const data = item?.sellers?.sellers?.filter((item: any) => {
+          item.ratingCount = item?.rating?.totalScore
+          item.priceNumber = item?.price?.cardPrice?.price?.replace(/[ ₽]/g, '')
+          return item.ratingCount > 4
+        }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount) || []
+        console.log(data, '让我看看是啥')
+        for (const sellers of data) {
+          this.expendShopCount++
+          this.reason = undefined
+          if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+          await this.mainWindowService.changeUrl(sellers.link, true)
+          await this.getHtmlData(this.task.targetCount || Infinity)
+        }
+      }
+    }
+    // 先用当前店铺中出售商品的跟卖店家
+    if (this.targetData < (this.task.targetCount || Infinity)) {
+      const goodsList = Array.from(this.goodsData.values())
+      const res = await expendShopHandle(goodsList)
+      if (res) return
+    }
+
+    // 如果当前店铺跟卖店家还不满足终止条件那就用猜你喜欢的跟卖店铺
+    const guessLikeList = Array.from(this.parseService.guessLikeList.values())
+    const sellersList = []
+    for (const url of guessLikeList) {
+      const response = await this.mainWindowService.getSellingData(url)
+      const sellers = {
+        sellers: []
+      }
+      if (response?.success) {
+        sellers.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        sellersList.push(sellers)
+      } else {
+        log.error('获取跟卖数据失败')
+      }
+    }
+    await expendShopHandle(sellersList)
+  }
   /**
    * 获取页面数据
    */
@@ -220,7 +274,7 @@ export class Collection {
         (item) => !filterDataList.map((item) => item.id).includes(item.id),
       )
       for (const item of data) {
-        if (this.reason === undefined && this.targetData < this.task.targetCount) {
+        if (this.reason === undefined && this.targetData < (this.task.targetCount || Infinity)) {
           await new Promise((resolve) => setTimeout(resolve, 50))
           this.process--
           this.outputLog(`完成商品${item.nameLabel}的处理`)
@@ -233,7 +287,7 @@ export class Collection {
         filterDataList.length &&
         this.reason !== 'cancel' &&
         this.reason !== 'failed' &&
-        this.targetData < this.task.targetCount
+        this.targetData < (this.task.targetCount || Infinity)
       ) {
         this.taskQueueService.addTask(filterDataList)
         this.taskQueueService.startProcessing()
@@ -336,7 +390,7 @@ export class Collection {
           }
         }
 
-        if (this.targetData >= this.task.targetCount && this.uuid === uuid) {
+        if (this.targetData >= (this.task.targetCount || Infinity) && this.uuid === uuid) {
           safeResolve('任务已完成')
           return
         }
@@ -380,7 +434,7 @@ export class Collection {
     this.isWrite = true
     while (this.writeQueue.length) {
       if (
-        this.targetData < this.task.targetCount &&
+        this.targetData < (this.task.targetCount || Infinity) &&
         (this.reason === 'success' || this.reason === undefined) &&
         this.uuid === uuid
       ) {
@@ -423,7 +477,7 @@ export class Collection {
       if (
         this.reason === 'cancel' ||
         this.reason === 'failed' ||
-        this.targetData >= this.task.targetCount
+        this.targetData >= (this.task.targetCount || Infinity)
       )
         return
       await new Promise((resolve) => setTimeout(resolve, 1000))

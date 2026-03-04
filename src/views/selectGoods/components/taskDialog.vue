@@ -70,6 +70,8 @@ const initData = ref<Task>({
   token: '',
   unit: undefined,
   aiSelectType: 0,
+  expendType: false,
+  expendShopCount: 0,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const formData = ref<Task>({ ...initData.value })
@@ -78,18 +80,6 @@ const rules: Record<string, Rule[]> = {
   taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
   targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
   sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
-  targetCount: [
-    { required: true, message: '请输入目标数量', trigger: ['change', 'blur'] },
-    {
-      validator: (_, value) => {
-        if (value <= 0) {
-          return Promise.reject('请输入大于0的数字')
-        }
-        return Promise.resolve()
-      },
-      trigger: ['change', 'blur'],
-    },
-  ],
   // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
 }
 
@@ -358,24 +348,7 @@ defineExpose({
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item required name="targetUrl">
-                  <template #label>
-                    <label class="flex-center">
-                      爬取网站URL
-                      <a-tooltip
-                        title="支持OZON商城的列表页，如：类目链接、店铺链接、搜索结果页链接"
-                      >
-                        <QuestionCircleOutlined class="info-icon" />
-                      </a-tooltip>
-                    </label>
-                  </template>
-                  <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item required name="targetCount">
+                <a-form-item>
                   <template #label>
                     <label class="flex-center">
                       目标数量
@@ -389,6 +362,57 @@ defineExpose({
                   <a-input-number
                     placeholder="请输入目标数量"
                     v-model:value="formData.targetCount"
+                    :min="1"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required name="targetUrl">
+                  <template #label>
+                    <label class="flex-center">
+                      OZON前台链接
+                      <a-tooltip
+                        title="支持OZON商城的列表页，如：类目链接、店铺链接、搜索结果页链接"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required>
+                  <template #label>
+                    <label class="flex-center">
+                      扩店模式
+                      <a-tooltip title="还不知道写些啥">
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-switch v-model:checked="formData.expendType" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]" v-if="formData.expendType">
+              <a-col :span="12">
+                <a-form-item required>
+                  <template #label>
+                    <label class="flex-center">
+                      扩展店铺数量
+                      <a-tooltip title="还不知道写些啥">
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-input-number
+                    placeholder="请输入目标数量"
+                    v-model:value="formData.expendShopCount"
                     :min="1"
                   />
                 </a-form-item>
