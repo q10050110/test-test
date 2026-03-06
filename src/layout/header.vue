@@ -74,7 +74,7 @@ window.electronAPI.on('unmaximize', () => {
         <img src="@/assets/window/lianxikefu.png" alt="" />
         联系客服
         <div class="qrcode">
-          <img src="@/assets/window/qrcode.png" alt="" />
+          <img src="https://ozonbang-test.oss-cn-beijing.aliyuncs.com/icons/customer.png" alt="" />
         </div>
       </div>
       <div class="operations">
