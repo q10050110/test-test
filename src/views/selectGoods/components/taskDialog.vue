@@ -254,9 +254,9 @@ const saveHandle = async (type: 'save' | 'execute') => {
 
   if (formData.value.isUseAutoUpGoods) {
     if (!formData.value.client_id && !formData.value.upDataConfigId)
-      return feedback.error('您当前已使用自动上架，请完善上架配置信息')
+      return feedback.error('您当前已开启自动上架，请完善上架配置信息')
     if (!formData.value.myProfitPercent && formData.value.myProfitPercent !== 0)
-      return feedback.error('您当前已使用自动上架，请填写我的利润率')
+      return feedback.error('您当前已开启自动上架，请填写我的利润率')
   }
 
   if (formData.value.upDataConfigId) {
