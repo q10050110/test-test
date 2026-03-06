@@ -71,7 +71,10 @@ export default {
   publish: [
     {
       provider: 'generic',
-      url: 'https://test-plus.shopbang.cn/version/',
+      url:
+        process.env.APP_ENV === 'development'
+          ? 'https://test-plus.shopbang.cn/version/'
+          : 'https://shopbang.cn/version/',
     },
   ],
 
