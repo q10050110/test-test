@@ -53,7 +53,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
-        upGoodsList: this.goodsData.values()
+        upGoodsList: Array.from(this.goodsData.values())
       })
     }
     const safeReject = (e: any, reject: Function) => {

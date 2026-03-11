@@ -307,7 +307,6 @@ const changeMode = computed({
 
 // 获取仓库信息
 const clientList = computed(() => {
-  formData.value.warehouse_id = undefined
   const obj = props.shopList.find((item) => item.client_id === formData.value.client_id)
   return obj ? obj.warehouse : []
 })
@@ -450,6 +449,7 @@ defineExpose({
                       allowClear
                       :disabled="!formData.isUseAutoUpGoods"
                       :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                      @change="formData.warehouse_id = undefined"
                     >
                       <a-select-option
                         :value="item.client_id"
@@ -529,7 +529,17 @@ defineExpose({
             </h3>
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
-                <a-form-item label="我的利润率" name="myProfitPercent">
+                <a-form-item name="myProfitPercent">
+                  <template #label>
+                    <label class="flex-center">
+                      我的利润率
+                      <a-tooltip
+                        title="利润就是成本/售价，成本：货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
                   <a-input-number
                     placeholder="请输入利润率"
                     v-model:value="formData.myProfitPercent"
