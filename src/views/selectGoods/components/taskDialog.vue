@@ -71,7 +71,7 @@ const initData = ref<Task>({
   unit: undefined,
   aiSelectType: 0,
   expendType: false,
-  expendShopCount: 0,
+  expendShopCount: 1,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const formData = ref<Task>({ ...initData.value })
@@ -248,6 +248,9 @@ const saveHandle = async (type: 'save' | 'execute') => {
     if (!formData.value.myProfitPercent && formData.value.myProfitPercent !== 0)
       return feedback.error('您当前已使用自动上架，请填写我的利润率')
   }
+
+  if (formData.value.expendType && !formData.value.expendShopCount)
+    return feedback.error('请填写需要拓展的店铺数量')
 
   if (formData.value.upDataConfigId) {
     const obj = props.configList.find((item) => item._id === formData.value.upDataConfigId)
