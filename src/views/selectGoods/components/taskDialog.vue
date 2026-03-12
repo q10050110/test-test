@@ -78,7 +78,21 @@ const formData = ref<Task>({ ...initData.value })
 
 const rules: Record<string, Rule[]> = {
   taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
-  targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
+  targetUrl: [
+    { required: true, message: '请输入网址', trigger: ['change', 'blur'] },
+    {
+      validator: (_, value) => {
+        try {
+          const url = new URL(value)
+          if (url.hostname.includes('ozon')) return Promise.resolve()
+          return Promise.reject('请输入正确的ozon网址')
+        } catch (error) {
+          return Promise.reject('请输入正确的ozon网址')
+        }
+      },
+      trigger: ['change', 'blur'],
+    },
+  ],
   sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
   // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
 }
