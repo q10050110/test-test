@@ -503,7 +503,7 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入库存"
                       v-model:value="formData.stock"
-                      :disabled="!formData.isUseAutoUpGoods"
+                      :disabled="!formData.isUseAutoUpGoods || !formData.warehouse_id"
                       :min="0"
                     ></a-input-number>
                   </a-form-item>

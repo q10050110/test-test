@@ -155,7 +155,7 @@ export class Collection {
     const expendShopHandle = async (goodsList: any[]) => {
       for (const item of goodsList) {
         let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
-        if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+        if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount || (this.reason === 'cancel' || this.reason === 'failed')) return true
         const data = item?.sellers?.sellers?.filter((item: any) => {
           item.ratingCount = item?.rating?.totalScore
           item.priceNumber = item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')
@@ -163,7 +163,7 @@ export class Collection {
         }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount) || []
         for (const sellers of data) {
           this.reason = undefined
-          if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount) return true
+          if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount || (this.reason === 'cancel' || this.reason === 'failed')) return true
           this.expendShopCount++
           this.outputLog('拓店模式开启中，请稍等！')
           await this.mainWindowService.changeUrl(sellers.link, true)
