@@ -1,10 +1,10 @@
-import { shell } from 'electron'
+import { shell, clipboard, BrowserWindow } from 'electron'
 import request from '../utils/request.js'
 import { operationStore } from '../store/index.js'
 import { SysTemUtils } from '../utils/system.js'
 import { InterfaceResult } from '../types/index.js'
 import { TaskManager } from './collection/task-manager.services.js'
-export const accountHandle = (type: 'register' | 'resetPassword') => {
+export const accountHandle = async (type: 'register' | 'resetPassword', mainWindow: BrowserWindow) => {
   const env = SysTemUtils.getEnv() === 'development'
   const testUrl =
     type === 'register'
@@ -14,7 +14,12 @@ export const accountHandle = (type: 'register' | 'resetPassword') => {
     type === 'register'
       ? 'https://shopbang.cn/erp/#/register'
       : 'https://shopbang.cn/erp/#/forgetPassword'
-  shell.openExternal(env ? testUrl : prodUrl)
+  try {
+    await shell.openExternal(env ? testUrl : prodUrl)
+  } catch (error) {
+    await clipboard.writeText(env ? testUrl : prodUrl)
+    mainWindow.webContents.send('window-notify', { type: 'account', message: '您未设置默认浏览器，已将网址拷贝到剪切板，请手动打开浏览器访问网址。' })
+  }
 }
 
 export const login = async (data: { phone: string; pwd: string }) => {

@@ -6,6 +6,7 @@ import { debounce } from 'lodash'
 import type CModal from './components/c-modal.vue'
 import type { Progress } from './types'
 import dingMp3 from '@/assets/window/ding.mp3'
+import notify from './utils/notify'
 const store = useUserStore()
 const appStore = useAppStore()
 const cModalRef = ref<InstanceType<typeof CModal>>()
@@ -72,6 +73,10 @@ window.electronAPI.on('update-error', async (error) => {
 window.electronAPI.on('window-close', () => {
   console.log('关闭窗口了')
   appStore.openHandle('quit')
+})
+
+window.electronAPI.on('window-notify', (data: { message: string; type: keyof typeof notify }) => {
+  notify[data.type].callback(data.message)
 })
 
 const onResize = debounce(() => {

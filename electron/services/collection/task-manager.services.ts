@@ -5,7 +5,7 @@ import request from '../../utils/request.js'
 import { Task } from './type.js'
 import { SysTemUtils } from '../../utils/system.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
-
+import { autoUpGoods } from './interface.services.js'
 export class TaskManager {
   private static instance: TaskManager
   private tasks: Map<string, Collection> = new Map()
@@ -13,7 +13,7 @@ export class TaskManager {
   private maxConcurrentTasks = 2
   private taskQueue: string[] = []
   private mainWindow: BrowserWindow | null = null
-  private filePathList: Map<string, { filePath: string; progress: any; autoResult?: string }> =
+  private filePathList: Map<string, { filePath: string; progress: any; autoResult?: string, upGoodsList: any[] }> =
     new Map()
   private constructor() { }
 
@@ -468,5 +468,14 @@ export class TaskManager {
     }
     this.tasks.clear()
     this.filePathList.clear()
+  }
+
+  // 上架
+  async upGoods(task: Task) {
+    const result = this.filePathList.get(task._id)
+    if (!result) return Promise.reject('任务不存在')
+    const data = new Map()
+    result.upGoodsList.forEach((item: any) => data.set(item.id, item))
+    return autoUpGoods(task, data)
   }
 }

@@ -65,7 +65,7 @@ const columns = ref<TableColumnsType<Task>>([
     title: '任务名称',
     dataIndex: 'taskName',
     key: 'taskName',
-    width: '30%',
+    width: '28%',
   },
   {
     title: '任务状态',
@@ -253,6 +253,21 @@ const exportHandle = async (tableFilePath: string) => {
   }
 }
 
+// 上架
+const upGoods = async (task: Task) => {
+  const res = await feedback.confirm('是否确认上架表格中的商品？')
+  if (!res) return
+  const data = toRaw(task)
+  data.progress = toRaw(data.progress)
+  const { code, message } = await window.electronAPI.invoke<any>('up-goods', data)
+  if (code === 200) {
+    task.autoResult = 'success'
+    feedback.success('上架成功！')
+  } else {
+    task.autoResult = message
+    feedback.error(message)
+  }
+}
 // 新建任务
 const dialogRef = ref<InstanceType<typeof TaskDialog>>()
 const openTaskDialogHandle = async (data?: Task) => {
@@ -422,6 +437,24 @@ onUnmounted(() => {
                   >导出</a-button
                 >
               </a-tooltip>
+              <a-tooltip placement="topRight" v-if="record.isUseAutoUpGoods">
+                <template #title>
+                  <span>将表格中的商品上架至OZON后台</span>
+                </template>
+                <a-button
+                  type="link"
+                  :icon="h(DownloadOutlined)"
+                  :disabled="
+                    record?.autoResult === 'success' ||
+                    !record?.tableFilePath ||
+                    record?.taskStatus === 'noExecuted' ||
+                    record?.taskStatus === 'running' ||
+                    record?.taskStatus === 'pending'
+                  "
+                  @click="upGoods(record as Task)"
+                  >上架</a-button
+                >
+              </a-tooltip>
             </template>
           </template>
         </a-table>
@@ -446,7 +479,7 @@ onUnmounted(() => {
   </div>
   <TaskDialog
     ref="dialogRef"
-    @refresh="getTaskList(false, true)"
+    @refresh="getTaskList(false, false)"
     :logisticsSimpleList="logisticsSimpleList"
     :shop-list="shopList"
     :config-list="configList"

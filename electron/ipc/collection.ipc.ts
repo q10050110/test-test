@@ -277,4 +277,22 @@ export const collectionIpc = (win: BrowserWindow) => {
       : 'https://shopbang.cn/erp/#/batchRecord'
     shell.openExternal(url)
   })
+
+  // 上架商品
+  ipcMain.handle('up-goods', async (event, data) => {
+    const res = await taskManager.upGoods(data)
+    if (res !== 'success') {
+      return {
+        code: 500,
+        message: res,
+        data: null
+      }
+    } else {
+      return {
+        code: 200,
+        message: '上架成功',
+        data: null
+      }
+    }
+  })
 }

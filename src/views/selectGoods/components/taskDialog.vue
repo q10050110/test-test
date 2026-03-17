@@ -70,26 +70,30 @@ const initData = ref<Task>({
   token: '',
   unit: undefined,
   aiSelectType: 0,
+  expendType: false,
+  expendShopCount: 1,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const formData = ref<Task>({ ...initData.value })
 
 const rules: Record<string, Rule[]> = {
   taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
-  targetUrl: [{ required: true, message: '请输入网址', trigger: ['change', 'blur'] }],
-  sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
-  targetCount: [
-    { required: true, message: '请输入目标数量', trigger: ['change', 'blur'] },
+  targetUrl: [
+    { required: true, message: '请输入网址', trigger: ['change', 'blur'] },
     {
       validator: (_, value) => {
-        if (value <= 0) {
-          return Promise.reject('请输入大于0的数字')
+        try {
+          const url = new URL(value)
+          if (url.hostname.includes('ozon')) return Promise.resolve()
+          return Promise.reject('请输入正确的ozon网址')
+        } catch (error) {
+          return Promise.reject('请输入正确的ozon网址')
         }
-        return Promise.resolve()
       },
       trigger: ['change', 'blur'],
     },
   ],
+  sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
   // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
 }
 
@@ -259,6 +263,9 @@ const saveHandle = async (type: 'save' | 'execute') => {
       return feedback.error('您当前已开启自动上架，请填写我的利润率')
   }
 
+  if (formData.value.expendType && !formData.value.expendShopCount)
+    return feedback.error('请填写需要拓展的店铺数量')
+
   if (formData.value.upDataConfigId) {
     const obj = props.configList.find((item) => item._id === formData.value.upDataConfigId)
     if (obj && !obj.shopData.length) return feedback.error('该配置无店铺，请检查后再上架')
@@ -317,7 +324,6 @@ const changeMode = computed({
 
 // 获取仓库信息
 const clientList = computed(() => {
-  formData.value.warehouse_id = undefined
   const obj = props.shopList.find((item) => item.client_id === formData.value.client_id)
   return obj ? obj.warehouse : []
 })
@@ -358,24 +364,7 @@ defineExpose({
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item required name="targetUrl">
-                  <template #label>
-                    <label class="flex-center">
-                      爬取网站URL
-                      <a-tooltip
-                        title="支持OZON商城的列表页，如：类目链接、店铺链接、搜索结果页链接"
-                      >
-                        <QuestionCircleOutlined class="info-icon" />
-                      </a-tooltip>
-                    </label>
-                  </template>
-                  <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item required name="targetCount">
+                <a-form-item>
                   <template #label>
                     <label class="flex-center">
                       目标数量
@@ -389,6 +378,57 @@ defineExpose({
                   <a-input-number
                     placeholder="请输入目标数量"
                     v-model:value="formData.targetCount"
+                    :min="1"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required name="targetUrl">
+                  <template #label>
+                    <label class="flex-center">
+                      OZON前台链接
+                      <a-tooltip
+                        title="支持OZON商城的列表页，如：类目链接、店铺链接、搜索结果页链接"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required>
+                  <template #label>
+                    <label class="flex-center">
+                      扩店模式
+                      <a-tooltip title="程序自动寻找跟卖着店铺，或者商品相关的卖家店铺，进行选品">
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-switch v-model:checked="formData.expendType" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="[16, 16]" v-if="formData.expendType">
+              <a-col :span="12">
+                <a-form-item required>
+                  <template #label>
+                    <label class="flex-center">
+                      扩展店铺数量
+                      <a-tooltip title="程序需要自动寻找符合的店铺数量">
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
+                  <a-input-number
+                    placeholder="请输入目标数量"
+                    v-model:value="formData.expendShopCount"
                     :min="1"
                   />
                 </a-form-item>
@@ -426,6 +466,7 @@ defineExpose({
                       allowClear
                       :disabled="!formData.isUseAutoUpGoods"
                       :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                      @change="formData.warehouse_id = undefined"
                     >
                       <a-select-option
                         :value="item.client_id"
@@ -462,7 +503,7 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入库存"
                       v-model:value="formData.stock"
-                      :disabled="!formData.isUseAutoUpGoods"
+                      :disabled="!formData.isUseAutoUpGoods || !formData.warehouse_id"
                       :min="0"
                     ></a-input-number>
                   </a-form-item>
@@ -505,7 +546,17 @@ defineExpose({
             </h3>
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
-                <a-form-item label="我的利润率" name="myProfitPercent">
+                <a-form-item name="myProfitPercent">
+                  <template #label>
+                    <label class="flex-center">
+                      我的利润率
+                      <a-tooltip
+                        title="利润就是成本/售价，成本：货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </label>
+                  </template>
                   <a-input-number
                     placeholder="请输入利润率"
                     v-model:value="formData.myProfitPercent"

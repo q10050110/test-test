@@ -262,7 +262,7 @@ export class DataProcessService {
       // 发货模式校验
       (item: any) => {
         if (!task.salesSchema) return true
-        const result = 'FBO,FBS'.includes(item.salesSchema)
+        const result = task.salesSchema?.includes(item.salesSchema)
         return result
       },
     ]

@@ -3,7 +3,7 @@ import { accountHandle, getUserInfo, login, logout } from '../services/account.s
 
 export const accountIpc = (win: BrowserWindow) => {
   ipcMain.on('account', (event, args: 'register' | 'resetPassword') => {
-    accountHandle(args)
+    accountHandle(args, win)
   })
 
   ipcMain.handle(
