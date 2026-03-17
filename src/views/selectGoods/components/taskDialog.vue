@@ -406,7 +406,7 @@ defineExpose({
                   <template #label>
                     <label class="flex-center">
                       扩店模式
-                      <a-tooltip title="还不知道写些啥">
+                      <a-tooltip title="程序自动寻找跟卖着店铺，或者商品相关的卖家店铺，进行选品">
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
                     </label>
@@ -421,7 +421,7 @@ defineExpose({
                   <template #label>
                     <label class="flex-center">
                       扩展店铺数量
-                      <a-tooltip title="还不知道写些啥">
+                      <a-tooltip title="程序需要自动寻找符合的店铺数量">
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
                     </label>
