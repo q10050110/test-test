@@ -437,8 +437,10 @@ export class Collection {
       ) {
         const data = this.writeQueue.shift()
         const result = await this.excelService.saveExcel(data)
-        this.goodsData.set(data[0]?.id, data?.[0])
-        if (data.length) this.targetData++
+        if (data.length) {
+          this.targetData++
+          this.goodsData.set(data[0]?.id, data?.[0])
+        }
         this.process--
         if (!result) this.writeError = true
         if (!this.task.tableFilePath)
