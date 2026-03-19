@@ -48,7 +48,7 @@ defineExpose({
 
 <template>
   <a-modal v-model:open="open" @cancel="open = false" style="width: 400px" :footer="null">
-    <div v-if="store.updateStatus === 'hasUpdate'">
+    <div v-if="store.updateStatus === 'hasUpdate' || true">
       <div class="c-modal">
         <div class="icon"><img src="@/assets/window/update.png" /></div>
         <div class="title">发现新版本</div>
@@ -111,7 +111,13 @@ defineExpose({
       </div>
     </div>
   </a-modal>
-  <a-modal v-model:open="showUpdateDialog" title="更新内容" :footer="null">
+  <a-modal
+    v-model:open="showUpdateDialog"
+    title="更新内容"
+    :footer="null"
+    @cancel="showUpdateDialog = false"
+    style="width: 400px; -webkit-app-region: no-drag"
+  >
     <div class="u-item" v-if="config.feature.length">
       <div class="title">
         <img src="@/assets/layout/feature.png" alt="" class="u-icon" />
