@@ -377,7 +377,7 @@ export class SysTemUtils {
       */
     copyFile: async (filePath: string) => {
       const ext = extname(filePath)
-      const originName = basename(filePath, ext)
+      const originName = basename(filePath, ext)?.split('_')?.[0]
       const newName = `${originName}_${dayjs().format('YYYYMMDDHHmmss')}${ext}`
       const { canceled, filePath: savePath } = await dialog.showSaveDialog({
         title: '保存文件',
@@ -386,7 +386,7 @@ export class SysTemUtils {
           { name: 'Excel 文件', extensions: ['xlsx'] }
         ]
       })
-      console.log(canceled, filePath, '看看是啥')
+
       if (canceled || !savePath) return
       try {
         if (existsSync(filePath)) {

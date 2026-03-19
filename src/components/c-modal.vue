@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores'
 import type { Progress } from '@/types'
+import config from '../../electron/config/index'
 import dayjs from 'dayjs'
 defineProps<{
   progress?: Progress
@@ -8,6 +9,7 @@ defineProps<{
 
 const store = useAppStore()
 const open = ref(false)
+const showUpdateDialog = ref(false)
 const updateHandle = async () => {
   store.setUpdate('download')
   window.electronAPI.sendMessage('start-update-app', {})
@@ -55,7 +57,13 @@ defineExpose({
           <div>{{ formatSize(store.updateInfo?.size || 0) }}</div>
           <div>{{ formatDate(store.updateInfo?.date || '') }}发布</div>
         </div>
-        <div class="desc">有新版本可用，是否立即下载更新？</div>
+        <div class="desc">
+          有新版本可用，是否立即下载更新？<span
+            style="cursor: pointer; color: #1a6be8"
+            @click="showUpdateDialog = true"
+            >查看更新</span
+          >
+        </div>
       </div>
 
       <a-row justify="center">
@@ -101,6 +109,41 @@ defineExpose({
         <span class="dot"></span>
         正在替换程序文件…
       </div>
+    </div>
+  </a-modal>
+  <a-modal v-model:open="showUpdateDialog" title="更新内容" :footer="null">
+    <div class="u-item" v-if="config.feature.length">
+      <div class="title">
+        <img src="@/assets/layout/feature.png" alt="" class="u-icon" />
+        新功能
+      </div>
+      <ul class="desc">
+        <li v-for="(item, i) in config.feature" :key="i">
+          {{ item }}
+        </li>
+      </ul>
+    </div>
+    <div class="u-item" v-if="config.optimize.length">
+      <div class="title">
+        <img src="@/assets/layout/optimize.png" alt="" class="u-icon" />
+        优化
+      </div>
+      <ul class="desc">
+        <li v-for="(item, i) in config.optimize" :key="i">
+          {{ item }}
+        </li>
+      </ul>
+    </div>
+    <div class="u-item">
+      <div class="title">
+        <img src="@/assets/layout/bug.png" alt="" class="u-icon" />
+        修复
+      </div>
+      <ul class="desc">
+        <li v-for="(item, i) in config.repair" :key="i">
+          {{ item }}
+        </li>
+      </ul>
     </div>
   </a-modal>
 </template>
@@ -263,6 +306,28 @@ defineExpose({
 
   50% {
     opacity: 1;
+  }
+}
+
+.u-item {
+  margin-bottom: 10px;
+  .title {
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+    .u-icon {
+      width: 32px;
+      height: 32px;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+  }
+  .desc {
+    list-style-position: outside;
+    box-sizing: border-box;
+    list-style: disc;
+    padding-left: 24px;
   }
 }
 </style>

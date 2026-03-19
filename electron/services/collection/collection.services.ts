@@ -38,7 +38,7 @@ export class Collection {
     this.mainWindow = mainWindow
     this.mainWindowService = new MainWindowService(this.closeHandle)
     this.taskQueueService = new TaskQueueService(this.taskHandle)
-    this.excelService = new ExcelService(task.taskName)
+    this.excelService = new ExcelService(`${task.taskName}_${this.task._id}`)
     this.dataProcessService = new DataProcessService()
     this.parseService = new ParseService(this.mainWindowService)
     this.windowService = new WindowService(this.parseService)

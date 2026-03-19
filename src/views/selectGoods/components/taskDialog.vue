@@ -406,7 +406,7 @@ defineExpose({
                   <template #label>
                     <label class="flex-center">
                       扩店模式
-                      <a-tooltip title="程序自动寻找跟卖着店铺，或者商品相关的卖家店铺，进行选品">
+                      <a-tooltip title="程序自动寻找跟卖者店铺，或者商品相关的卖家店铺，进行选品">
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
                     </label>
@@ -551,7 +551,7 @@ defineExpose({
                     <label class="flex-center">
                       我的利润率
                       <a-tooltip
-                        title="利润就是成本/售价，成本：货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金"
+                        title="利润率就是利润/售价，利润：售价 - （货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金）"
                       >
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
