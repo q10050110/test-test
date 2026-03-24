@@ -39,6 +39,9 @@ export class DataProcessService {
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.goods_id) this.data.set(item.goods_id, item)
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
+            item.length = undefined
+            item.weight = undefined
+            item.height = undefined
           })
       }
 

@@ -691,7 +691,17 @@ defineExpose({
               </a-row>
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
-                  <a-form-item label="商品售价">
+                  <a-form-item>
+                    <template #label>
+                      <label class="flex-center">
+                        商品售价
+                        <a-tooltip
+                          title="商品售价单位使用的是卢布单位，若您的“ozon前台链接”页面改变了币种，请自行转换。"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
                     <div class="range-input-wrapper">
                       <a-input-number
                         placeholder="最小价格"
