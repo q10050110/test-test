@@ -47,6 +47,28 @@ export class MainWindowService {
       this.browserWindow.webContents.once('dom-ready', async () => {
         log.info('页面 DOM 已准备就绪')
         clearTimeout(timeoutId)
+        await this.browserWindow?.webContents?.executeJavaScript(`
+          (() => {
+            // 防止重复插入
+            if (document.getElementById('__electron_mask__')) return;
+
+            const mask = document.createElement('div');
+            mask.id = '__electron_mask__';
+
+            Object.assign(mask.style, {
+              position: 'fixed',
+              top: '0',
+              left: '0',
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(0,0,0,0)', 
+              zIndex: '999999999',
+              pointerEvents: 'auto',
+              cursor: 'not-allowed'
+            });
+            document.body.appendChild(mask);
+          })();
+        `)
         await new Promise((resolve) => setTimeout(resolve, 3000))
         safeResolve(this.browserWindow)
       })

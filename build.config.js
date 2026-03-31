@@ -12,10 +12,10 @@ export default {
     mirror: 'https://npmmirror.com/mirrors/electron/',
   },
   // 应用唯一标识
-  appId: 'com.example.myapp',
+  appId: process.env.APP_ENV === 'development' ? 'sp.bang.test' : 'sp.bang',
 
   // 应用名称（安装包和桌面图标显示）
-  productName: '上品帮',
+  productName: process.env.APP_ENV === 'development' ? '上品帮-测试' : '上品帮',
 
   // 输出目录
   directories: {
@@ -49,7 +49,8 @@ export default {
     allowToChangeInstallationDirectory: true, // 可修改安装目录
     createDesktopShortcut: true, // 创建桌面快捷方式
     createStartMenuShortcut: true, // 创建开始菜单快捷方式
-    shortcutName: '上品帮-自动化助手', // 快捷方式名称
+    shortcutName:
+      process.env.APP_ENV === 'development' ? '上品帮-自动化助手-测试' : '上品帮-自动化助手', // 快捷方式名称
     perMachine: false, // 只允许当前电脑安装
   },
 
