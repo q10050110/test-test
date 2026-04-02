@@ -37,11 +37,13 @@ export class DataProcessService {
             item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
             item.discount = item?.discount?.toFixed(2)
             if (item.accessibility) item.accessibility = item.accessibility * 100
-            if (item.goods_id) this.data.set(item.goods_id, item)
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
             item.length = undefined
             item.weight = undefined
             item.height = undefined
+            item.width = undefined
+            item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 0) * 100)?.toFixed(2)
+            if (item.goods_id) this.data.set(item.goods_id, item)
           })
       }
 
@@ -50,7 +52,6 @@ export class DataProcessService {
         if (obj) {
           return { ...item, ...obj, productId: item.id }
         }
-
         return { ...item, productId: item.id }
       })
       return mergeData
@@ -81,11 +82,11 @@ export class DataProcessService {
   /**
    * 获取详细数据
    */
-  async getDetailData(params: { taskId: string; reqDatas: any[] }) {
+  async getDetailData(params: { taskId: string; reqDatas: any[], upMode?: 1 | 2 }) {
     try {
-      const { taskId, reqDatas } = params
+      const { taskId, reqDatas, upMode } = params
       const res = await request({
-        url: '/api/auto/filterGoods/goodsFilter',
+        url: upMode != 2 ? '/api/auto/filterGoods/goodsFilter' : '/api/auto/filterGoods/goodsFilter2',
         method: 'post',
         data: {
           taskId,
@@ -268,6 +269,26 @@ export class DataProcessService {
         const result = task.salesSchema?.includes(item.salesSchema)
         return result
       },
+      // 评论数校验
+      (item: any) => {
+        const result = this.checkRange(item.reviewCountLabel, task.numberOfCommentsMin, task.numberOfCommentsMax)
+        return result
+      },
+      // 评分范围校验
+      (item: any) => {
+        const result = this.checkRange(item.rating, task.ratingMin, task.ratingMax)
+        return result
+      },
+      // 点击率校验
+      (item: any) => {
+        const result = this.checkRange(item.clickRate, task.clickRateMin, task.clickRateMax)
+        return result
+      },
+      // 成交率校验
+      (item: any) => {
+        const result = this.checkRange(item.nullableRedemptionRate, task.nullableRedemptionRateMin, task.nullableRedemptionRateMax)
+        return result
+      }
     ]
     const filteredData = data.filter((item) => {
       const results = filters.map((filterFn) => filterFn(item))

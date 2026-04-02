@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, shell } from 'electron'
 import { SysTemUtils } from '../utils/system.js'
 import { UpdaterManager } from '../services/update.services.js'
 export const windowIpc = (win: BrowserWindow) => {
@@ -45,5 +45,9 @@ export const windowIpc = (win: BrowserWindow) => {
 
   ipcMain.on('quit-and-install-app', async () => {
     UpdaterManager.getInstance().quitAndInstall()
+  })
+
+  ipcMain.on('open-url', async (event, data: string) => {
+    shell.openExternal(data)
   })
 }

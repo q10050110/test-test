@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { QuestionCircleOutlined, SwapOutlined } from '@ant-design/icons-vue'
+import { QuestionCircleOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons-vue'
 import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
-import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods'
+import type {
+  ConfigList,
+  LogisticsSimpleList,
+  ShopList,
+  Task,
+  ConditionForm,
+} from '@/types/selectGoods'
 import feedback from '@/utils/feedback'
 import { getShopCurCode } from '@/enums/index'
 const props = defineProps<{
@@ -72,10 +78,81 @@ const initData = ref<Task>({
   aiSelectType: 0,
   expendType: false,
   expendShopCount: 1,
+  basePriceType: 'originSale',
+  rejustType: 'fixed',
+  rejustValue: undefined,
+  upMode: 2,
+  nullableRedemptionRateMax: undefined,
+  nullableRedemptionRateMin: undefined,
+  ratingMax: undefined,
+  ratingMin: undefined,
+  clickRateMax: undefined,
+  clickRateMin: undefined,
+  numberOfCommentsMax: undefined,
+  numberOfCommentsMin: undefined,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
+const priceType = [
+  {
+    label: '商品售价',
+    value: 'originSale',
+  },
+  {
+    label: '跟卖最低价',
+    value: 'followMin',
+  },
+]
+const regulatingType = [
+  {
+    label: '固定值',
+    value: 'fixed',
+  },
+  {
+    label: '百分比',
+    value: 'precent',
+  },
+]
 const formData = ref<Task>({ ...initData.value })
-
+const conditionFormData = ref<ConditionForm>({
+  soldCountMin: undefined,
+  soldCountMax: undefined,
+  gmvSumMin: undefined,
+  gmvSumMax: undefined,
+  salePriceMin: undefined,
+  salePriceMax: undefined,
+  ratingMin: undefined,
+  ratingMax: undefined,
+  clickRateMin: undefined,
+  clickRateMax: undefined,
+  nullableRedemptionRateMin: undefined,
+  nullableRedemptionRateMax: undefined,
+  upGoodsTimeMin: undefined,
+  upGoodsTimeMax: undefined,
+  monthDynamicsMin: undefined,
+  monthDynamicsMax: undefined,
+  adFeeMin: undefined,
+  adFeeMax: undefined,
+  promotionDayMin: undefined,
+  promotionDayMax: undefined,
+  promotionDiscountMin: undefined,
+  promotionDiscountMax: undefined,
+  promotionDynamicsMin: undefined,
+  promotionDynamicsMax: undefined,
+  promoteDayMin: undefined,
+  promoteDayMax: undefined,
+  viewsMin: undefined,
+  viewsMax: undefined,
+  cardRateMin: undefined,
+  cardRateMax: undefined,
+  showRateMin: undefined,
+  showRateMax: undefined,
+  salesSchema: 'FBO,FBS',
+  followMin: undefined,
+  followMax: undefined,
+  numberOfCommentsMin: undefined,
+  numberOfCommentsMax: undefined,
+  brandType: '2',
+})
 const rules: Record<string, Rule[]> = {
   taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
   targetUrl: [
@@ -199,8 +276,56 @@ const filters = [
     const result = checkRange(formData.value.followMin, formData.value.followMax)
     return result
   },
+  // 评论数范围校验
+  (item: any) => {
+    const result = checkRange(item.numberOfCommentsMin, item.numberOfCommentsMax)
+    return result
+  },
+  // 评分范围校验
+  (item: any) => {
+    const result = checkRange(item.ratingMin, item.ratingMax)
+    return result
+  },
+  // 点击率范围校验
+  (item: any) => {
+    const result = checkRange(item.clickRateMin, item.clickRateMax)
+    return result
+  },
+  // 成交率范围校验
+  (item: any) => {
+    const result = checkRange(item.nullableRedemptionRateMin, item.nullableRedemptionRateMax)
+    return result
+  },
 ]
 
+// 选品条件变化
+watch(
+  () => formData.value.aiSelectType,
+  (newVal, oldVal) => {
+    if (oldVal === 1) {
+      const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
+      Object.assign(
+        conditionFormData.value,
+        Object.fromEntries(keys.map((k) => [k, formData.value[k]])),
+      )
+    }
+    if (newVal === 2) {
+      const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
+      keys.forEach((key) => {
+        if (key === 'salesSchema') formData.value[key] = 'FBO,FBS'
+        if (key === 'brandType') formData.value[key] = '2'
+        if (key !== 'salesSchema' && key !== 'brandType') formData.value[key] = undefined
+      })
+      formData.value.soldCountMin = 50
+      formData.value.monthDynamicsMin = 10
+      formData.value.followMax = 30
+      formData.value.ratingMin = 4
+    }
+    if (newVal === 1) {
+      formData.value = { ...formData.value, ...conditionFormData.value }
+    }
+  },
+)
 // 关闭自动上架清空配置项
 watch(
   () => formData.value.isUseAutoUpGoods,
@@ -259,7 +384,11 @@ const saveHandle = async (type: 'save' | 'execute') => {
   if (formData.value.isUseAutoUpGoods) {
     if (!formData.value.client_id && !formData.value.upDataConfigId)
       return feedback.error('您当前已开启自动上架，请完善上架配置信息')
-    if (!formData.value.myProfitPercent && formData.value.myProfitPercent !== 0)
+    if (
+      !formData.value.myProfitPercent &&
+      formData.value.myProfitPercent !== 0 &&
+      formData.value.upMode !== 2
+    )
       return feedback.error('您当前已开启自动上架，请填写我的利润率')
   }
 
@@ -301,6 +430,25 @@ const saveHandle = async (type: 'save' | 'execute') => {
   }
 }
 
+/* 切换新旧版 */
+const changeVersion = computed({
+  get() {
+    return formData.value.upMode
+  },
+  set(val) {
+    if (val === 1) {
+      formData.value.basePriceType = undefined
+      formData.value.rejustType = undefined
+      formData.value.rejustValue = undefined
+    } else {
+      formData.value.myProfitPercent = undefined
+    }
+    formData.value.internalExpress = undefined
+    formData.value.rubExpressPrice = undefined
+    formData.value.elsePercent = undefined
+    formData.value.upMode = val
+  },
+})
 /* 自动上架 */
 // 切换自动上架配置时清空之前的配置信息
 const changeMode = computed({
@@ -328,6 +476,16 @@ const clientList = computed(() => {
   return obj ? obj.warehouse : []
 })
 
+// 跳转到ERP配置页
+const goErp = () => {
+  window.electronAPI.sendMessage('go-erp', 'upGoodsSetting')
+}
+
+const changeHandle = (val?: 'followMin' | 'originSale') => {
+  formData.value.rejustType = val ? formData.value.rejustType : undefined
+  formData.value.basePriceType = undefined
+  formData.value.basePriceType = val
+}
 defineExpose({
   mode,
   formData,
@@ -519,18 +677,31 @@ defineExpose({
                         <span>{{ changeMode ? '上架配置' : '单店铺' }}</span>
                       </div>
                     </template>
-                    <a-select
-                      placeholder="请选择上架配置"
-                      v-model:value="formData.upDataConfigId"
-                      style="width: 200px"
-                      allowClear
-                      :disabled="!formData.isUseAutoUpGoods"
-                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
-                    >
-                      <a-select-option :value="item._id" v-for="item in configList" :key="item._id">
-                        {{ item.name }}
-                      </a-select-option>
-                    </a-select>
+                    <div style="display: flex">
+                      <a-select
+                        placeholder="请选择上架配置"
+                        v-model:value="formData.upDataConfigId"
+                        style="width: 200px"
+                        allowClear
+                        :disabled="!formData.isUseAutoUpGoods"
+                        :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                      >
+                        <a-select-option
+                          :value="item._id"
+                          v-for="item in configList"
+                          :key="item._id"
+                        >
+                          {{ item.name }}
+                        </a-select-option>
+                      </a-select>
+                      <div class="auto-col" style="display: flex" @click="goErp">
+                        <EditOutlined />
+                        <a-button type="link">修改配置</a-button>
+                        <a-tooltip title="修改配置后请重新打开界面，以便刷新配置">
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </div>
+                    </div>
                   </a-form-item>
                 </a-col>
               </template>
@@ -538,95 +709,240 @@ defineExpose({
           </section>
           <!-- 商品定价 -->
           <section class="form-section">
-            <h3 class="section-title">
-              <span>商品定价</span>
-              <a-tooltip title="对符合条件的商品，进行定价">
-                <QuestionCircleOutlined class="info-icon" />
-              </a-tooltip>
+            <h3 class="section-title" style="display: flex; justify-content: space-between">
+              <div>
+                <span style="margin-right: 5px">商品定价</span>
+                <a-tooltip title="对符合条件的商品，进行定价">
+                  <QuestionCircleOutlined class="info-icon" />
+                </a-tooltip>
+              </div>
+              <div class="auto-col" @click="changeVersion = changeVersion === 1 ? 2 : 1">
+                <SwapOutlined style="margin-right: 5px" />
+                <span>{{ changeVersion === 1 ? '切换新版' : '切换旧版' }}</span>
+              </div>
             </h3>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item name="myProfitPercent">
-                  <template #label>
-                    <label class="flex-center">
-                      我的利润率
-                      <a-tooltip
-                        title="利润率就是利润/售价，利润：售价 - （货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金）"
-                      >
-                        <QuestionCircleOutlined class="info-icon" />
-                      </a-tooltip>
-                    </label>
-                  </template>
-                  <a-input-number
-                    placeholder="请输入利润率"
-                    v-model:value="formData.myProfitPercent"
-                    style="width: 100%"
-                    addon-after="%"
-                  />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="国际物流" name="internalExpress">
-                  <a-select
-                    placeholder="请选择物流"
-                    v-model:value="formData.internalExpress"
-                    allowClear
-                    :get-popup-container="(triggerNode) => triggerNode.parentNode"
-                  >
-                    <a-select-option
-                      :value="item.value"
-                      v-for="item in logisticsSimpleList"
-                      :key="item.value"
+            <div v-if="formData.upMode === 1">
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item name="myProfitPercent">
+                    <template #label>
+                      <label class="flex-center">
+                        我的利润率
+                        <a-tooltip
+                          title="利润率就是利润/售价，利润：售价 - （货源+其他费用+国内运费+尾程派送+国际物流费+rfbs佣金）"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-input-number
+                      placeholder="请输入利润率"
+                      v-model:value="formData.myProfitPercent"
+                      style="width: 100%"
+                      addon-after="%"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="国际物流" name="internalExpress">
+                    <a-select
+                      placeholder="请选择物流"
+                      v-model:value="formData.internalExpress"
+                      allowClear
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
                     >
-                      {{ item.label }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item label="国内运费" name="rubExpressPrice">
-                  <a-input-number
-                    placeholder="请输入国内运费+代贴单"
-                    v-model:value="formData.rubExpressPrice"
-                    style="width: 100%"
-                    addon-after="￥"
-                  />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="其他（提现、货损等）" name="elsePercent">
-                  <a-input-number
-                    placeholder="请输入其他费用"
-                    v-model:value="formData.elsePercent"
-                    style="width: 100%"
-                    addon-after="%"
-                  />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[16, 16]">
-              <a-col :span="12">
-                <a-form-item required name="sourceType">
-                  <template #label>
-                    <label class="flex-center">
-                      1688货源
-                      <a-tooltip
-                        title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
+                      <a-select-option
+                        :value="item.value"
+                        v-for="item in logisticsSimpleList"
+                        :key="item.value"
                       >
-                        <QuestionCircleOutlined class="info-icon" />
-                      </a-tooltip>
-                    </label>
-                  </template>
-                  <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
-                    <a-radio value="0">综合</a-radio>
-                    <a-radio value="1">价格最低</a-radio>
-                    <a-radio value="2">销量最高</a-radio>
-                  </a-radio-group>
-                </a-form-item>
-              </a-col>
-            </a-row>
+                        {{ item.label }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="国内运费" name="rubExpressPrice">
+                    <a-input-number
+                      placeholder="请输入国内运费+代贴单"
+                      v-model:value="formData.rubExpressPrice"
+                      style="width: 100%"
+                      addon-after="￥"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="其他（提现、货损等）" name="elsePercent">
+                    <a-input-number
+                      placeholder="请输入其他费用"
+                      v-model:value="formData.elsePercent"
+                      style="width: 100%"
+                      addon-after="%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item required name="sourceType">
+                    <template #label>
+                      <label class="flex-center">
+                        1688货源
+                        <a-tooltip
+                          title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
+                      <a-radio value="0">综合</a-radio>
+                      <a-radio value="1">价格最低</a-radio>
+                      <a-radio value="2">销量最高</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </div>
+            <div v-else>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="8">
+                  <a-form-item>
+                    <template #label>
+                      <label class="flex-center">
+                        定价基准
+                        <a-tooltip title="以符合条件的商品售价或跟卖列表最低价为定价基准">
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-select
+                      placeholder="请选择"
+                      v-model:value="formData.basePriceType"
+                      allowClear
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                      @change="changeHandle($event as 'followMin' | 'originSale')"
+                    >
+                      <a-select-option
+                        :value="item.value"
+                        v-for="item in priceType"
+                        :key="item.value"
+                        >{{ item.label }}</a-select-option
+                      >
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item label="调整方式">
+                    <a-select
+                      placeholder="请选择"
+                      v-model:value="formData.rejustType"
+                      allowClear
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                      @change="formData.rejustValue = undefined"
+                      :disabled="!formData.basePriceType"
+                    >
+                      <a-select-option
+                        :value="item.value"
+                        v-for="item in regulatingType"
+                        :key="item.value"
+                        >{{ item.label }}</a-select-option
+                      >
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item>
+                    <template #label>
+                      <label class="flex-center">
+                        调整值
+                        <a-tooltip
+                          title="调整的货币单位为卢布(₽)，如果出现调整后的价格小于等于0，将按照商品售价或最低跟卖价进行定价"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-input-number
+                      v-model:value="formData.rejustValue"
+                      placeholder="请输入数值"
+                      :disabled="!formData.rejustType"
+                      v-if="formData.rejustType === 'fixed'"
+                    />
+                    <a-input-number
+                      v-model:value="formData.rejustValue"
+                      placeholder="请输入数值"
+                      :disabled="!formData.rejustType"
+                      addon-after="%"
+                      v-else
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="8">
+                  <a-form-item label="国际物流" name="internalExpress">
+                    <a-select
+                      placeholder="请选择物流"
+                      v-model:value="formData.internalExpress"
+                      allowClear
+                      :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                    >
+                      <a-select-option
+                        :value="item.value"
+                        v-for="item in logisticsSimpleList"
+                        :key="item.value"
+                      >
+                        {{ item.label }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item label="国内运费" name="rubExpressPrice">
+                    <a-input-number
+                      placeholder="请输入国内运费+代贴单"
+                      v-model:value="formData.rubExpressPrice"
+                      style="width: 100%"
+                      addon-after="￥"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="8">
+                  <a-form-item label="其他（提现、货损等）" name="elsePercent">
+                    <a-input-number
+                      placeholder="请输入其他费用"
+                      v-model:value="formData.elsePercent"
+                      style="width: 100%"
+                      addon-after="%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item required name="sourceType">
+                    <template #label>
+                      <label class="flex-center">
+                        1688货源
+                        <a-tooltip
+                          title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
+                      <a-radio value="0">综合</a-radio>
+                      <a-radio value="1">价格最低</a-radio>
+                      <a-radio value="2">销量最高</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </div>
           </section>
 
           <!-- 选品条件 -->
@@ -646,11 +962,12 @@ defineExpose({
                       </a-tooltip>
                     </a-radio>
                     <a-radio :value="1">自定义</a-radio>
+                    <a-radio :value="2">默认</a-radio>
                   </a-radio-group>
                 </a-form-item>
               </a-col>
             </a-row>
-            <div v-if="formData.aiSelectType === 1">
+            <div v-if="formData.aiSelectType !== 0">
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
                   <a-form-item label="月销量范围">
@@ -720,20 +1037,50 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="12">
-                  <a-form-item label="重量范围">
+                  <a-form-item label="评分">
+                    <div class="range-input-wrapper">
+                      <a-input-number placeholder="最小值" v-model:value="formData.ratingMin" />
+                      <span class="separator">至</span>
+                      <a-input-number placeholder="最大值" v-model:value="formData.ratingMax" />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="点击率">
                     <div class="range-input-wrapper">
                       <a-input-number
-                        placeholder="最小重量"
-                        v-model:value="formData.weightMin"
+                        placeholder="最小值"
+                        v-model:value="formData.clickRateMin"
                         style="width: calc(50% - 8px)"
-                        addon-after="g"
+                        addon-after="%"
                       />
                       <span class="separator">至</span>
                       <a-input-number
-                        placeholder="最大重量"
-                        v-model:value="formData.weightMax"
+                        placeholder="最大值"
+                        v-model:value="formData.clickRateMax"
                         style="width: calc(50% - 8px)"
-                        addon-after="g"
+                        addon-after="%"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="成交率">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.nullableRedemptionRateMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="%"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.nullableRedemptionRateMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="%"
                       />
                     </div>
                   </a-form-item>
@@ -972,7 +1319,23 @@ defineExpose({
                 </a-col>
               </a-row>
               <a-row :gutter="[16, 16]">
-                <a-col :span="24">
+                <a-col :span="12">
+                  <a-form-item label="评论数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.numberOfCommentsMin"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.numberOfCommentsMax"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+
+                <a-col :span="12">
                   <a-form-item label="品牌类型">
                     <a-radio-group v-model:value="formData.brandType" style="width: 100%">
                       <a-radio value="0">有品牌</a-radio>

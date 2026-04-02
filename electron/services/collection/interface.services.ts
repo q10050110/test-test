@@ -118,7 +118,8 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
     up_goods_type: 0,
     use_pack: true,
     warehouse_id: task.warehouse_id,
-    total_num: goodsData.size
+    total_num: goodsData.size,
+    ocType: "auto"
   }
 
   while (source.length > 0) {

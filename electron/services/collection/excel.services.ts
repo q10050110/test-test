@@ -30,6 +30,7 @@ export class ExcelService {
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCountLabel', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },
+        { header: '跟卖最低价', key: 'followMinPrice', width: 15 },
         { header: '商品创建日期', key: 'nullableCreateDate', width: 15 },
         { header: '上架时间（天）', key: 'releaseDate', width: 15 },
         { header: '发货模式', key: 'salesSchema', width: 15 },
@@ -74,16 +75,18 @@ export class ExcelService {
         { header: '对方利润率（%）', key: 'otherProfitPercent', width: 15 },
         { header: '对方利润（元）', key: 'otherProfit', width: 15 },
         { header: '我的售价（元）', key: 'resMoney', width: 15 },
-        { header: '我的利润率（%）', key: 'myProfitPercent', width: 15 },
+        { header: '预期售价（元）', key: 'estimateMoney', width: 15 },
+        { header: '预期售价（卢布）', key: 'estimateMoneyRub', width: 15 },
+        { header: '我的利润率（%）', key: 'myActualProfitPercent', width: 15 },
         { header: '我的利润（元）', key: 'myProfit', width: 15 },
         // 对方信息
-        /*         { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
-                { header: '对万其他费用（元）', key: 'otherElsePrice', width: 15 },
-                { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
-                { header: '对方总成本（元）', key: 'otherCost', width: 15 },
-                { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
-                { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
-                { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 } */
+        { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
+        { header: '对方其他费用（元）', key: 'otherElsePrice', width: 15 },
+        { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
+        { header: '对方总成本（元）', key: 'otherCost', width: 15 },
+        { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
+        { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
+        { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 }
       ]
 
       // 首先设置列定义
@@ -110,7 +113,7 @@ export class ExcelService {
         this.excel.mergeCells('A1:Q1')
         this.excel.mergeCells('R1:AI1')
         this.excel.mergeCells('AJ1:AN1')
-        this.excel.mergeCells('AO1:BB1')
+        this.excel.mergeCells('AO1:BE1')
 
         // 设置表头样式 - 只设置第1行（主类别标题）
         this.excel.setRowStyle(1, {
