@@ -480,6 +480,7 @@ onUnmounted(() => {
   <TaskDialog
     ref="dialogRef"
     @refresh="getTaskList(false, false)"
+    @refresh-config="getConfigList"
     :logisticsSimpleList="logisticsSimpleList"
     :shop-list="shopList"
     :config-list="configList"

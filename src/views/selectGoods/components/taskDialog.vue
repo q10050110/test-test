@@ -17,7 +17,7 @@ const props = defineProps<{
   configList: ConfigList
 }>()
 
-const emits = defineEmits(['refresh'])
+const emits = defineEmits(['refresh', 'refreshConfig'])
 const open = ref(false)
 const submitting = ref(false)
 const mode = ref(true)
@@ -685,6 +685,7 @@ defineExpose({
                         allowClear
                         :disabled="!formData.isUseAutoUpGoods"
                         :get-popup-container="(triggerNode) => triggerNode.parentNode"
+                        @dropdownVisibleChange="emits('refreshConfig')"
                       >
                         <a-select-option
                           :value="item._id"
@@ -697,7 +698,10 @@ defineExpose({
                       <div class="auto-col" style="display: flex" @click="goErp">
                         <EditOutlined />
                         <a-button type="link">修改配置</a-button>
-                        <a-tooltip title="修改配置后请重新打开界面，以便刷新配置">
+                        <a-tooltip
+                          title="【跳转到默认浏览器打开ERP修改上架配置，请确保登陆的账号一致。
+修改配置后请重新选择上架配置获取最新数据】"
+                        >
                           <QuestionCircleOutlined class="info-icon" />
                         </a-tooltip>
                       </div>
@@ -1037,11 +1041,45 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="12">
+                  <a-form-item label="跟卖人数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.followMin"
+                        style="width: calc(50% - 8px)"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.followMax"
+                        style="width: calc(50% - 8px)"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
                   <a-form-item label="评分">
                     <div class="range-input-wrapper">
                       <a-input-number placeholder="最小值" v-model:value="formData.ratingMin" />
                       <span class="separator">至</span>
                       <a-input-number placeholder="最大值" v-model:value="formData.ratingMax" />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="评论数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.numberOfCommentsMin"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.numberOfCommentsMax"
+                      />
                     </div>
                   </a-form-item>
                 </a-col>
@@ -1300,41 +1338,6 @@ defineExpose({
                     </a-select>
                   </a-form-item>
                 </a-col>
-                <a-col :span="12">
-                  <a-form-item label="跟卖人数">
-                    <div class="range-input-wrapper">
-                      <a-input-number
-                        placeholder="最小值"
-                        v-model:value="formData.followMin"
-                        style="width: calc(50% - 8px)"
-                      />
-                      <span class="separator">至</span>
-                      <a-input-number
-                        placeholder="最大值"
-                        v-model:value="formData.followMax"
-                        style="width: calc(50% - 8px)"
-                      />
-                    </div>
-                  </a-form-item>
-                </a-col>
-              </a-row>
-              <a-row :gutter="[16, 16]">
-                <a-col :span="12">
-                  <a-form-item label="评论数">
-                    <div class="range-input-wrapper">
-                      <a-input-number
-                        placeholder="最小值"
-                        v-model:value="formData.numberOfCommentsMin"
-                      />
-                      <span class="separator">至</span>
-                      <a-input-number
-                        placeholder="最大值"
-                        v-model:value="formData.numberOfCommentsMax"
-                      />
-                    </div>
-                  </a-form-item>
-                </a-col>
-
                 <a-col :span="12">
                   <a-form-item label="品牌类型">
                     <a-radio-group v-model:value="formData.brandType" style="width: 100%">
