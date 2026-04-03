@@ -48,7 +48,7 @@ defineExpose({
 
 <template>
   <a-modal v-model:open="open" @cancel="open = false" style="width: 400px" :footer="null">
-    <div v-if="store.updateStatus === 'hasUpdate' || true">
+    <div v-if="store.updateStatus === 'hasUpdate'">
       <div class="c-modal">
         <div class="icon"><img src="@/assets/window/update.png" /></div>
         <div class="title">发现新版本</div>
