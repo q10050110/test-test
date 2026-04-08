@@ -132,6 +132,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         old_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         origin_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         price: config?.price ? (item.resMoney * config.price / 100).toFixed(2) : item.resMoney,
+        goods_source_url: item?.['1688link']
       }))
       .filter((item) => item.price)
 

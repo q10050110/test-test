@@ -89,11 +89,12 @@ export class ParseService {
       const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
         item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
-        item.sellerNumber = item?.sellers?.sellers?.length || 0
-        const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((item: any) => item) || [-1]
-        item.followMinPrice = Math.min(...priceList)
+        item.sellerNumber = item?.sellers?.sellers?.length || undefined
+        const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((item: any) => item && item > item.price)
+        item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
       } else {
         item.sellerNumber = undefined
+        item.followMinPrice = item.price
         log.error('获取跟卖数据失败')
       }
     }

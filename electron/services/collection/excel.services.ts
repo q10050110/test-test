@@ -80,13 +80,13 @@ export class ExcelService {
         { header: '我的利润率（%）', key: 'myActualProfitPercent', width: 15 },
         { header: '我的利润（元）', key: 'myProfit', width: 15 },
         // 对方信息
-        { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
-        { header: '对方其他费用（元）', key: 'otherElsePrice', width: 15 },
-        { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
-        { header: '对方总成本（元）', key: 'otherCost', width: 15 },
-        { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
-        { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
-        { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 }
+        /*         { header: '对方佣金（元）', key: 'otherFbsPrice', width: 15 },
+                { header: '对方其他费用（元）', key: 'otherElsePrice', width: 15 },
+                { header: '对方尾程派送费（元）', key: 'otherEndDeliveryPrice', width: 15 },
+                { header: '对方总成本（元）', key: 'otherCost', width: 15 },
+                { header: '对方人民币售价（元）', key: 'ozonPriceCny', width: 15 },
+                { header: '汇率（卢布 => 人民币）', key: 'rmbToRub', width: 15 },
+                { header: '对方物流费用（元）', key: 'otherLogisticsMoney', width: 15 } */
       ]
 
       // 首先设置列定义

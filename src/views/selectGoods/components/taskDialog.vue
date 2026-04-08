@@ -92,6 +92,12 @@ const initData = ref<Task>({
   numberOfCommentsMin: undefined,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
+const defaultLines = [
+  '1、月销量范围≥50',
+  '2、月销售动态：≥10%',
+  '3、跟卖人数：≤30人',
+  '4、商品评分：≥4.0',
+]
 const priceType = [
   {
     label: '商品售价',
@@ -297,18 +303,19 @@ const filters = [
     return result
   },
 ]
+const saveOldFormdata = () => {
+  const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
+  Object.assign(
+    conditionFormData.value,
+    Object.fromEntries(keys.map((k) => [k, formData.value[k]])),
+  )
+}
 
 // 选品条件变化
 watch(
   () => formData.value.aiSelectType,
   (newVal, oldVal) => {
-    if (oldVal === 1) {
-      const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
-      Object.assign(
-        conditionFormData.value,
-        Object.fromEntries(keys.map((k) => [k, formData.value[k]])),
-      )
-    }
+    if (oldVal === 1) saveOldFormdata()
     if (newVal === 2) {
       const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
       keys.forEach((key) => {
@@ -390,6 +397,11 @@ const saveHandle = async (type: 'save' | 'execute') => {
       formData.value.upMode !== 2
     )
       return feedback.error('您当前已开启自动上架，请填写我的利润率')
+    if (formData.value.upMode === 2) {
+      if (!formData.value.basePriceType) return feedback.error('请选择商品价格类型')
+      if (!formData.value.rejustType) return feedback.error('请选择商品价格类型')
+      if (!formData.value.rejustValue) return feedback.error('请填写商品价格调整值')
+    }
   }
 
   if (formData.value.expendType && !formData.value.expendShopCount)
@@ -490,6 +502,7 @@ defineExpose({
   mode,
   formData,
   openDialog,
+  saveOldFormdata,
 })
 </script>
 <template>
@@ -966,12 +979,20 @@ defineExpose({
                       </a-tooltip>
                     </a-radio>
                     <a-radio :value="1">自定义</a-radio>
-                    <a-radio :value="2">默认</a-radio>
+                    <a-radio :value="2"
+                      >默认
+                      <a-tooltip>
+                        <template #title>
+                          <div v-for="(line, index) in defaultLines" :key="index">{{ line }}</div>
+                        </template>
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </a-radio>
                   </a-radio-group>
                 </a-form-item>
               </a-col>
             </a-row>
-            <div v-if="formData.aiSelectType !== 0">
+            <div v-if="formData.aiSelectType === 1">
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
                   <a-form-item label="月销量范围">
@@ -1345,6 +1366,88 @@ defineExpose({
                       <a-radio value="1">无品牌</a-radio>
                       <a-radio value="2">不限</a-radio>
                     </a-radio-group>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </div>
+            <div v-if="formData.aiSelectType === 2">
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="月销量范围">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.soldCountMin"
+                        style="width: calc(50% - 8px)"
+                        disabled
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.soldCountMax"
+                        style="width: calc(50% - 8px)"
+                        disabled
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="月销售动态">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.monthDynamicsMin"
+                        style="width: calc(50% - 8px)"
+                        addon-before="₽"
+                        disabled
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.monthDynamicsMax"
+                        style="width: calc(50% - 8px)"
+                        addon-before="₽"
+                        disabled
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="跟卖人数">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.followMin"
+                        style="width: calc(50% - 8px)"
+                        disabled
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.followMax"
+                        style="width: calc(50% - 8px)"
+                        disabled
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="评分">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.ratingMin"
+                        disabled
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.ratingMax"
+                        disabled
+                      />
+                    </div>
                   </a-form-item>
                 </a-col>
               </a-row>

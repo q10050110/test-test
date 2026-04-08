@@ -275,6 +275,7 @@ const openTaskDialogHandle = async (data?: Task) => {
   if (data?._id && dialogRef.value) {
     if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
     dialogRef.value.formData = { ...data, upMode: data.upMode ? data.upMode : 1 }
+    if (data?.aiSelectType == 1) dialogRef.value.saveOldFormdata()
   }
   await getConfigList()
   await getShopList()
