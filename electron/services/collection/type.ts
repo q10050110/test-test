@@ -61,6 +61,18 @@ export interface Task {
   aiSelectType: number
   expendType: boolean
   expendShopCount: number
+  basePriceType?: 'originSale' | 'followMin'
+  rejustType?: 'precent' | 'fixed'
+  rejustValue?: number
+  upMode?: 1 | 2 // 老模式：1 新模式：2
+  numberOfCommentsMax?: number // 评论数
+  numberOfCommentsMin?: number // 评论数
+  ratingMax?: number // 评分
+  ratingMin?: number // 评分
+  clickRateMax?: number // 点击率
+  clickRateMin?: number // 点击率
+  nullableRedemptionRateMax?: number //成交率
+  nullableRedemptionRateMin?: number //成交率
 }
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined

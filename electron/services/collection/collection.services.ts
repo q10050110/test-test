@@ -411,6 +411,7 @@ export class Collection {
         let detailData = await this.dataProcessService.getDetailData({
           taskId: this.task._id,
           reqDatas: [task],
+          upMode: this.task.upMode
         })
         this.writeQueue.push(detailData)
         this.writeTable()

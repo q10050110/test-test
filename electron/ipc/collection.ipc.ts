@@ -273,9 +273,9 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 跳转EPR
   ipcMain.on('go-erp', (event, data) => {
     const env = SysTemUtils.getEnv() === 'development'
-    const url = env ? 'https://test-plus.shopbang.cn/erp/#/batchRecord'
-      : 'https://shopbang.cn/erp/#/batchRecord'
-    shell.openExternal(url)
+    const url = env ? 'https://test-plus.shopbang.cn/erp/#/'
+      : 'https://shopbang.cn/erp/#/'
+    shell.openExternal(`${url}${data}`)
   })
 
   // 上架商品

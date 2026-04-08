@@ -40,7 +40,6 @@ const checkUpdateHandle = () => {
 const clickHandle = () => {
   window.electronAPI.sendMessage('window', 'close')
 }
-
 // 跳转视频教程
 const openUrl = () => {
   window.electronAPI.sendMessage(

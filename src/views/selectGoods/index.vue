@@ -274,7 +274,8 @@ const openTaskDialogHandle = async (data?: Task) => {
   await nextTick()
   if (data?._id && dialogRef.value) {
     if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
-    dialogRef.value.formData = { ...data }
+    dialogRef.value.formData = { ...data, upMode: data.upMode ? data.upMode : 1 }
+    if (data?.aiSelectType == 1) dialogRef.value.saveOldFormdata()
   }
   await getConfigList()
   await getShopList()
@@ -286,7 +287,7 @@ const bgColor = (value?: string) => {
   return value ? (value === 'success' ? '#6bb64b' : '#ff7875') : '#1a7aff'
 }
 
-const goErp = () => window.electronAPI.sendMessage('go-erp', {})
+const goErp = () => window.electronAPI.sendMessage('go-erp', 'batchRecord')
 
 onMounted(() => {
   window.electronAPI.on('task-progress', getProgress)
@@ -480,6 +481,7 @@ onUnmounted(() => {
   <TaskDialog
     ref="dialogRef"
     @refresh="getTaskList(false, false)"
+    @refresh-config="getConfigList"
     :logisticsSimpleList="logisticsSimpleList"
     :shop-list="shopList"
     :config-list="configList"

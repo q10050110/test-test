@@ -118,7 +118,8 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
     up_goods_type: 0,
     use_pack: true,
     warehouse_id: task.warehouse_id,
-    total_num: goodsData.size
+    total_num: goodsData.size,
+    ocType: "auto"
   }
 
   while (source.length > 0) {
@@ -131,6 +132,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         old_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         origin_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
         price: config?.price ? (item.resMoney * config.price / 100).toFixed(2) : item.resMoney,
+        goods_source_url: item?.['1688link']
       }))
       .filter((item) => item.price)
 

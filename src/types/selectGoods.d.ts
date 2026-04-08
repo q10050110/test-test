@@ -65,6 +65,18 @@ export type Task = {
   expendType: boolean
   expendShopCount?: number
   autoResult?: string
+  basePriceType?: 'originSale' | 'followMin'
+  rejustType?: 'precent' | 'fixed'
+  rejustValue?: number
+  upMode?: 1 | 2
+  numberOfCommentsMax?: number // 评论数
+  numberOfCommentsMin?: number // 评论数
+  ratingMax?: number // 评分
+  ratingMin?: number // 评分
+  clickRateMax?: number // 点击率
+  clickRateMin?: number // 点击率
+  nullableRedemptionRateMax?: number //成交率
+  nullableRedemptionRateMin?: number //成交率
 }
 
 export type TaskList = {
@@ -124,3 +136,45 @@ export type Config = {
 }
 
 export type ConfigList = Config[]
+
+export type ConditionForm = Pick<
+  Task,
+  | 'soldCountMin'
+  | 'soldCountMax'
+  | 'gmvSumMin'
+  | 'gmvSumMax'
+  | 'salePriceMin'
+  | 'salePriceMax'
+  | 'ratingMin'
+  | 'ratingMax'
+  | 'clickRateMin'
+  | 'clickRateMax'
+  | 'nullableRedemptionRateMin'
+  | 'nullableRedemptionRateMax'
+  | 'upGoodsTimeMin'
+  | 'upGoodsTimeMax'
+  | 'monthDynamicsMin'
+  | 'monthDynamicsMax'
+  | 'adFeeMin'
+  | 'adFeeMax'
+  | 'promotionDayMin'
+  | 'promotionDayMax'
+  | 'promotionDiscountMin'
+  | 'promotionDiscountMax'
+  | 'promotionDynamicsMin'
+  | 'promotionDynamicsMax'
+  | 'promoteDayMin'
+  | 'promoteDayMax'
+  | 'viewsMin'
+  | 'viewsMax'
+  | 'cardRateMin'
+  | 'cardRateMax'
+  | 'showRateMin'
+  | 'showRateMax'
+  | 'salesSchema'
+  | 'followMin'
+  | 'followMax'
+  | 'numberOfCommentsMin'
+  | 'numberOfCommentsMax'
+  | 'brandType'
+>
