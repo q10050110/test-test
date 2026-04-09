@@ -90,7 +90,7 @@ export class ParseService {
       if (response?.success) {
         item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
         item.sellerNumber = item?.sellers?.sellers?.length || undefined
-        const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((item: any) => item && item > item.price)
+        const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < item.price)
         item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
       } else {
         item.sellerNumber = undefined
