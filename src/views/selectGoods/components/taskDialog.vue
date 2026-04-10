@@ -93,10 +93,8 @@ const initData = ref<Task>({
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const defaultLines = [
-  '1、月销量范围≥50',
-  '2、月销售动态：≥10%',
-  '3、跟卖人数：≤30人',
-  '4、商品评分：≥4.0',
+  '系统预设选品条件，用于快速筛选出比较有潜力的商品。',
+  '可按需修改条件，精准筛选目标商品。',
 ]
 const priceType = [
   {
@@ -177,6 +175,9 @@ const rules: Record<string, Rule[]> = {
     },
   ],
   sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
+  basePriceType: [{ required: true, message: '请选择定价基准', trigger: ['change', 'blur'] }],
+  rejustType: [{ required: true, message: '请选择调整方式', trigger: ['change', 'blur'] }],
+  rejustValue: [{ required: true, message: '请输入调整值', trigger: ['change', 'blur'] }],
   // targetProfitPercent: [{ required: true, message: '请输入利润率大于', trigger: ['change', 'blur'] }]
 }
 
@@ -498,6 +499,17 @@ const changeHandle = (val?: 'followMin' | 'originSale') => {
   formData.value.basePriceType = undefined
   formData.value.basePriceType = val
 }
+
+const autoUpHandle = async (val: any) => {
+  if (val) {
+    const res = await feedback.confirm('请确认是否开启', {
+      title: '该开关开启会将自动化助手选出的商品自动上架',
+    })
+    if (res) formData.value.isUseAutoUpGoods = val
+    return
+  }
+  formData.value.isUseAutoUpGoods = val
+}
 defineExpose({
   mode,
   formData,
@@ -614,9 +626,10 @@ defineExpose({
                 <QuestionCircleOutlined class="info-icon" />
               </a-tooltip>
               <a-switch
-                v-model:checked="formData.isUseAutoUpGoods"
+                :checked="formData.isUseAutoUpGoods"
                 size="default"
                 style="margin-left: 10px"
+                @change="autoUpHandle"
               />
             </h3>
             <a-row :gutter="[16, 16]">
@@ -826,7 +839,7 @@ defineExpose({
             <div v-else>
               <a-row :gutter="[16, 16]">
                 <a-col :span="8">
-                  <a-form-item>
+                  <a-form-item name="basePriceType">
                     <template #label>
                       <label class="flex-center">
                         定价基准
@@ -852,7 +865,7 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
-                  <a-form-item label="调整方式">
+                  <a-form-item label="调整方式" name="rejustType">
                     <a-select
                       placeholder="请选择"
                       v-model:value="formData.rejustType"
@@ -871,7 +884,7 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
-                  <a-form-item>
+                  <a-form-item name="rejustValue">
                     <template #label>
                       <label class="flex-center">
                         调整值
