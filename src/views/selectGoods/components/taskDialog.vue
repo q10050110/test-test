@@ -398,11 +398,12 @@ const saveHandle = async (type: 'save' | 'execute') => {
       formData.value.upMode !== 2
     )
       return feedback.error('您当前已开启自动上架，请填写我的利润率')
-    if (formData.value.upMode === 2) {
-      if (!formData.value.basePriceType) return feedback.error('请选择商品价格类型')
-      if (!formData.value.rejustType) return feedback.error('请选择商品价格类型')
-      if (!formData.value.rejustValue) return feedback.error('请填写商品价格调整值')
-    }
+  }
+
+  if (formData.value.upMode === 2) {
+    if (!formData.value.basePriceType) return feedback.error('请选择商品价格类型')
+    if (!formData.value.rejustType) return feedback.error('请选择商品价格类型')
+    if (!formData.value.rejustValue) return feedback.error('请填写商品价格调整值')
   }
 
   if (formData.value.expendType && !formData.value.expendShopCount)
@@ -839,11 +840,13 @@ defineExpose({
             <div v-else>
               <a-row :gutter="[16, 16]">
                 <a-col :span="8">
-                  <a-form-item name="basePriceType">
+                  <a-form-item>
                     <template #label>
                       <label class="flex-center">
                         定价基准
-                        <a-tooltip title="以符合条件的商品售价或跟卖列表最低价为定价基准">
+                        <a-tooltip
+                          title="以符合条件的商品售价或跟卖最低价为定价基准，配合后面的调整方式和调整值得到最终定价"
+                        >
                           <QuestionCircleOutlined class="info-icon" />
                         </a-tooltip>
                       </label>
@@ -865,7 +868,18 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
-                  <a-form-item label="调整方式" name="rejustType">
+                  <a-form-item>
+                    <template #label>
+                      <label class="flex-center">
+                        调整方式
+                        <a-tooltip
+                          title="以固定值调整就是比定价基准便宜/贵多少金额，
+以百分比调整就是比定价基准便宜/贵百分之多少"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
                     <a-select
                       placeholder="请选择"
                       v-model:value="formData.rejustType"
@@ -884,12 +898,13 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
-                  <a-form-item name="rejustValue">
+                  <a-form-item>
                     <template #label>
                       <label class="flex-center">
                         调整值
                         <a-tooltip
-                          title="调整的货币单位为卢布(₽)，如果出现调整后的价格小于等于0，将按照商品售价或最低跟卖价进行定价"
+                          title="根据调整值决定比定价基准便宜（用负数-号）/贵（用正数+号）多少（卢布₽ ），
+如果出现调整后的价格小于等于0，将按照商品售价或最低跟卖价进行定价"
                         >
                           <QuestionCircleOutlined class="info-icon" />
                         </a-tooltip>
