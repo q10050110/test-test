@@ -158,7 +158,19 @@ const conditionFormData = ref<ConditionForm>({
   brandType: '2',
 })
 const rules: Record<string, Rule[]> = {
-  taskName: [{ required: true, message: '请输入任务名称', trigger: ['change', 'blur'] }],
+  taskName: [
+    { required: true, message: '请输入任务名称', trigger: ['change', 'blur'] },
+    {
+      validator: (_, value) => {
+        const invalid = /[\\/:*?"<>|]/.test(value)
+        if (invalid) {
+          return Promise.reject('任务名称不能包含 \\ / : * ? " < > | 等特殊字符')
+        }
+        return Promise.resolve()
+      },
+      trigger: ['change', 'blur'],
+    },
+  ],
   targetUrl: [
     { required: true, message: '请输入网址', trigger: ['change', 'blur'] },
     {

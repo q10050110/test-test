@@ -38,11 +38,16 @@ export class ParseService {
         ?.replace(/[\s\u2009]/g, '')
       // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
       const name = $(element).parent().find('a').children('div').children('span').text()
-      const str = $(element)
+      let str = $(element)
         .parent()
         .find('.tsBodyMBold')
         .text()
         .replace(/\u202F/g, ' ')
+      if (!str) str = $(element)
+        .parent().find('.tsBodyControl300XSmall')
+        .text()
+        .replace(/\u202F/g, ' ')
+
       const match = str.match(/\s*([0-5]\.\d{1})\s*(\d[\d\s]*)\s*/i)
       const rating = match ? match[1] : 0
       const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
