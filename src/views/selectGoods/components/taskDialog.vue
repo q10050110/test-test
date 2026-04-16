@@ -515,9 +515,12 @@ const changeHandle = (val?: 'followMin' | 'originSale') => {
 
 const autoUpHandle = async (val: any) => {
   if (val) {
-    const res = await feedback.confirm('请确认是否开启', {
-      title: '该开关开启会将自动化助手选出的商品自动上架',
-    })
+    const res = await feedback.confirm(
+      '系统将在任务结束后，自动将符合条件的商品，全部上架到指定店铺，请谨慎操作！！',
+      {
+        title: '是否将商品自动上架到店铺 ？',
+      },
+    )
     if (res) formData.value.isUseAutoUpGoods = val
     return
   }
