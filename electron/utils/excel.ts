@@ -3,7 +3,7 @@ import { promises as fsPromises } from 'fs'
 import { dirname } from 'path'
 import type { Workbook, Worksheet, Row, Font, Fill, Border, CellValue } from 'exceljs'
 import log from '../log/index.js'
-
+import sharp from 'sharp'
 export class ExcelWriter {
   private workbook!: Workbook
   private worksheet!: Worksheet
@@ -96,31 +96,70 @@ export class ExcelWriter {
    */
   async appendAndSave(rows: Array<Record<string, any>>): Promise<boolean> {
     await this.init()
-
-    // 创建一个独立的 promise 来处理保存逻辑
     const savePromise = this.memoryQueue.then(async () => {
-      // 检查文件是否被其他进程占用
       const isInUse = await this.isFileInUse(this.filePath)
       if (isInUse) {
-        log.warn(`文件 ${this.filePath} 被其他进程占用，无法保存`)
+        log.warn(`文件 ${this.filePath} 被占用`)
         return false
       }
-
-      for (const row of rows) {
-        this.worksheet.addRow(row)
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i]
+        const rowObj = this.worksheet.addRow(row)
+        const rowIndex = rowObj.number
+        try {
+          if (row.cover) {
+            const res = await fetch(row.cover)
+            const buffer = await res.arrayBuffer()
+            const imageId = this.workbook.addImage({
+              buffer,
+              extension: 'jpeg',
+            })
+            rowObj.height = 80
+            this.worksheet.getColumn(3).width = 15
+            this.worksheet.addImage(imageId, {
+              tl: { col: 2, row: rowIndex - 1 } as any,
+              br: { col: 3, row: rowIndex - 1 + 0.999 } as any,
+              editAs: 'oneCell',
+            })
+          }
+          if (row.cover2) {
+            const res = await fetch(row.cover2)
+            const buffer = Buffer.from(await res.arrayBuffer())
+            const convertedBuffer = await sharp(buffer)
+              .png()
+              .toBuffer()
+            console.log(convertedBuffer, '让我看看你是啥')
+            const imageId = this.workbook.addImage({
+              buffer: convertedBuffer as any,
+              extension: 'png',
+            })
+            rowObj.height = 80
+            this.worksheet.getColumn(49).width = 15
+            this.worksheet.addImage(imageId, {
+              tl: { col: 48, row: rowIndex - 1 } as any,
+              br: { col: 49, row: rowIndex - 1 + 0.999 } as any,
+              editAs: 'oneCell',
+            })
+          }
+          rowObj.eachCell((cell) => {
+            cell.alignment = {
+              vertical: 'middle',
+              horizontal: 'center',
+              wrapText: true,
+            }
+          })
+        } catch (e) {
+          log.warn(`图片处理失败`, e)
+        }
       }
 
-      // 立即保存到磁盘
-      const saveResult = await this.flushToDisk()
-      return saveResult
+      return await this.flushToDisk()
     })
 
-    // 等待当前队列完成并返回结果
     try {
-      const result = await savePromise
-      return result
+      return await savePromise
     } catch (error) {
-      log.error(`保存Excel数据失败:`, error)
+      log.error(`保存Excel失败:`, error)
       return false
     }
   }
