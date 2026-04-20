@@ -128,7 +128,7 @@ export class ExcelWriter {
             const convertedBuffer = await sharp(buffer)
               .png()
               .toBuffer()
-            console.log(convertedBuffer, '让我看看你是啥')
+
             const imageId = this.workbook.addImage({
               buffer: convertedBuffer as any,
               extension: 'png',
