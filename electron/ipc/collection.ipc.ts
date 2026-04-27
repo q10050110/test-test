@@ -295,4 +295,15 @@ export const collectionIpc = (win: BrowserWindow) => {
       }
     }
   })
+
+  // 获取当前任务数
+  ipcMain.handle('get-current-task-count', async (event) => {
+    return taskManager.getConcurrentTaskCount()
+  })
+
+  // 设置最大并发任务数
+  ipcMain.handle('set-max-concurrent-task-count', async (event, count) => {
+    taskManager.setMaxConcurrentTasks(count)
+    return true
+  })
 }
