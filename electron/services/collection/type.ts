@@ -56,7 +56,7 @@ export interface Task {
   token?: string
   log?: { date: string; log: string }[]
   tableFilePath?: string
-  unit?: '¥' | '$' | '₽' | '€' | 'YN' | '₸'
+  unit: '¥' | '$' | '₽' | '€' | 'YN' | '₸'
   autoResult?: string
   aiSelectType: number
   expendType: boolean
@@ -83,6 +83,7 @@ export type ShopData = {
   name: string
   stock: number
   warehouseId: string
+  currency_code: "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT"
 }
 
 export type Config = {

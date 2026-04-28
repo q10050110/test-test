@@ -1,10 +1,12 @@
 import request from '../../utils/request.js'
-import { Config, ConfigList, Task } from './type.js'
+import { Config, ConfigList, ShopData, Task } from './type.js'
 import { operationStore } from '../../store/index.js'
 import { compressData } from '../../utils/index.js'
 import log from '../../log/index.js'
-
+import { getRate, currencyConversion, getShopCurCode } from '../../utils/index.js'
 let configList: ConfigList = []
+let shopList: ShopData[] = []
+let rate: any = null
 export const getLogisticsList = async () => {
   try {
     const res = await request({
@@ -34,7 +36,7 @@ export const getShopList = async () => {
     })
     const data = res.data
       .filter((item: any) => item.platform === 'OZON' && item.account_id === user._id)
-
+    shopList = data
     return {
       code: 400,
       data,
@@ -100,10 +102,16 @@ export const batchUpGoods = async (data: any) => {
  */
 export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   if (goodsData.size === 0) return '没有可上架的商品'
+  if (!rate) rate = await getRate()
   const source = Array.from(goodsData.values())
   const result = []
   let config: Config | undefined
   if (task.upDataConfigId) config = configList?.find(item => item._id === task.upDataConfigId)
+  if (!task.unit) {
+    const shopId = config ? config?.shopData[0].client_id : task.client_id
+    const currency_code = shopList?.find(item => shopId === item.client_id)?.currency_code
+    task.unit = getShopCurCode(currency_code || 'CNY')
+  }
   const baseParams = {
     client_id: task.client_id,
     upDataConfigId: task.upDataConfigId,
@@ -129,9 +137,9 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         goods_id: item.id,
         name: item.nameLabel,
         offer_id: config?.offerIdPrefix ? config.offerIdPrefix : '',
-        old_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
-        origin_price: config?.cropPrice ? ((item.resMoney * config.cropPrice || 1) / 100).toFixed(2) : (item.resMoney * 1.6).toFixed(2),
-        price: config?.price ? (item.resMoney * config.price / 100).toFixed(2) : item.resMoney,
+        old_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        origin_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        price: config?.price ? (currencyConversion(item.resMoney, rate, task.unit) * config.price / 100).toFixed(2) : currencyConversion(item.resMoney, rate, task.unit),
         goods_source_url: item?.['1688link']
       }))
       .filter((item) => item.price)

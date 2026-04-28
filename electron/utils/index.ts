@@ -1,6 +1,7 @@
 import request from './request.js'
 import pako from 'pako'
 import Decimal from 'decimal.js'
+import log from '../log/index.js'
 export const compressData = (text: any) => {
   text = JSON.stringify(text)
   // 将文本数据转换为 Uint8Array
@@ -20,6 +21,9 @@ export const compressData = (text: any) => {
   return compressedBase64
 }
 
+/**
+ * 获取汇率 
+ */
 export const getRate = async () => {
   try {
     const res = await request({
@@ -42,54 +46,55 @@ export const getRate = async () => {
 export const currencyConversion = (
   basePrice: number,
   rateObj: any,
-  type: 'old' | 'origin' | 'current',
   unit: '¥' | '$' | '₽' | '€' | 'YN' | '₸',
-): string | null => {
+): number => {
   let rate
-  if (!rateObj) return null
+  if (!rateObj) return 0
   switch (unit) {
     case '¥':
-    case '₸':
-      rate = rateObj?.['RUB/CNY']
+      rate = 1
       break
     case 'YN':
     case '₽':
-      rate = 1
+      rate = rateObj?.['CNY/RUB']
       break
     case '$':
-      rate = rateObj?.['RUB/USD']
+      rate = rateObj?.['CNY/USD']
       break
     case '€':
-      const num = rateObj?.['EUR/RUB']
+      const num = rateObj?.['CNY/EUR']
       rate = (1 / num).toFixed(4)
       break
+    case '₸':
+      rate = rateObj?.['CNY/KZT']
+      break
   }
-
   const priceNum = Number(basePrice)
   const rateNum = Number(rate)
 
   if (isNaN(priceNum) || isNaN(rateNum)) {
-    return null
+    log.error('货币转换错误', basePrice, rate, unit)
+    return 0
   }
 
   let price = new Decimal(basePrice)
 
-  switch (type) {
-    case 'current':
-      // 改后售价 = 95% 后再取整
-      price = price.mul(0.95).round()
-      break
+  return Number(price.mul(rate).toFixed(2)) // 最终展示精度
+}
 
-    case 'origin':
-      // 划线价格 = 1.6 倍
-      price = price.mul(1.6)
-      break
+const codeMap = {
+  CNY: '¥',
+  USD: '$',
+  RUB: '₽',
+  EUR: '€',
+  BYN: 'YN',
+  KZT: '₸',
+} as const
 
-    case 'old':
-    default:
-      // 原价不处理
-      break
+export const getShopCurCode = (code: keyof typeof codeMap) => {
+  function getCurrencyName(code: keyof typeof codeMap) {
+    return codeMap[code]
   }
 
-  return price.mul(rate).toFixed(2) // 最终展示精度
+  return getCurrencyName(code)
 }

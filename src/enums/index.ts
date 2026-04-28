@@ -5,10 +5,10 @@ const codeMap = {
   EUR: '€',
   BYN: 'YN',
   KZT: '₸',
-}
+} as const
 
 export const getShopCurCode = (code: keyof typeof codeMap) => {
-  function getCurrencyName(code: keyof typeof codeMap): string {
+  function getCurrencyName(code: keyof typeof codeMap) {
     return codeMap[code]
   }
 
