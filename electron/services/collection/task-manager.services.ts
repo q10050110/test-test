@@ -41,7 +41,7 @@ export class TaskManager {
     */
   setMaxConcurrentTasks(max: number) {
     this.maxConcurrentTasks = max
-    this.processNextTask()
+    while (this.activeTasks.size < this.maxConcurrentTasks && this.taskQueue.length) this.processNextTask()
   }
   /**
    * 添加任务（仅创建任务，不立即执行）
