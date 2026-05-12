@@ -415,7 +415,8 @@ const saveHandle = async (type: 'save' | 'execute') => {
   if (formData.value.upMode === 2) {
     if (!formData.value.basePriceType) return feedback.error('请选择商品价格类型')
     if (!formData.value.rejustType) return feedback.error('请选择商品价格类型')
-    if (!formData.value.rejustValue) return feedback.error('请填写商品价格调整值')
+    if (!formData.value.rejustValue && formData.value.rejustValue !== 0)
+      return feedback.error('请填写商品价格调整值')
   }
 
   if (formData.value.expendType && !formData.value.expendShopCount)
