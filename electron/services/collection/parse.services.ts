@@ -113,15 +113,15 @@ export class ParseService {
       price2,
       link1688,
       cover2 = ''
-    const goodsList = $('.offerListLayoutWrapper--o0LXuuFm').children('div')
+    const goodsList = $('.offerListLayoutWrapper--qlAH8LJK').children('div')
     goodsList.each((index, element) => {
-      const isAd = $(element).find('.mainImgIcon--Y8zt2ArJ').length > 0
+      const isAd = $(element).find('.mainImgIcon--GzUD_qpZ').length > 0
       if (isAd) return
       str = $(element).attr('data-renderkey')?.split('_')
-      price1 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').text()
-      price2 = $(element).children('.offer-price-row').find('.textMain--s_l2eHVJ').next().text()
+      price1 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').text()
+      price2 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').next().text()
       link1688 = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
-      cover2 = $(element).find('.mainImg--GT1EYFGa').attr('src') || ''
+      cover2 = $(element).find('.mainImg--KwnHnbbk').attr('src') || ''
       return false
     })
     const price = `${price1}${price2}`
