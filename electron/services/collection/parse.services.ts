@@ -54,10 +54,13 @@ export class ParseService {
       const obj = {
         href,
         price: Number(price),
+        price1: Number(price),
         oPrice,
+        oPrice1: oPrice,
         // discountLabel: isNaN(Number(discount)) ? discount : `${Number(discount).toFixed(2)}%`,
         link,
         cover,
+        cover3: cover,
         nameLabel: name,
         id,
         rating,
@@ -96,7 +99,9 @@ export class ParseService {
         item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
         item.sellerNumber = item?.sellers?.sellers?.length || undefined
         const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < item.price)
+        item.sellerNumber1 = item.sellerNumber
         item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
+        item.followMinPrice1 = item.followMinPrice
       } else {
         item.sellerNumber = undefined
         item.followMinPrice = item.price

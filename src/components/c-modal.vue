@@ -140,7 +140,7 @@ defineExpose({
         </li>
       </ul>
     </div>
-    <div class="u-item">
+    <div class="u-item" v-if="config.repair.length">
       <div class="title">
         <img src="@/assets/layout/bug.png" alt="" class="u-icon" />
         修复

@@ -121,6 +121,12 @@ export class ExcelWriter {
               br: { col: 3, row: rowIndex - 1 + 0.999 } as any,
               editAs: 'oneCell',
             })
+            this.worksheet.getColumn(50).width = 15
+            this.worksheet.addImage(imageId, {
+              tl: { col: 49, row: rowIndex - 1 } as any,
+              br: { col: 50, row: rowIndex - 1 + 0.999 } as any,
+              editAs: 'oneCell',
+            })
           }
           if (row.cover2) {
             const res = await fetch(row.cover2)

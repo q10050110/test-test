@@ -1127,9 +1127,19 @@ defineExpose({
                 <a-col :span="12">
                   <a-form-item label="评分">
                     <div class="range-input-wrapper">
-                      <a-input-number placeholder="最小值" v-model:value="formData.ratingMin" />
+                      <a-input-number
+                        :min="0"
+                        :max="5"
+                        placeholder="最小值"
+                        v-model:value="formData.ratingMin"
+                      />
                       <span class="separator">至</span>
-                      <a-input-number placeholder="最大值" v-model:value="formData.ratingMax" />
+                      <a-input-number
+                        :min="0"
+                        :max="5"
+                        placeholder="最大值"
+                        v-model:value="formData.ratingMax"
+                      />
                     </div>
                   </a-form-item>
                 </a-col>
