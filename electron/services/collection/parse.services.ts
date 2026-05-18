@@ -133,6 +133,30 @@ export class ParseService {
     const sourcePrice = isNaN(Number(price)) ? 0 : price
     return { link1688, sourcePrice, cover2 }
   }
+
+  async aoXiaParse(html: any) {
+    const $ = cheerio.load(html);
+    const row = $('.ant-table-row').first();
+    const goods = row.find('.infoItem--V27Uh_WV');
+    const str = row.attr('data-row-key') || '';
+    const cover2 =
+      goods.find('.infoItemContentImg--rjPgLM0F').attr('src') || '';
+    const price =
+      goods.find('.infoItemContentInfoPrice--wdNSIanc').text() || '';
+    const sourcePrice =
+      Number(price.replace(/[^\d.]/g, '')) || 0;
+    // 链接
+    const link1688 =
+      str
+        ? `https://detail.1688.com/offer/${str}.html`
+        : '';
+
+    return {
+      link1688,
+      sourcePrice,
+      cover2
+    };
+  }
   /**
    * 获取商品数量
    */
