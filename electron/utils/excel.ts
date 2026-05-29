@@ -159,13 +159,39 @@ export class ExcelWriter {
         }
       }
 
-      return await this.flushToDisk()
+      try {
+        const dir = dirname(this.filePath)
+
+        await fsPromises.mkdir(dir, {
+          recursive: true,
+        })
+
+        const tempPath = `${this.filePath}.tmp`
+
+        // 先写入临时文件
+        await this.workbook.xlsx.writeFile(tempPath)
+
+        // 删除旧文件（Windows 下 rename 覆盖容易 EPERM）
+        try {
+          await fsPromises.unlink(this.filePath)
+        } catch { }
+
+        // 临时文件替换正式文件
+        await fsPromises.rename(tempPath, this.filePath)
+
+        return true
+      } catch (error) {
+        log.error(`写入Excel失败`, error)
+
+        return false
+      }
     })
 
     try {
       return await savePromise
     } catch (error) {
       log.error(`保存Excel失败:`, error)
+
       return false
     }
   }
