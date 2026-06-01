@@ -171,7 +171,9 @@ export class MainWindowService {
    * 改变当前窗口 URL
    */
   async changeUrl(url: string, waitForLoad = true) {
-    console.log(url, '新窗口地址')
+    console.log(url, '新窗口地址-未拼接')
+    const newUrl = url.startsWith('https://') ? url : `https://www.ozon.ru${url}`
+    console.log(newUrl, '新窗口地址')
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
       throw new Error('窗口不存在或已销毁')
     }
@@ -179,7 +181,7 @@ export class MainWindowService {
     const win = this.browserWindow
 
     if (!waitForLoad) {
-      await win.loadURL(url)
+      await win.loadURL(newUrl)
       return true
     }
 
@@ -212,7 +214,7 @@ export class MainWindowService {
         safeReject(`加载失败: ${errorDesc} (${errorCode})`)
       })
 
-      win.loadURL(url)
+      win.loadURL(newUrl)
     })
   }
 
