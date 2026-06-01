@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores'
 import type { Progress } from '@/types'
-import config from '../../electron/config/index'
 import dayjs from 'dayjs'
 defineProps<{
   progress?: Progress
 }>()
 
+const config = ref<{
+  feature: string[]
+  optimize: string[]
+  repair: string[]
+}>({
+  feature: [],
+  optimize: [],
+  repair: [],
+})
 const store = useAppStore()
 const open = ref(false)
 const showUpdateDialog = ref(false)
@@ -40,6 +48,22 @@ const formatSize = (size: number) => {
   return `${size.toFixed(2)} ${units[i]}`
 }
 
+const getConfig = async () => {
+  const {
+    feature = [],
+    optimize = [],
+    repair = [],
+  } = await window.electronAPI.invoke<{ feature: string[]; optimize: string[]; repair: string[] }>(
+    'get-config',
+    '',
+  )
+  config.value = {
+    feature,
+    optimize,
+    repair,
+  }
+}
+getConfig()
 defineExpose({
   openHandle,
   closeHandle,
