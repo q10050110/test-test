@@ -645,7 +645,7 @@ defineExpose({
             </a-row>
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
-                <a-form-item>
+                <a-form-item required>
                   <template #label>
                     <a-radio
                       class="flex-center"
