@@ -6,6 +6,7 @@ import {
   getShopList,
   getLogisticsList,
   getConfigList,
+  getCategoryList
 } from '../services/collection/interface.services.js'
 export const collectionIpc = (win: BrowserWindow) => {
   const taskManager = TaskManager.getInstance()
@@ -268,6 +269,11 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 获取店铺配置
   ipcMain.handle('get-config-list', async (event, params) => {
     return await getConfigList()
+  })
+
+  // 获取分类
+  ipcMain.handle('get-category-list', async (event, params) => {
+    return await getCategoryList()
   })
 
   // 跳转EPR

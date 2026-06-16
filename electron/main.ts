@@ -189,7 +189,9 @@ class ElectronApp {
       event.preventDefault()
       try {
         globalBroadcast.broadcast('app-ready-quit', '退出清理等待')
-        await new CloseProcessService().run()
+        const closeProcessService = new CloseProcessService()
+        await closeProcessService.deleteFolder()
+        await closeProcessService.run()
         await new Promise((resolve) => setTimeout(resolve, 2000))
         app.exit(0)
       } catch (error) {

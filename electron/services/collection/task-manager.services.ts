@@ -7,6 +7,8 @@ import { SysTemUtils } from '../../utils/system.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 import { autoUpGoods } from './interface.services.js'
 import os from 'os'
+import { join } from 'path'
+const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
 export class TaskManager {
   private static instance: TaskManager
   private tasks: Map<string, Collection> = new Map()
@@ -269,6 +271,11 @@ export class TaskManager {
             if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath))
               task.tableFilePath = copyTask.filePath
           }
+        }
+        if (!task.tableFilePath) {
+          const tableName = `${task.taskName}_${task._id}.xlsx`
+          const filePath = join(excelDir, tableName)
+          if (SysTemUtils.fileOperations.exists(filePath)) task.tableFilePath = filePath
         }
       }
       return data

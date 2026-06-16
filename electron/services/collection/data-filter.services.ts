@@ -160,7 +160,7 @@ export class DataProcessService {
   /**
    * 数据过滤
    */
-  async filterData(data: any[], task: Task) {
+  async filterData(data: any[], task: Task, type: 'base' | 'detail' | 'merge' = 'merge') {
     if (!data || !Array.isArray(data) || data.length === 0) {
       return []
     }
@@ -261,15 +261,53 @@ export class DataProcessService {
         const result = this.checkRange(item.convToCartSearch, task.showRateMin, task.showRateMax)
         return result
       },
-      // 跟卖人数范围校验
-      (item: any) => {
-        const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax)
-        return result
-      },
       // 发货模式校验
       (item: any) => {
         if (!task.salesSchema) return true
         const result = task.salesSchema?.includes(item.salesSchema)
+        return result
+      },
+      // 点击率校验
+      (item: any) => {
+        const result = this.checkRange(item.clickRate, task.clickRateMin, task.clickRateMax)
+        return result
+      },
+      // 成交率校验
+      (item: any) => {
+        const result = this.checkRange(item.nullableRedemptionRate, task.nullableRedemptionRateMin, task.nullableRedemptionRateMax)
+        return result
+      },
+      // 重量范围校验
+      (item: any) => {
+        const result = this.checkRange(item.weight, task.weightRangeMin, task.weightRangeMax)
+        return result
+      },
+      // 包装长度范围校验
+      (item: any) => {
+        const result = this.checkRange(item.packageLength, task.packageLengthMin, task.packageLengthMax)
+        return result
+      },
+      // 包装高度范围校验
+      (item: any) => {
+        const result = this.checkRange(item.packageHeight, task.packageHeightMin, task.packageHeightMax)
+        return result
+      },
+      // 包装宽度范围校验
+      (item: any) => {
+        const result = this.checkRange(item.packageWidth, task.packageWidthMin, task.packageWidthMax)
+        return result
+      },
+      // 退货取消率校验
+      (item: any) => {
+        const result = this.checkRange(item.returnCancelRate, task.returnCancelRateMin, task.returnCancelRateMax)
+        return result
+      },
+    ]
+
+    const filters2 = [
+      // 跟卖人数范围校验
+      (item: any) => {
+        const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax)
         return result
       },
       // 评论数校验
@@ -282,22 +320,36 @@ export class DataProcessService {
         const result = this.checkRange(item.rating, task.ratingMin, task.ratingMax)
         return result
       },
-      // 点击率校验
-      (item: any) => {
-        const result = this.checkRange(item.clickRate, task.clickRateMin, task.clickRateMax)
-        return result
-      },
-      // 成交率校验
-      (item: any) => {
-        const result = this.checkRange(item.nullableRedemptionRate, task.nullableRedemptionRateMin, task.nullableRedemptionRateMax)
-        return result
-      }
     ]
-    const filteredData = data.filter((item) => {
-      const results = filters.map((filterFn) => filterFn(item))
-      const overallResult = results.every((r) => r)
-      return overallResult
-    })
+    let filteredData
+    switch (type) {
+      case 'base':
+        filteredData = data.filter((item) => {
+          const results = filters.map((filterFn) => filterFn(item))
+          const overallResult = results.every((r) => r)
+          return overallResult
+        })
+        break;
+      case 'detail':
+        filteredData = data.filter((item) => {
+          const results = filters2.map((filterFn) => filterFn(item))
+          const overallResult = results.every((r) => r)
+          return overallResult
+        })
+        break;
+      default:
+        filteredData = data.filter((item) => {
+          const results = filters.map((filterFn) => filterFn(item))
+          const overallResult = results.every((r) => r)
+          return overallResult
+        }).filter((item) => {
+          const results = filters2.map((filterFn) => filterFn(item))
+          const overallResult = results.every((r) => r)
+          return overallResult
+        })
+        break;
+    }
+
     return filteredData
   }
 

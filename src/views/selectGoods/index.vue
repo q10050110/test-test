@@ -216,6 +216,14 @@ const getProgress = async (data?: any) => {
   tabsRef.value?.writeLog(collectionTask._id, log)
 }
 
+// 获取分类列表
+const categoryList = ref([])
+const getCategoryList = async () => {
+  const { data, code } = await window.electronAPI.invoke<any>('get-category-list', {})
+  if (code !== 400) return
+  categoryList.value = data
+}
+getCategoryList()
 // 获取物流信息
 const logisticsSimpleList = ref<LogisticsSimpleList>([])
 const getLogisticsSimpleList = async () => {
@@ -277,7 +285,15 @@ const openTaskDialogHandle = async (data?: Task) => {
   await nextTick()
   if (data?._id && dialogRef.value) {
     if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
-    dialogRef.value.formData = { ...data, upMode: data.upMode ? data.upMode : 1 }
+    dialogRef.value.formData = {
+      ...data,
+      upMode: data.upMode ? data.upMode : 1,
+      isUseCategorySelect: data.isUseCategorySelect
+        ? data.isUseCategorySelect
+        : data.isUseCategorySelect === 0
+          ? 0
+          : 1,
+    }
     if (data?.aiSelectType == 1) dialogRef.value.saveOldFormdata()
   }
   await getConfigList()
@@ -462,13 +478,21 @@ onUnmounted(() => {
               >
               <a-tooltip placement="topRight">
                 <template #title>
-                  <span>导出符合条件的商品表格</span>
+                  <span>{{
+                    record.taskStatus === 'noExecuted'
+                      ? '程序意外中断，已爬取数据自动保存，请尽快导出'
+                      : '导出符合条件的商品表格'
+                  }}</span>
                 </template>
                 <a-button
                   type="link"
                   :icon="h(DownloadOutlined)"
                   :disabled="!record?.tableFilePath"
                   @click="exportHandle(record?.tableFilePath)"
+                  :style="{
+                    color:
+                      record.taskStatus === 'noExecuted' && record.tableFilePath ? '#f5a23e' : '',
+                  }"
                   >导出</a-button
                 >
               </a-tooltip>
@@ -519,6 +543,7 @@ onUnmounted(() => {
     :logisticsSimpleList="logisticsSimpleList"
     :shop-list="shopList"
     :config-list="configList"
+    :category-list="categoryList"
   />
 </template>
 

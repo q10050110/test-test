@@ -13,6 +13,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AButton: typeof import('ant-design-vue/es')['Button']
+    ACascader: typeof import('ant-design-vue/es')['Cascader']
     ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
     ACol: typeof import('ant-design-vue/es')['Col']
     AConfigProvider: typeof import('ant-design-vue/es')['ConfigProvider']
@@ -48,6 +49,7 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const AButton: typeof import('ant-design-vue/es')['Button']
+  const ACascader: typeof import('ant-design-vue/es')['Cascader']
   const ACheckbox: typeof import('ant-design-vue/es')['Checkbox']
   const ACol: typeof import('ant-design-vue/es')['Col']
   const AConfigProvider: typeof import('ant-design-vue/es')['ConfigProvider']

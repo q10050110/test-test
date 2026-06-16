@@ -2,12 +2,14 @@
 import { QuestionCircleOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons-vue'
 import type { FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
+import { Cascader } from 'ant-design-vue'
 import type {
   ConfigList,
   LogisticsSimpleList,
   ShopList,
   Task,
   ConditionForm,
+  categoryList,
 } from '@/types/selectGoods'
 import feedback from '@/utils/feedback'
 import { getShopCurCode } from '@/enums/index'
@@ -15,12 +17,14 @@ const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
   configList: ConfigList
+  categoryList: categoryList
 }>()
 
 const emits = defineEmits(['refresh', 'refreshConfig'])
 const open = ref(false)
 const submitting = ref(false)
 const mode = ref(true)
+const options = ref<categoryList>([])
 const initData = ref<Task>({
   _id: undefined,
   taskStatus: 'noExecuted',
@@ -90,6 +94,18 @@ const initData = ref<Task>({
   clickRateMin: undefined,
   numberOfCommentsMax: undefined,
   numberOfCommentsMin: undefined,
+  isUseCategorySelect: 1,
+  categoryIds: [],
+  weightRangeMin: undefined,
+  weightRangeMax: undefined,
+  packageLengthMin: undefined,
+  packageLengthMax: undefined,
+  packageHeightMin: undefined,
+  packageHeightMax: undefined,
+  packageWidthMin: undefined,
+  packageWidthMax: undefined,
+  returnCancelRateMin: undefined,
+  returnCancelRateMax: undefined,
 })
 const tooltipLines = ['ai根据商品的竞争力、热度、上架时间等维度，筛选出较有潜力的商品']
 const defaultLines = [
@@ -171,21 +187,25 @@ const rules: Record<string, Rule[]> = {
       trigger: ['change', 'blur'],
     },
   ],
-  targetUrl: [
+  /*   targetUrl: [
     { required: true, message: '请输入网址', trigger: ['change', 'blur'] },
     {
       validator: (_, value) => {
-        try {
-          const url = new URL(value)
-          if (url.hostname.includes('ozon')) return Promise.resolve()
-          return Promise.reject('请输入正确的ozon网址')
-        } catch (error) {
-          return Promise.reject('请输入正确的ozon网址')
+        if (formData.value.isUseCategorySelect === 1) {
+          try {
+            const url = new URL(value)
+            if (url.hostname.includes('ozon')) return Promise.resolve()
+            return Promise.reject('请输入正确的ozon网址')
+          } catch (error) {
+            return Promise.reject('请输入正确的ozon网址')
+          }
+        } else {
+          return Promise.resolve()
         }
       },
       trigger: ['change', 'blur'],
     },
-  ],
+  ], */
   sourceType: [{ required: true, message: '请选择货源排序', trigger: ['change', 'blur'] }],
   basePriceType: [{ required: true, message: '请选择定价基准', trigger: ['change', 'blur'] }],
   rejustType: [{ required: true, message: '请选择调整方式', trigger: ['change', 'blur'] }],
@@ -315,6 +335,31 @@ const filters = [
     const result = checkRange(item.nullableRedemptionRateMin, item.nullableRedemptionRateMax)
     return result
   },
+  // 重量范围校验
+  (item: any) => {
+    const result = checkRange(item.weightRangeMin, item.weightRangeMax)
+    return result
+  },
+  // 包装长度校验
+  (item: any) => {
+    const result = checkRange(item.packageLengthMin, item.packageLengthMax)
+    return result
+  },
+  // 包装高度校验
+  (item: any) => {
+    const result = checkRange(item.packageHeightMin, item.packageHeightMax)
+    return result
+  },
+  // 包装宽度校验
+  (item: any) => {
+    const result = checkRange(item.packageWidthMin, item.packageWidthMax)
+    return result
+  },
+  // 退货取消率范围校验
+  (item: any) => {
+    const result = checkRange(item.returnCancelRateMin, item.returnCancelRateMax)
+    return result
+  },
 ]
 const saveOldFormdata = () => {
   const keys = Object.keys(conditionFormData.value) as (keyof ConditionForm)[]
@@ -400,7 +445,17 @@ const saveHandle = async (type: 'save' | 'execute') => {
     feedback.error('请完善表单报错项')
     return
   }
-
+  if (formData.value.isUseCategorySelect) {
+    if (!formData.value.targetUrl) return feedback.error('请输入网址')
+    try {
+      const url = new URL(formData.value.targetUrl)
+      if (!url.hostname.includes('ozon')) return feedback.error('请输入正确的ozon网址')
+    } catch (error) {
+      return feedback.error('请输入正确的网址')
+    }
+  }
+  if (!formData.value.isUseCategorySelect && !formData.value.categoryIds?.length)
+    return feedback.error('请选择商品分类')
   if (formData.value.isUseAutoUpGoods) {
     if (!formData.value.client_id && !formData.value.upDataConfigId)
       return feedback.error('您当前已开启自动上架，请完善上架配置信息')
@@ -436,7 +491,6 @@ const saveHandle = async (type: 'save' | 'execute') => {
   }
 
   submitting.value = true
-
   try {
     const data = JSON.parse(JSON.stringify(formData.value))
 
@@ -502,6 +556,12 @@ const clientList = computed(() => {
   const obj = props.shopList.find((item) => item.client_id === formData.value.client_id)
   return obj ? obj.warehouse : []
 })
+
+// 选品模式改变
+const modeChangeHandle = (val: 0 | 1) => {
+  val === 1 ? (formData.value.categoryIds = []) : (formData.value.targetUrl = '')
+  formData.value.isUseCategorySelect = val
+}
 
 // 跳转到ERP配置页
 const goErp = () => {
@@ -585,22 +645,31 @@ defineExpose({
             </a-row>
             <a-row :gutter="[16, 16]">
               <a-col :span="12">
-                <a-form-item required name="targetUrl">
+                <a-form-item>
                   <template #label>
-                    <label class="flex-center">
+                    <a-radio
+                      class="flex-center"
+                      size="small"
+                      :checked="formData.isUseCategorySelect === 1"
+                      @change="modeChangeHandle(1)"
+                    >
                       OZON前台链接
                       <a-tooltip
                         title="支持OZON商城的列表页，如：类目链接、店铺链接、搜索结果页链接"
                       >
                         <QuestionCircleOutlined class="info-icon" />
                       </a-tooltip>
-                    </label>
+                    </a-radio>
                   </template>
-                  <a-input placeholder="请输入URL" v-model:value="formData.targetUrl" />
+                  <a-input
+                    placeholder="请输入URL"
+                    v-model:value="formData.targetUrl"
+                    :disabled="formData.isUseCategorySelect === 0"
+                  />
                 </a-form-item>
               </a-col>
             </a-row>
-            <a-row :gutter="[16, 16]">
+            <!--             <a-row :gutter="[16, 16]">
               <a-col :span="12">
                 <a-form-item required>
                   <template #label>
@@ -631,6 +700,41 @@ defineExpose({
                     v-model:value="formData.expendShopCount"
                     :min="1"
                   />
+                </a-form-item>
+              </a-col>
+            </a-row> -->
+            <a-row :gutter="[16, 16]">
+              <a-col :span="12">
+                <a-form-item required>
+                  <template #label>
+                    <a-radio
+                      class="flex-center"
+                      size="small"
+                      :checked="formData.isUseCategorySelect === 0"
+                      @change="modeChangeHandle(0)"
+                    >
+                      类目选品
+                      <a-tooltip
+                        title="类目选品是通过查询热销商品数据，并根据选品条件选出对应商品，然后再去获取ozon前台商品售价以及跟卖数据"
+                      >
+                        <QuestionCircleOutlined class="info-icon" />
+                      </a-tooltip>
+                    </a-radio>
+                  </template>
+                  <a-cascader
+                    v-model:value="formData.categoryIds"
+                    placeholder="请选择商品类目"
+                    :disabled="formData.isUseCategorySelect === 1"
+                    expandTrigger="hover"
+                    multiple
+                    :fieldNames="{
+                      label: 'name',
+                      value: 'category_id',
+                    }"
+                    :options="categoryList"
+                    :showCheckedStrategy="Cascader.SHOW_CHILD"
+                    :maxTagCount="1"
+                  ></a-cascader>
                 </a-form-item>
               </a-col>
             </a-row>
@@ -1161,6 +1265,86 @@ defineExpose({
               </a-row>
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
+                  <a-form-item label="重量范围">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.weightRangeMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="g"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.weightRangeMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="g"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="包装长度">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.packageLengthMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.packageLengthMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item label="包装高度">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.packageHeightMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.packageHeightMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="包装宽度">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小值"
+                        v-model:value="formData.packageWidthMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大值"
+                        v-model:value="formData.packageWidthMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="mm"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
                   <a-form-item label="点击率">
                     <div class="range-input-wrapper">
                       <a-input-number
@@ -1201,20 +1385,20 @@ defineExpose({
               </a-row>
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
-                  <a-form-item label="上架时间">
+                  <a-form-item label="退货率">
                     <div class="range-input-wrapper">
                       <a-input-number
-                        placeholder="最小天数"
-                        v-model:value="formData.upGoodsTimeMin"
+                        placeholder="最小值"
+                        v-model:value="formData.returnCancelRateMin"
                         style="width: calc(50% - 8px)"
-                        addon-after="天"
+                        addon-after="%"
                       />
                       <span class="separator">至</span>
                       <a-input-number
-                        placeholder="最大天数"
-                        v-model:value="formData.upGoodsTimeMax"
+                        placeholder="最大值"
+                        v-model:value="formData.returnCancelRateMax"
                         style="width: calc(50% - 8px)"
-                        addon-after="天"
+                        addon-after="%"
                       />
                     </div>
                   </a-form-item>
@@ -1399,6 +1583,25 @@ defineExpose({
               </a-row>
               <a-row :gutter="[16, 16]">
                 <a-col :span="12">
+                  <a-form-item label="上架时间">
+                    <div class="range-input-wrapper">
+                      <a-input-number
+                        placeholder="最小天数"
+                        v-model:value="formData.upGoodsTimeMin"
+                        style="width: calc(50% - 8px)"
+                        addon-after="天"
+                      />
+                      <span class="separator">至</span>
+                      <a-input-number
+                        placeholder="最大天数"
+                        v-model:value="formData.upGoodsTimeMax"
+                        style="width: calc(50% - 8px)"
+                        addon-after="天"
+                      />
+                    </div>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
                   <a-form-item label="发货模式">
                     <a-select
                       placeholder="请选择发货模式"
@@ -1413,6 +1616,8 @@ defineExpose({
                     </a-select>
                   </a-form-item>
                 </a-col>
+              </a-row>
+              <a-row :gutter="[16, 16]">
                 <a-col :span="12">
                   <a-form-item label="品牌类型">
                     <a-radio-group v-model:value="formData.brandType" style="width: 100%">

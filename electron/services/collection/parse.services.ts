@@ -104,11 +104,81 @@ export class ParseService {
         item.followMinPrice1 = item.followMinPrice
       } else {
         item.sellerNumber = undefined
+        item.sellerNumber1 = undefined
         item.followMinPrice = item.price
+        item.followMinPrice1 = item.price
         log.error('获取跟卖数据失败')
       }
     }
     return uniqueData
+  }
+  /** 
+   * 商品去重
+    */
+  async ozonDetailListParser(list: any[]) {
+    const uniqueData = list.filter(item => !this.ozonGoodsData.has(item._id))
+    uniqueData.forEach(item => {
+      this.ozonGoodsData.add(item._id)
+    })
+    return uniqueData
+  }
+  async ozonDetailParse(data: any, domain: string, goods: any) {
+    if (!data.success) return {};
+    try {
+      const widgetStatesPrice = JSON.parse(data.data.widgetStates?.['webPrice-3121879-default-1'] || '{}')
+      const widgetStatesScore = JSON.parse(data.data.widgetStates?.['webSingleProductScore-3386432-default-1'] || '{}')
+      const queryUrl = encodeURIComponent(
+        `/modal/otherOffersFromSellers?product_id=${goods._id}&page_changed=true`,
+      )
+      const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
+      const cleanPrice = (str: string | undefined) => {
+        if (!str) return 0;
+        return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0;
+      };
+      const price = cleanPrice(widgetStatesPrice?.cardPrice);
+      const oPrice = cleanPrice(widgetStatesPrice?.originalPrice);
+      let str = widgetStatesScore?.text || ''
+      const match = str.match(/([0-5](?:\.\d)?)[^0-9]*(\d[\d\s]*)/i)
+      const rating = match ? match[1] : 0
+      const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
+      const response = await this.windowService?.getSellingData(requestUrl)
+      let sellers,
+        sellerNumber,
+        sellerNumber1,
+        followMinPrice,
+        followMinPrice1 = undefined
+      if (response?.success) {
+        sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        sellerNumber = sellers?.sellers?.length
+        const priceList = sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < price)
+        sellerNumber1 = sellerNumber
+        followMinPrice = priceList?.length ? Math.min(...priceList) : price
+        followMinPrice1 = priceList?.length ? Math.min(...priceList) : price
+      } else {
+        log.error('获取跟卖数据失败')
+      }
+
+      return {
+        id: goods._id,
+        price,
+        price1: price,
+        oPrice,
+        oPrice1: oPrice,
+        rating,
+        reviewCountLabel,
+        sellers,
+        sellerNumber,
+        sellerNumber1,
+        followMinPrice,
+        followMinPrice1,
+        cover: goods.photo,
+        nameLabel: goods.name,
+        ...goods
+      }
+    } catch (error) {
+      log.error('解析数据失败~~~')
+      return {}
+    }
   }
 
   async '1688Parse'(html: any) {

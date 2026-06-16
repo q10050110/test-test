@@ -73,6 +73,18 @@ export interface Task {
   clickRateMin?: number // 点击率
   nullableRedemptionRateMax?: number //成交率
   nullableRedemptionRateMin?: number //成交率
+  isUseCategorySelect?: 0 | 1 // 选品模式
+  categoryIds?: number[]
+  weightRangeMin?: number // 重量范围
+  weightRangeMax?: number // 重量范围
+  packageLengthMin?: number // 包装长度
+  packageLengthMax?: number // 包装长度
+  packageHeightMin?: number  // 包装高度
+  packageHeightMax?: number // 包装高度
+  packageWidthMin?: number // 包装宽度
+  packageWidthMax?: number // 包装宽度
+  returnCancelRateMin?: number // 退货取消率
+  returnCancelRateMax?: number // 退货取消率
 }
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined
@@ -107,3 +119,9 @@ export type Config = {
 }
 
 export type ConfigList = Config[]
+
+export interface Response<T> {
+  code: number
+  message: string
+  data: T
+}

@@ -12,7 +12,7 @@ import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
 import { autoUpGoods } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
-
+import type { Response } from './type.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -33,6 +33,13 @@ export class Collection {
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
   private expendShopCount = 0
+  private query: { pageNo: number, pageSize: number, total: number, maxPage: number, categories: number[] } = {
+    pageNo: 1,
+    pageSize: 30,
+    total: 0,
+    maxPage: 99,
+    categories: []
+  }
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
     this.mainWindow = mainWindow
@@ -42,6 +49,7 @@ export class Collection {
     this.dataProcessService = new DataProcessService()
     this.parseService = new ParseService(this.mainWindowService)
     this.windowService = new WindowService(this.parseService)
+    this.query.categories = [...new Set(task.categoryIds?.flat(2) || [])]
   }
   run() {
     let timer: NodeJS.Timeout | undefined
@@ -84,9 +92,14 @@ export class Collection {
         this.uuid = randomUUID()
         this.updateStatus('running')
         this.outputLog('窗口创建成功，任务开始执行')
-        await this.mainWindowService.createCollectionWindow(this.task.targetUrl)
-        this.outputLog('页面解析成功，开始获取商品列表')
-        await this.getHtmlData(this.task.targetCount || Infinity)
+        await this.mainWindowService.createCollectionWindow(this.task.targetUrl || 'https://www.ozon.ru')
+        if (this.task.isUseCategorySelect === 0) {
+          this.outputLog(`分类选品模式`)
+          await this.categoryMode(this.task.targetCount || Infinity)
+        } else {
+          this.outputLog('页面解析成功，开始获取商品列表')
+          await this.getHtmlData(this.task.targetCount || Infinity)
+        }
         await this.waitForAllTasks()
         await this.expendShop()
         memoryMonitor.trackBusinessMetrics({
@@ -147,6 +160,98 @@ export class Collection {
     })
   }
 
+  /** 
+   * 分类选品模式
+  */
+  async categoryMode(targetCount: number) {
+    const dataList = await this.getCategoryGoodsList()
+    const targetList = await this.parseService.ozonDetailListParser(dataList)
+    this.outputLog('获取商品成功')
+    await this.categoryProcess(targetList)
+    try {
+      while (this.targetData < targetCount) {
+        if (this.reason && this.reason !== 'success') throw new Error('任务终止')
+        if (this.reason === 'success') break
+        if (this.taskQueueService.getTaskCount() > 20) {
+          this.outputLog('任务队列数据源充足，等待处理中')
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          continue
+        }
+        const dataList = await this.getCategoryGoodsList()
+        const targetList = await this.parseService.ozonDetailListParser(dataList)
+        this.outputLog('获取商品成功')
+        await this.categoryProcess(targetList)
+      }
+      if (!this.reason) this.reason = 'success'
+      this.outputLog(`分类选品模式结束，已获取${this.targetData}个商品`)
+    } catch (error) {
+      return error
+    }
+  }
+
+  /** 
+   * 分类模式处理
+    */
+  async categoryProcess(list: any[]) {
+    const filterData = await this.dataProcessService.filterData(list, this.task, 'base')
+    const baseData: any[] = []
+    const apiList = []
+    for (const goods of filterData) {
+      if (this.targetData >= (this.task.targetCount || Infinity)) return
+      apiList.push(this.getHtmlDetailData(goods))
+    }
+    const res = await Promise.all(apiList)
+    res.forEach(item => {
+      if (item.price) {
+        const url = `https://www.ozon.ru/product/${item.id}`
+        baseData.push({ href: url, ...item })
+      }
+    })
+    const targetData = await this.dataProcessService.filterData(baseData, this.task, 'detail')
+    this.process += targetData.length
+    if (
+      targetData.length &&
+      this.reason !== 'cancel' &&
+      this.reason !== 'failed' &&
+      this.targetData < (this.task.targetCount || Infinity)
+    ) {
+      this.taskQueueService.addTask(targetData)
+      this.taskQueueService.startProcessing()
+      this.outputLog('处理符合筛选条件的商品中')
+    }
+  }
+
+  /** 
+   * 获取商品列表
+    */
+  async getCategoryGoodsList() {
+    this.outputLog(`获取分类商品`)
+    const { code, data } = await request<Response<any>, Response<any>>({
+      url: '/api/goods/hotSales/v2/ozon/getReMaiData',
+      method: 'post',
+      data: this.query
+    })
+    if (!code) {
+      if (!data.total || this.query.pageNo >= this.query.maxPage) this.reason = 'success'
+      this.query.pageNo += 1
+      this.query.maxPage = data.total / this.query.pageSize
+      return data.list || []
+    } else {
+      this.reason = 'failed'
+      log.error(`获取分类商品失败！`)
+      return []
+    }
+  }
+
+  /**  
+   * 获取详情页数据 
+   */
+  async getHtmlDetailData(obj: any) {
+    const res = await this.mainWindowService.getDataByApi(obj._id)
+    const domain = await this.mainWindowService.getDomain()
+    this.outputLog(`获取商品详情页数据`)
+    return this.parseService.ozonDetailParse(res, domain, obj)
+  }
   /** 
    * 拓店模式
     */

@@ -52,4 +52,20 @@ request.interceptors.response.use(
   },
 )
 
+export const downloadFile = async (params: { url: string, method: 'get' | 'post' }) => {
+  const { url, method } = params
+  const token = operationStore.get('token')
+  const prefix = SysTemUtils.getEnv() === 'development'
+    ? 'https://test-plus.shopbang.cn'
+    : 'https://plus.shopbang.cn'
+  return axios({
+    url: url.startsWith('https') ? url : `${prefix}${url}`,
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      token
+    },
+  })
+}
+
 export default request

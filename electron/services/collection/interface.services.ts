@@ -1,12 +1,17 @@
-import request from '../../utils/request.js'
+import request, { downloadFile } from '../../utils/request.js'
 import { Config, ConfigList, ShopData, Task } from './type.js'
 import { operationStore } from '../../store/index.js'
 import { compressData } from '../../utils/index.js'
 import log from '../../log/index.js'
 import { getRate, currencyConversion, getShopCurCode } from '../../utils/index.js'
+import { runInNewContext } from 'node:vm'
 let configList: ConfigList = []
 let shopList: ShopData[] = []
 let rate: any = null
+
+/**
+ * 获取物流
+  */
 export const getLogisticsList = async () => {
   try {
     const res = await request({
@@ -26,6 +31,10 @@ export const getLogisticsList = async () => {
     }
   }
 }
+
+/** 
+ * 获取列表
+  */
 export const getShopList = async () => {
   const user = operationStore.get('user')
   try {
@@ -50,6 +59,9 @@ export const getShopList = async () => {
   }
 }
 
+/** 
+ * 获取配置
+  */
 export const getConfigList = async () => {
   try {
     const user = operationStore.get('user')
@@ -73,6 +85,53 @@ export const getConfigList = async () => {
     }
   }
 }
+
+/** 
+ * 获取分类
+  */
+export const getCategoryList = async () => {
+  try {
+    const versionRes = await request({
+      url: '/api/goods/open/ozon/getOZONCategoryVersion',
+      method: 'post'
+    })
+    const categoryVersion = operationStore.get('categoryVersion')
+    const categoryList = operationStore.get('categoryList') || []
+    if (versionRes.data === categoryVersion && categoryList?.length) return {
+      code: 400,
+      data: categoryList,
+      message: '获取成功',
+    }
+    const category = await downloadFile({
+      url: '/resources/docs/js/ozoncategory.js',
+      method: 'get'
+    })
+    let jsContent = typeof category.data === 'string' ? category.data : category.data.toString()
+    jsContent = jsContent.replace(/export\s+default\s+(\w+)/g, 'this.arr = $1;')
+    const sandbox = {
+      arr: [], // 用于接收 JS 中定义的 arr
+      // 防止 JS 代码中引用全局变量报错
+      window: {},
+      global: {},
+    }
+    runInNewContext(jsContent, sandbox)
+    const extractedArr = sandbox.arr
+    operationStore.set('categoryVersion', versionRes.data)
+    operationStore.set('categoryList', extractedArr)
+    return {
+      code: 400,
+      data: extractedArr,
+      message: '获取成功',
+    }
+  } catch (error) {
+    console.log(error)
+    return {
+      code: 500,
+      message: '获取失败！',
+    }
+  }
+}
+
 
 /**
  * 批量上架接口

@@ -77,6 +77,18 @@ export type Task = {
   clickRateMin?: number // 点击率
   nullableRedemptionRateMax?: number //成交率
   nullableRedemptionRateMin?: number //成交率
+  isUseCategorySelect?: 0 | 1 // 选品模式
+  categoryIds?: number[] // 分类
+  weightRangeMin?: number // 重量范围
+  weightRangeMax?: number // 重量范围
+  packageLengthMin?: number // 包装长度
+  packageLengthMax?: number // 包装长度
+  packageHeightMin?: number  // 包装高度
+  packageHeightMax?: number // 包装高度
+  packageWidthMin?: number // 包装宽度
+  packageWidthMax?: number // 包装宽度
+  returnCancelRateMin?: number // 退货取消率
+  returnCancelRateMax?: number // 退货取消率
 }
 
 export type TaskList = {
@@ -178,3 +190,21 @@ export type ConditionForm = Pick<
   | 'numberOfCommentsMax'
   | 'brandType'
 >
+
+export type CategoryForm = Pick<
+  Task,
+  'isUseCategorySelect' | 'categoryIds' | 'weightRangeMin' | 'weightRangeMax' | 'packageLengthMin' | 'packageLengthMax' | 'packageHeightMin' | 'packageHeightMax' | 'packageWidthMin' | 'packageWidthMax' | 'returnCancelRateMin' | 'returnCancelRateMax'
+>
+
+export type category = {
+  description_category_id: number
+  category_name: string
+  type_name?: string
+  type_id?: number
+  category_id?: number
+  key?: string
+  name?: string
+  children?: category[]
+}
+
+export type categoryList = category[]

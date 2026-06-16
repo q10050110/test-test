@@ -71,7 +71,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: false,
+          show: true,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -88,14 +88,14 @@ export class WindowService {
           },
           1000 * 60 * 2,
         )
-
+        console.log(cover, '让我看看你是啥~~~')
         this.windows.push({ cleanup, id: winId })
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {
           try {
             let sortText: string | undefined
             if (sourceType) {
-              sortText = sourceType === '1' ? '按价格排序' : '按销量排序'
+              sortText = sourceType === '1' ? '价格' : '销量'
             }
             await new Promise((res) => setTimeout(res, 5000))
             // 执行排序逻辑
@@ -103,7 +103,7 @@ export class WindowService {
               await win?.webContents.executeJavaScript(`
               new Promise((resolve, reject) => {
                 const sortText = ${JSON.stringify(sortText)};
-                const list = document.querySelectorAll('.sortItem--MLxA1iKN');
+                const list = document.querySelectorAll('.sortItem--X1Plgn6V');
                 try {
                   if (!sortText) resolve(true);
                   for (const el of list) {
@@ -123,7 +123,7 @@ export class WindowService {
             const html = await win?.webContents.executeJavaScript(
               'document.documentElement.outerHTML',
             )
-            const obj = this.parseService.aoXiaParse(html)
+            const obj = this.parseService['1688Parse'](html)
             win?.destroy()
             // 增加延迟以确保页面稳定
             await new Promise((res) => setTimeout(res, 5000))
@@ -134,8 +134,8 @@ export class WindowService {
         })
 
         // 加载目标页面
-        // win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?') 
-        win.loadURL('https://aibuy.1688.com/landingpage/home/image-search.html?bizType=cbu&customerId=cbu')
+        win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
+
         // 等待页面加载完成并增加延迟
         await new Promise((res) => setTimeout(res, 2000))
 
@@ -146,16 +146,9 @@ export class WindowService {
               // 获取图片 Blob
               const response = await fetch(${JSON.stringify(cover)});
               const imageBlob = await response.blob();
-              const btn = document.querySelector('.imgSearchWrapper--K22yd940')
-              if(!btn){
-                reject(new Error('未找到图片上传按钮'));
-                return;
-              }
-              btn.click();
-              await new Promise((res) => setTimeout(res, 1000))
+
               // 查找上传输入框
-              const uploadInput = document.querySelector('.inputFile--SS5yInc3') || 
-                                 document.querySelector('input[type="file"]') ||
+              const uploadInput = document.querySelector('input[type="file"]') ||
                                  document.querySelector('[accept*="image"]') ||
                                  Array.from(document.querySelectorAll('input')).find(el => 
                                    el.type === 'file' || el.accept?.includes('image')
@@ -183,8 +176,7 @@ export class WindowService {
               await new Promise(r => setTimeout(r, 2000));
 
               // 查找并点击搜索按钮
-              const searchButton = document.querySelector('.submit-btn--VPFVb9Xu') ||
-                                  document.querySelector('[data-tracker="pasteImagePreview"]') ||
+              const searchButton = document.querySelector('[data-tracker="pasteImagePreview"]') ||
                                   document.querySelector('.search-btn') ||
                                   document.querySelector('[class*="search-btn"]') ||
                                   Array.from(document.querySelectorAll('div, button')).find(el => 

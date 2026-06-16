@@ -35,7 +35,7 @@ export class MainWindowService {
           backgroundThrottling: false,
         },
       })
-
+      this.browserWindow.webContents.openDevTools()
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()
@@ -60,6 +60,17 @@ export class MainWindowService {
     })
   }
 
+  /** 
+   * 获取domin
+    */
+  async getDomain() {
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+      return ''
+    }
+    const wc = this.browserWindow.webContents
+    const domain = new URL(wc.getURL()).origin
+    return domain
+  }
   /**
    * 获取页面
    */
@@ -216,6 +227,24 @@ export class MainWindowService {
 
       win.loadURL(newUrl)
     })
+  }
+
+  /** 
+   * 通过接口获取页面数据
+    */
+  async getDataByApi(id: string) {
+    try {
+      const target = `https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2?url=%2Fproduct%2Flastik-dlya-obuvi-sredstvo-dlya-suhoy-chistki-obuvi-${id}`
+      const response = await this.browserWindow?.webContents.executeJavaScript(`
+            fetch(${JSON.stringify(target)}, { credentials: 'include' })
+            .then(response => response.json())
+            .then(data => ({ success: true, data: data }))
+          `)
+      return response
+    } catch (error) {
+      console.log(error)
+      return { success: false, data: {} }
+    }
   }
 
   /**
