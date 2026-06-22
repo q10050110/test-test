@@ -184,6 +184,8 @@ const copyHandle = async (task: Task) => {
 const cancelTask = async (taskId: string) => {
   const { code, message } = await window.electronAPI.invoke<any>('collection-cancel-task', taskId)
   if (code === 200) return feedback.success('取消任务成功')
+  const obj = tableData.value?.find((item) => item._id === taskId)
+  if (obj) obj.taskStatus = 'cancelled'
   feedback.error(message)
 }
 // 批量删除任务

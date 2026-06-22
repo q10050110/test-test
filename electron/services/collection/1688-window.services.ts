@@ -71,7 +71,7 @@ export class WindowService {
         win = new BrowserWindow({
           width: 1200,
           height: 800,
-          show: true,
+          show: false,
           webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -88,7 +88,6 @@ export class WindowService {
           },
           1000 * 60 * 2,
         )
-        console.log(cover, '让我看看你是啥~~~')
         this.windows.push({ cleanup, id: winId })
         // 绑定 IPC 监听器（使用唯一事件名称）
         ipcMain.once(`result-page-${winId}`, async (event, _) => {

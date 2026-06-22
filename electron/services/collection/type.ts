@@ -125,3 +125,51 @@ export interface Response<T> {
   message: string
   data: T
 }
+
+export type Query = {
+  pageNo: number
+  pageSize: number
+  total: number
+  maxPage: number
+  categories: number[]
+  isAutoBang: boolean
+  lastSortValues: string[]
+  weightRangeMin?: number
+  weightRangeMax?: number
+  packageLengthMin?: number
+  packageLengthMax?: number
+  packageWidthMin?: number
+  packageWidthMax?: number
+  packageHeightMin?: number
+  packageHeightMax?: number
+  nullableRedemptionRateMin?: number
+  nullableRedemptionRateMax?: number
+  returnCancelRateMin?: number
+  returnCancelRateMax?: number
+  brandType?: string
+  gmvSumMin?: number
+  gmvSumMax?: number
+  searchAndCartConversionMin?: number
+  searchAndCartConversionMax?: number
+  soldCountMin?: number
+  soldCountMax?: number
+  shelfDateMin?: number
+  shelfDateMax?: number
+  salesDynamicsMin?: number
+  salesDynamicsMax?: number
+  drrMin?: number
+  drrMax?: number
+  daysInPromoMin?: number
+  daysInPromoMax?: number
+  discountMin?: number
+  discountMax?: number
+  promoRevenueShareMin?: number
+  promoRevenueShareMax?: number
+  daysWithTrafaretsMin?: number
+  daysWithTrafaretsMax?: number
+  qtyViewPdpMin?: number
+  qtyViewPdpMax?: number
+  pdpToCartConversionMin?: number
+  pdpToCartConversionMax?: number
+  salesSchema?: string
+}

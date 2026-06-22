@@ -24,7 +24,6 @@ const emits = defineEmits(['refresh', 'refreshConfig'])
 const open = ref(false)
 const submitting = ref(false)
 const mode = ref(true)
-const options = ref<categoryList>([])
 const initData = ref<Task>({
   _id: undefined,
   taskStatus: 'noExecuted',
@@ -94,7 +93,7 @@ const initData = ref<Task>({
   clickRateMin: undefined,
   numberOfCommentsMax: undefined,
   numberOfCommentsMin: undefined,
-  isUseCategorySelect: 1,
+  isUseCategorySelect: 0,
   categoryIds: [],
   weightRangeMin: undefined,
   weightRangeMax: undefined,
@@ -889,6 +888,8 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入利润率"
                       v-model:value="formData.myProfitPercent"
+                      :min="0"
+                      :max="100"
                       style="width: 100%"
                       addon-after="%"
                     />
@@ -919,6 +920,7 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入国内运费+代贴单"
                       v-model:value="formData.rubExpressPrice"
+                      :min="0"
                       style="width: 100%"
                       addon-after="￥"
                     />
@@ -929,6 +931,8 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入其他费用"
                       v-model:value="formData.elsePercent"
+                      :min="0"
+                      :max="100"
                       style="width: 100%"
                       addon-after="%"
                     />
@@ -1018,7 +1022,7 @@ defineExpose({
                   </a-form-item>
                 </a-col>
                 <a-col :span="8">
-                  <a-form-item>
+                  <a-form-item required>
                     <template #label>
                       <label class="flex-center">
                         调整值
@@ -1069,6 +1073,7 @@ defineExpose({
                   <a-form-item label="国内运费" name="rubExpressPrice">
                     <a-input-number
                       placeholder="请输入国内运费+代贴单"
+                      :min="0"
                       v-model:value="formData.rubExpressPrice"
                       style="width: 100%"
                       addon-after="￥"
@@ -1080,6 +1085,8 @@ defineExpose({
                     <a-input-number
                       placeholder="请输入其他费用"
                       v-model:value="formData.elsePercent"
+                      :min="0"
+                      :max="100"
                       style="width: 100%"
                       addon-after="%"
                     />
@@ -1148,11 +1155,13 @@ defineExpose({
                       <a-input-number
                         placeholder="最小值"
                         v-model:value="formData.soldCountMin"
+                        :min="0"
                         style="width: calc(50% - 8px)"
                       />
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大值"
+                        :min="0"
                         v-model:value="formData.soldCountMax"
                         style="width: calc(50% - 8px)"
                       />
@@ -1164,6 +1173,7 @@ defineExpose({
                     <div class="range-input-wrapper">
                       <a-input-number
                         placeholder="最小值"
+                        :min="0"
                         v-model:value="formData.gmvSumMin"
                         style="width: calc(50% - 8px)"
                         addon-before="₽"
@@ -1171,6 +1181,7 @@ defineExpose({
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大值"
+                        :min="0"
                         v-model:value="formData.gmvSumMax"
                         style="width: calc(50% - 8px)"
                         addon-before="₽"
@@ -1195,6 +1206,7 @@ defineExpose({
                     <div class="range-input-wrapper">
                       <a-input-number
                         placeholder="最小价格"
+                        :min="0"
                         v-model:value="formData.salePriceMin"
                         style="width: calc(50% - 8px)"
                         addon-before="₽"
@@ -1202,6 +1214,7 @@ defineExpose({
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大价格"
+                        :min="0"
                         v-model:value="formData.salePriceMax"
                         style="width: calc(50% - 8px)"
                         addon-before="₽"
@@ -1214,12 +1227,14 @@ defineExpose({
                     <div class="range-input-wrapper">
                       <a-input-number
                         placeholder="最小值"
+                        :min="0"
                         v-model:value="formData.followMin"
                         style="width: calc(50% - 8px)"
                       />
                       <span class="separator">至</span>
                       <a-input-number
                         placeholder="最大值"
+                        :min="0"
                         v-model:value="formData.followMax"
                         style="width: calc(50% - 8px)"
                       />
@@ -1251,11 +1266,13 @@ defineExpose({
                   <a-form-item label="评论数">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.numberOfCommentsMin"
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.numberOfCommentsMax"
                       />
@@ -1268,6 +1285,7 @@ defineExpose({
                   <a-form-item label="重量范围">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.weightRangeMin"
                         style="width: calc(50% - 8px)"
@@ -1275,6 +1293,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.weightRangeMax"
                         style="width: calc(50% - 8px)"
@@ -1287,6 +1306,7 @@ defineExpose({
                   <a-form-item label="包装长度">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.packageLengthMin"
                         style="width: calc(50% - 8px)"
@@ -1294,6 +1314,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.packageLengthMax"
                         style="width: calc(50% - 8px)"
@@ -1308,6 +1329,7 @@ defineExpose({
                   <a-form-item label="包装高度">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.packageHeightMin"
                         style="width: calc(50% - 8px)"
@@ -1315,6 +1337,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.packageHeightMax"
                         style="width: calc(50% - 8px)"
@@ -1327,6 +1350,7 @@ defineExpose({
                   <a-form-item label="包装宽度">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.packageWidthMin"
                         style="width: calc(50% - 8px)"
@@ -1334,6 +1358,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.packageWidthMax"
                         style="width: calc(50% - 8px)"
@@ -1348,6 +1373,8 @@ defineExpose({
                   <a-form-item label="点击率">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.clickRateMin"
                         style="width: calc(50% - 8px)"
@@ -1355,6 +1382,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.clickRateMax"
                         style="width: calc(50% - 8px)"
@@ -1367,6 +1396,8 @@ defineExpose({
                   <a-form-item label="成交率">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.nullableRedemptionRateMin"
                         style="width: calc(50% - 8px)"
@@ -1374,6 +1405,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.nullableRedemptionRateMax"
                         style="width: calc(50% - 8px)"
@@ -1388,6 +1421,8 @@ defineExpose({
                   <a-form-item label="退货率">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.returnCancelRateMin"
                         style="width: calc(50% - 8px)"
@@ -1395,6 +1430,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.returnCancelRateMax"
                         style="width: calc(50% - 8px)"
@@ -1407,6 +1444,8 @@ defineExpose({
                   <a-form-item label="月销售动态">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.monthDynamicsMin"
                         style="width: calc(50% - 8px)"
@@ -1414,6 +1453,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.monthDynamicsMax"
                         style="width: calc(50% - 8px)"
@@ -1428,6 +1469,8 @@ defineExpose({
                   <a-form-item label="广告份额">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.adFeeMin"
                         style="width: calc(50% - 8px)"
@@ -1435,6 +1478,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.adFeeMax"
                         style="width: calc(50% - 8px)"
@@ -1447,6 +1492,7 @@ defineExpose({
                   <a-form-item label="参与促销天数">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小天数"
                         v-model:value="formData.promotionDayMin"
                         style="width: calc(50% - 8px)"
@@ -1454,6 +1500,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大天数"
                         v-model:value="formData.promotionDayMax"
                         style="width: calc(50% - 8px)"
@@ -1468,6 +1515,8 @@ defineExpose({
                   <a-form-item label="参与促销折扣">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.promotionDiscountMin"
                         style="width: calc(50% - 8px)"
@@ -1475,6 +1524,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.promotionDiscountMax"
                         style="width: calc(50% - 8px)"
@@ -1508,6 +1559,7 @@ defineExpose({
                   <a-form-item label="付费推广天数">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小天数"
                         v-model:value="formData.promoteDayMin"
                         style="width: calc(50% - 8px)"
@@ -1515,6 +1567,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大天数"
                         v-model:value="formData.promoteDayMax"
                         style="width: calc(50% - 8px)"
@@ -1527,12 +1580,14 @@ defineExpose({
                   <a-form-item label="商品卡片浏览量">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.viewsMin"
                         style="width: calc(50% - 8px)"
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.viewsMax"
                         style="width: calc(50% - 8px)"
@@ -1546,6 +1601,8 @@ defineExpose({
                   <a-form-item label="商品卡片加购率">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.cardRateMin"
                         style="width: calc(50% - 8px)"
@@ -1553,6 +1610,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.cardRateMax"
                         style="width: calc(50% - 8px)"
@@ -1565,6 +1624,8 @@ defineExpose({
                   <a-form-item label="搜索和目录加购率">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.showRateMin"
                         style="width: calc(50% - 8px)"
@@ -1572,6 +1633,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.showRateMax"
                         style="width: calc(50% - 8px)"
@@ -1586,6 +1649,7 @@ defineExpose({
                   <a-form-item label="上架时间">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小天数"
                         v-model:value="formData.upGoodsTimeMin"
                         style="width: calc(50% - 8px)"
@@ -1593,6 +1657,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大天数"
                         v-model:value="formData.upGoodsTimeMax"
                         style="width: calc(50% - 8px)"
@@ -1635,6 +1700,8 @@ defineExpose({
                   <a-form-item label="月销量范围">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最小值"
                         v-model:value="formData.soldCountMin"
                         style="width: calc(50% - 8px)"
@@ -1642,6 +1709,8 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="100"
                         placeholder="最大值"
                         v-model:value="formData.soldCountMax"
                         style="width: calc(50% - 8px)"
@@ -1654,6 +1723,7 @@ defineExpose({
                   <a-form-item label="月销售动态">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.monthDynamicsMin"
                         style="width: calc(50% - 8px)"
@@ -1662,6 +1732,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.monthDynamicsMax"
                         style="width: calc(50% - 8px)"
@@ -1677,6 +1748,7 @@ defineExpose({
                   <a-form-item label="跟卖人数">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
                         placeholder="最小值"
                         v-model:value="formData.followMin"
                         style="width: calc(50% - 8px)"
@@ -1684,6 +1756,7 @@ defineExpose({
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
                         placeholder="最大值"
                         v-model:value="formData.followMax"
                         style="width: calc(50% - 8px)"
@@ -1696,12 +1769,16 @@ defineExpose({
                   <a-form-item label="评分">
                     <div class="range-input-wrapper">
                       <a-input-number
+                        :min="0"
+                        :max="5"
                         placeholder="最小值"
                         v-model:value="formData.ratingMin"
                         disabled
                       />
                       <span class="separator">至</span>
                       <a-input-number
+                        :min="0"
+                        :max="5"
                         placeholder="最大值"
                         v-model:value="formData.ratingMax"
                         disabled

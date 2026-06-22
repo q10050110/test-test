@@ -11,7 +11,7 @@ import {
 const store = useAppStore()
 const isMax = ref(false)
 const open = ref(false)
-const desc = ref('真的真的要退出吗T_T？')
+const desc = ref('请确认是否要退出，如有选品数据未导出请先导出，退出后将无法找回。')
 const btnText = computed(() => {
   if (store.updateStatus === 'downloaded') return '立即安装'
   return '立即下载'
@@ -49,7 +49,7 @@ const openUrl = () => {
 }
 const cancelHandle = () => {
   open.value = false
-  desc.value = '真的真的要退出吗T_T？'
+  desc.value = '请确认是否要退出，如有选品数据未导出请先导出，退出后将无法找回。'
 }
 
 window.electronAPI.on('maximize', () => {

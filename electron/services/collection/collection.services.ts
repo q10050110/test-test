@@ -12,7 +12,7 @@ import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
 import { autoUpGoods } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
-import type { Response } from './type.js'
+import type { Query, Response } from './type.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -33,12 +33,15 @@ export class Collection {
   private isWrite = false // 是否写入
   private writeQueue: any[] = []
   private expendShopCount = 0
-  private query: { pageNo: number, pageSize: number, total: number, maxPage: number, categories: number[] } = {
+  private total = 0
+  private query: Query = {
     pageNo: 1,
     pageSize: 30,
     total: 0,
     maxPage: 99,
-    categories: []
+    categories: [],
+    isAutoBang: true,
+    lastSortValues: [],
   }
   constructor(task: Task, mainWindow: BrowserWindow) {
     this.task = task
@@ -50,6 +53,7 @@ export class Collection {
     this.parseService = new ParseService(this.mainWindowService)
     this.windowService = new WindowService(this.parseService)
     this.query.categories = [...new Set(task.categoryIds?.flat(2) || [])]
+    this.initQueryParams(task)
   }
   run() {
     let timer: NodeJS.Timeout | undefined
@@ -173,17 +177,16 @@ export class Collection {
         if (this.reason && this.reason !== 'success') throw new Error('任务终止')
         if (this.reason === 'success') break
         if (this.taskQueueService.getTaskCount() > 20) {
-          this.outputLog('任务队列数据源充足，等待处理中')
+          this.outputLog(`任务队列数据源充足，等待处理中。分类总数量${this.total}`)
           await new Promise((resolve) => setTimeout(resolve, 2000))
           continue
         }
         const dataList = await this.getCategoryGoodsList()
         const targetList = await this.parseService.ozonDetailListParser(dataList)
-        this.outputLog('获取商品成功')
+        this.outputLog(`获取商品成功。分类总数量${this.total}`)
         await this.categoryProcess(targetList)
       }
       if (!this.reason) this.reason = 'success'
-      this.outputLog(`分类选品模式结束，已获取${this.targetData}个商品`)
     } catch (error) {
       return error
     }
@@ -198,6 +201,8 @@ export class Collection {
     const apiList = []
     for (const goods of filterData) {
       if (this.targetData >= (this.task.targetCount || Infinity)) return
+      goods.nullableCreateDate = dayjs(goods.nullableCreateDate).format('YYYY-MM-DD')
+      goods.releaseDate = dayjs().diff(dayjs(goods.nullableCreateDate), 'day')
       apiList.push(this.getHtmlDetailData(goods))
     }
     const res = await Promise.all(apiList)
@@ -235,6 +240,8 @@ export class Collection {
       if (!data.total || this.query.pageNo >= this.query.maxPage) this.reason = 'success'
       this.query.pageNo += 1
       this.query.maxPage = data.total / this.query.pageSize
+      this.query.lastSortValues = data.lastSortValues
+      this.total = data.total
       return data.list || []
     } else {
       this.reason = 'failed'
@@ -664,5 +671,49 @@ export class Collection {
     this.goodsData.clear()
     this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)
     this.outputLog('清理完成')
+  }
+
+  /** 
+   * 初始化查询参数
+    */
+  async initQueryParams(task: Task) {
+    this.query.weightRangeMin = task.weightRangeMin
+    this.query.weightRangeMax = task.weightRangeMax
+    this.query.packageLengthMin = task.packageLengthMin
+    this.query.packageLengthMax = task.packageLengthMax
+    this.query.packageWidthMin = task.packageWidthMin
+    this.query.packageWidthMax = task.packageWidthMax
+    this.query.packageHeightMin = task.packageHeightMin
+    this.query.packageHeightMax = task.packageHeightMax
+    this.query.nullableRedemptionRateMin = task.nullableRedemptionRateMin
+    this.query.nullableRedemptionRateMax = task.nullableRedemptionRateMax
+    this.query.returnCancelRateMin = task.returnCancelRateMin
+    this.query.returnCancelRateMax = task.returnCancelRateMax
+    this.query.brandType = task.brandType
+    this.query.gmvSumMin = task.gmvSumMin
+    this.query.gmvSumMax = task.gmvSumMax
+    this.query.searchAndCartConversionMin = task.showRateMin
+    this.query.searchAndCartConversionMax = task.showRateMax
+    this.query.soldCountMin = task.soldCountMin
+    this.query.soldCountMax = task.soldCountMax
+    this.query.shelfDateMin = task.upGoodsTimeMin
+    this.query.shelfDateMax = task.upGoodsTimeMax
+    this.query.salesDynamicsMin = task.monthDynamicsMin
+    this.query.salesDynamicsMax = task.monthDynamicsMax
+    this.query.drrMin = task.adFeeMin
+    this.query.drrMax = task.adFeeMax
+    this.query.daysInPromoMin = task.promotionDayMin
+    this.query.daysInPromoMax = task.promotionDayMax
+    this.query.discountMin = task.promotionDiscountMin
+    this.query.discountMax = task.promotionDiscountMax
+    this.query.promoRevenueShareMin = task.promotionDynamicsMin
+    this.query.promoRevenueShareMax = task.promotionDynamicsMax
+    this.query.daysWithTrafaretsMin = task.promoteDayMin
+    this.query.daysWithTrafaretsMax = task.promoteDayMax
+    this.query.qtyViewPdpMin = task.viewsMin
+    this.query.qtyViewPdpMax = task.viewsMax
+    this.query.pdpToCartConversionMin = task.cardRateMin
+    this.query.pdpToCartConversionMax = task.cardRateMax
+    this.query.salesSchema = task.salesSchema
   }
 }

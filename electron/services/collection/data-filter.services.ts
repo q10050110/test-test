@@ -185,11 +185,6 @@ export class DataProcessService {
         const result = this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax)
         return result
       },
-      // 销售价格范围校验
-      (item: any) => {
-        const result = this.checkRange(item.price, task.salePriceMin, task.salePriceMax)
-        return result
-      },
       // 重量范围校验
       (item: any) => {
         const result = this.checkRange(item.weight, task.weightMin, task.weightMax)
@@ -305,6 +300,11 @@ export class DataProcessService {
     ]
 
     const filters2 = [
+      // 销售价格范围校验
+      (item: any) => {
+        const result = this.checkRange(item.price, task.salePriceMin, task.salePriceMax)
+        return result
+      },
       // 跟卖人数范围校验
       (item: any) => {
         const result = this.checkRange(item.sellerNumber, task.followMin, task.followMax)

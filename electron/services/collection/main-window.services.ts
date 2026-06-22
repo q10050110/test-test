@@ -35,7 +35,6 @@ export class MainWindowService {
           backgroundThrottling: false,
         },
       })
-      this.browserWindow.webContents.openDevTools()
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()
@@ -242,7 +241,7 @@ export class MainWindowService {
           `)
       return response
     } catch (error) {
-      console.log(error)
+      console.log('获取页面数据报错~~')
       return { success: false, data: {} }
     }
   }
