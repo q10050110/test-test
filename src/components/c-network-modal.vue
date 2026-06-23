@@ -43,6 +43,8 @@ window.electronAPI.on('network-error', (data) => {
           当前网络连接已中断，任务无法继续执行。
           <br />
           您可以尝试重新检测网络，或先导出已获取的数据后退出程序。
+          <br />
+          <span style="color: red">tips：导出的数据将会在桌面的sp_bang文价夹中~</span>
         </div>
 
         <div class="network-error__actions">
@@ -58,7 +60,7 @@ window.electronAPI.on('network-error', (data) => {
 .network-error {
   padding: 12px 8px;
   text-align: center;
-
+  -webkit-app-region: no-drag !important;
   &__icon {
     font-size: 56px;
     margin-bottom: 16px;

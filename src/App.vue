@@ -96,9 +96,9 @@ onMounted(async () => {
   <a-config-provider :locale="zhCN" :theme="appStore.theme">
     <router-view v-if="!appStore.loading" />
     <c-loading v-else />
-    <c-modal ref="cModalRef" :progress="progress" />
-    <c-close-modal />
-    <c-network-modal />
+    <c-modal ref="cModalRef" :progress="progress" v-if="!appStore.loading" />
+    <c-close-modal v-if="!appStore.loading" />
+    <c-network-modal v-if="!appStore.loading" />
   </a-config-provider>
 </template>
 

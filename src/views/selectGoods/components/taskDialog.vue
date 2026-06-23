@@ -165,7 +165,7 @@ const conditionFormData = ref<ConditionForm>({
   cardRateMax: undefined,
   showRateMin: undefined,
   showRateMax: undefined,
-  salesSchema: 'FBO,FBS',
+  salesSchema: undefined,
   followMin: undefined,
   followMax: undefined,
   numberOfCommentsMin: undefined,
