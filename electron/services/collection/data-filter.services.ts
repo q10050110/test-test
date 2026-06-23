@@ -279,17 +279,17 @@ export class DataProcessService {
       },
       // 包装长度范围校验
       (item: any) => {
-        const result = this.checkRange(item.packageLength, task.packageLengthMin, task.packageLengthMax)
+        const result = this.checkRange(item.length, task.packageLengthMin, task.packageLengthMax)
         return result
       },
       // 包装高度范围校验
       (item: any) => {
-        const result = this.checkRange(item.packageHeight, task.packageHeightMin, task.packageHeightMax)
+        const result = this.checkRange(item.height, task.packageHeightMin, task.packageHeightMax)
         return result
       },
       // 包装宽度范围校验
       (item: any) => {
-        const result = this.checkRange(item.packageWidth, task.packageWidthMin, task.packageWidthMax)
+        const result = this.checkRange(item.width, task.packageWidthMin, task.packageWidthMax)
         return result
       },
       // 退货取消率校验

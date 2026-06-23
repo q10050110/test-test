@@ -135,7 +135,7 @@ export class ParseService {
         if (!str) return 0;
         return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0;
       };
-      const price = cleanPrice(widgetStatesPrice?.cardPrice);
+      const price = cleanPrice(widgetStatesPrice?.cardPrice || widgetStatesPrice?.price);
       const oPrice = cleanPrice(widgetStatesPrice?.originalPrice);
       let str = widgetStatesScore?.text || ''
       const match = str.match(/([0-5](?:\.\d)?)[^0-9]*(\d[\d\s]*)/i)

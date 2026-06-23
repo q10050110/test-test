@@ -197,6 +197,7 @@ export class Collection {
     */
   async categoryProcess(list: any[]) {
     const filterData = await this.dataProcessService.filterData(list, this.task, 'base')
+    if (!filterData.length) return
     const baseData: any[] = []
     const apiList = []
     for (const goods of filterData) {
