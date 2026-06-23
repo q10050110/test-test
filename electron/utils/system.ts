@@ -425,6 +425,37 @@ export class SysTemUtils {
         console.error('删除文件夹失败：', error)
       }
     },
+    /** 
+     * 拷贝文件夹
+      */
+    copyFolder: (source: string, destination: string) => {
+      try {
+        if (existsSync(source)) {
+          const entries = readdirSync(source, { withFileTypes: true })
+
+          if (!existsSync(destination)) {
+            mkdirSync(destination, { recursive: true })
+          }
+
+          for (const entry of entries) {
+            const srcPath = join(source, entry.name)
+            const destPath = join(destination, entry.name)
+
+            if (entry.isDirectory()) {
+              // 递归复制子目录
+              this.fileOperations.copyFolder(srcPath, destPath)
+            } else {
+              // 复制文件
+              copyFileSync(srcPath, destPath)
+            }
+          }
+        } else {
+          return false
+        }
+      } catch (error) {
+        console.error('复制文件夹失败：', error)
+      }
+    },
   }
   /**
    * 对话框操作

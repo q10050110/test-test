@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
 import { SysTemUtils } from '../utils/system.js'
 import { UpdaterManager } from '../services/update.services.js'
+import { checkNetworkStatus } from '../utils/index.js'
 import { getConfig } from '../config/index.js'
 export const windowIpc = (win: BrowserWindow) => {
   ipcMain.on('window', async (event, data: 'hide' | 'close' | 'maximize' | 'minimize') => {
@@ -54,5 +55,9 @@ export const windowIpc = (win: BrowserWindow) => {
 
   ipcMain.handle('get-config', async () => {
     return await getConfig()
+  })
+
+  ipcMain.handle('check-network', async () => {
+    return checkNetworkStatus()
   })
 }

@@ -47,7 +47,10 @@ request.interceptors.response.use(
   },
   (error) => {
     log.error(`${error?.config?.url || error}接口报错：${error?.config?.message || error}`)
-    if (error.code === 'ENOTFOUND') return Promise.reject('当前网络不可用')
+    if (error.code === 'ENOTFOUND') {
+      globalBroadcast.broadcast('network-error', { code: error.code, message: '当前网络不可用' })
+      return Promise.reject('当前网络不可用')
+    }
     return Promise.reject(error)
   },
 )

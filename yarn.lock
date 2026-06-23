@@ -1464,13 +1464,6 @@
   dependencies:
     undici-types "~6.21.0"
 
-"@types/node@^24.10.4":
-  version "24.10.8"
-  resolved "https://registry.npmmirror.com/@types/node/-/node-24.10.8.tgz#9b529d32e7e5adb74b13d1fc9b83615e9a12a701"
-  integrity sha512-r0bBaXu5Swb05doFYO2kTWHMovJnNVbCsII0fhesM8bNRlLhXIuckley4a2DaD+vOdmm5G+zGkQZAPZsF80+YQ==
-  dependencies:
-    undici-types "~7.16.0"
-
 "@types/pako@^2.0.4":
   version "2.0.4"
   resolved "https://registry.npmmirror.com/@types/pako/-/pako-2.0.4.tgz#c3575ef8125e176c345fa0e7b301c1db41170c15"

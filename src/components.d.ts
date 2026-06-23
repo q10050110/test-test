@@ -41,6 +41,7 @@ declare module 'vue' {
     CCloseModal: typeof import('./components/c-close-modal.vue')['default']
     CLoading: typeof import('./components/c-loading.vue')['default']
     CModal: typeof import('./components/c-modal.vue')['default']
+    CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -77,6 +78,7 @@ declare global {
   const CCloseModal: typeof import('./components/c-close-modal.vue')['default']
   const CLoading: typeof import('./components/c-loading.vue')['default']
   const CModal: typeof import('./components/c-modal.vue')['default']
+  const CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

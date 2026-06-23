@@ -2,6 +2,7 @@ import request from './request.js'
 import pako from 'pako'
 import Decimal from 'decimal.js'
 import log from '../log/index.js'
+import * as dns from 'node:dns';
 export const compressData = (text: any) => {
   text = JSON.stringify(text)
   // 将文本数据转换为 Uint8Array
@@ -97,4 +98,21 @@ export const getShopCurCode = (code: keyof typeof codeMap) => {
   }
 
   return getCurrencyName(code)
+}
+
+/** 
+ * 检测网络是否可用
+  */
+export const checkNetworkStatus = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    dns.resolve('baidu.com', (err) => {
+      if (err) {
+        console.error('网络不可用:');
+        resolve(false);
+      } else {
+        console.log('网络可用');
+        resolve(true);
+      }
+    });
+  });
 }

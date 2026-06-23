@@ -73,7 +73,7 @@ const initData = ref<Task>({
   cardRateMax: undefined,
   showRateMin: undefined,
   showRateMax: undefined,
-  salesSchema: 'FBO,FBS',
+  salesSchema: undefined,
   followMin: undefined,
   followMax: undefined,
   token: '',

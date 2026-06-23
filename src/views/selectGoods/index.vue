@@ -315,13 +315,19 @@ const changeTaskQueueCount = () => {
   window.electronAPI.invoke('set-max-concurrent-task-count', taskQueueCount.value)
 }
 
+const refreshTaskList = () => {
+  getTaskList()
+}
+
 onMounted(async () => {
   taskQueueCount.value = await window.electronAPI.invoke('get-current-task-count', {})
   window.electronAPI.on('task-progress', getProgress)
+  window.electronAPI.on('refresh-task-list', refreshTaskList)
 })
 
 onUnmounted(() => {
   window.electronAPI.off('task-progress', getProgress)
+  window.electronAPI.off('refresh-task-list', refreshTaskList)
 })
 </script>
 

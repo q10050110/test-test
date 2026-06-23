@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, shell } from 'electron'
+import { ipcMain, BrowserWindow, shell, app } from 'electron'
 import { TaskManager } from '../services/collection/task-manager.services.js'
 import { SysTemUtils } from '../utils/system.js'
 import log from '../log/index.js'
@@ -8,6 +8,7 @@ import {
   getConfigList,
   getCategoryList
 } from '../services/collection/interface.services.js'
+import { join } from 'node:path'
 export const collectionIpc = (win: BrowserWindow) => {
   const taskManager = TaskManager.getInstance()
   taskManager.setMainWindow(win)
@@ -208,9 +209,10 @@ export const collectionIpc = (win: BrowserWindow) => {
   })
 
   // 取消所有任务
-  ipcMain.handle('collection-cancel-all-task', async (event, taskId: string) => {
+  ipcMain.handle('collection-cancel-all-task', async (event, refresh: boolean = false) => {
     try {
       await taskManager.stopAllTasks()
+      if (refresh) win.webContents.send('refresh-task-list')
       return true
     } catch (error) {
       log.error(error)
@@ -310,6 +312,21 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 设置最大并发任务数
   ipcMain.handle('set-max-concurrent-task-count', async (event, count) => {
     taskManager.setMaxConcurrentTasks(count)
+    return true
+  })
+
+  // 下载所有表格
+  ipcMain.handle('download-all-tables', async (event) => {
+    try {
+      const desktopPath = app.getPath('desktop')
+      const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
+      const timestamp = new Date().getTime()
+      const folderName = `sp_bang_${timestamp}`
+      const dest = join(desktopPath, folderName)
+      await SysTemUtils.fileOperations.copyFolder(excelDir, dest)
+    } catch (error) {
+      log.error('导出所有表格失败~', error)
+    }
     return true
   })
 }

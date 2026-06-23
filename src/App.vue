@@ -98,6 +98,7 @@ onMounted(async () => {
     <c-loading v-else />
     <c-modal ref="cModalRef" :progress="progress" />
     <c-close-modal />
+    <c-network-modal />
   </a-config-provider>
 </template>
 

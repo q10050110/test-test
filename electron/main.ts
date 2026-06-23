@@ -230,7 +230,7 @@ class ElectronApp {
       // 只有在致命错误时才重启
       if (this.isFatalError(error) && app.isReady()) {
         this.isAppCrashed = true // 标记应用崩溃
-        log.info('检测到致命异常，执行重启策略...')
+        log.info('检测到致命异常，执行重启策略...', error)
 
         if (this.shouldAllowRestart()) {
           log.info('符合重启条件，正在重启应用...')
