@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { QuestionCircleOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons-vue'
 import type { FormInstance } from 'ant-design-vue'
+import type { ShowSearchType } from 'ant-design-vue/es/cascader'
 import type { Rule } from 'ant-design-vue/es/form'
 import { Cascader } from 'ant-design-vue'
 import type {
@@ -586,6 +587,11 @@ const autoUpHandle = async (val: any) => {
   }
   formData.value.isUseAutoUpGoods = val
 }
+
+// 分类搜索
+const filter: ShowSearchType['filter'] = (inputValue, path) => {
+  return path.some((option) => option.name.includes(inputValue))
+}
 defineExpose({
   mode,
   formData,
@@ -725,6 +731,7 @@ defineExpose({
                     placeholder="请选择商品类目"
                     :disabled="formData.isUseCategorySelect === 1"
                     expandTrigger="hover"
+                    :show-search="{ filter }"
                     multiple
                     :fieldNames="{
                       label: 'name',
