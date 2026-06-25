@@ -243,6 +243,9 @@ export class Collection {
       this.query.maxPage = data.total / this.query.pageSize
       this.query.lastSortValues = data.lastSortValues
       this.total = data.total
+      data.list.forEach(item => {
+        if (item.brand === 'без бренда') item.brand = ''
+      })
       return data.list || []
     } else {
       this.reason = 'failed'
