@@ -202,8 +202,6 @@ export class Collection {
     const apiList = []
     for (const goods of filterData) {
       if (this.targetData >= (this.task.targetCount || Infinity)) return
-      goods.nullableCreateDate = dayjs(goods.nullableCreateDate).format('YYYY-MM-DD')
-      goods.releaseDate = dayjs().diff(dayjs(goods.nullableCreateDate), 'day')
       apiList.push(this.getHtmlDetailData(goods))
     }
     const res = await Promise.all(apiList)
@@ -245,6 +243,8 @@ export class Collection {
       this.total = data.total
       data.list.forEach((item: any) => {
         if (item.brand === 'без бренда') item.brand = ''
+        item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD')
+        item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
       })
       return data.list || []
     } else {

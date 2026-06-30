@@ -100,6 +100,8 @@ export class DataProcessService {
       let item = res.data[0]
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
+      if (!item.commissionRfbs) item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
+      if (!item.commissionFbp) item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
       item.chineseName = await this.getChineseName(item.nameLabel)
       return [item]
     } catch (error) {

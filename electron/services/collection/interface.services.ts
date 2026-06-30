@@ -194,7 +194,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       .splice(0, 100)
       .map((item) => ({
         goods_id: item.id,
-        name: item.nameLabel,
+        name: '',
         offer_id: config?.offerIdPrefix ? config.offerIdPrefix : '',
         old_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
         origin_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
