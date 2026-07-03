@@ -39,12 +39,6 @@ export class DataProcessService {
             item.discount = item?.discount?.toFixed(2)
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-            if (SysTemUtils.getEnv() !== 'development') {
-              item.length = undefined
-              item.weight = undefined
-              item.height = undefined
-              item.width = undefined
-            }
             item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 0) * 100)?.toFixed(2)
             if (item.goods_id) this.data.set(item.goods_id, item)
           })
@@ -185,11 +179,6 @@ export class DataProcessService {
       // 月销售额范围校验
       (item: any) => {
         const result = this.checkRange(item.gmvSum, task.gmvSumMin, task.gmvSumMax)
-        return result
-      },
-      // 重量范围校验
-      (item: any) => {
-        const result = this.checkRange(item.weight, task.weightMin, task.weightMax)
         return result
       },
       // 上架时间范围校验

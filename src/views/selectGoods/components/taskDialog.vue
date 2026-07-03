@@ -52,8 +52,6 @@ const initData = ref<Task>({
   gmvSumMax: undefined,
   salePriceMin: undefined,
   salePriceMax: undefined,
-  weightMin: undefined,
-  weightMax: undefined,
   upGoodsTimeMin: undefined,
   upGoodsTimeMax: undefined,
   monthDynamicsMin: undefined,
