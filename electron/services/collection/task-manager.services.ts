@@ -5,7 +5,8 @@ import request from '../../utils/request.js'
 import { Task } from './type.js'
 import { SysTemUtils } from '../../utils/system.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
-import { autoUpGoods } from './interface.services.js'
+import { autoUpGoods, autoSaveData } from './interface.services.js'
+import { operationStore } from '../../store/index.js'
 import os from 'os'
 import { join } from 'path'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
@@ -500,4 +501,20 @@ export class TaskManager {
     result.upGoodsList.forEach((item: any) => data.set(item.id, item))
     return autoUpGoods(task, data)
   }
+
+  // 保存数据
+  /*   async saveData(list: any[]) {
+      const taskList = operationStore.get('taskList') || []
+      for (const item of list) {
+        const localData = operationStore.get(item)
+        if (localData) {
+          const code = await autoSaveData({ taskId: item, datas: localData.taskData })
+          if (!code) {
+            operationStore.delete(item)
+            taskList.splice(taskList.indexOf(item), 1)
+            operationStore.set('taskList', taskList)
+          }
+        }
+      }
+    } */
 }

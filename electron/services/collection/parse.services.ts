@@ -96,9 +96,9 @@ export class ParseService {
     for (const item of uniqueData) {
       const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
-        item.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
-        item.sellerNumber = item?.sellers?.sellers?.length || undefined
-        const priceList = item?.sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < item.price)
+        const sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        item.sellerNumber = sellers?.sellers?.length || undefined
+        const priceList = sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < item.price)
         item.sellerNumber1 = item.sellerNumber
         item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
         item.followMinPrice1 = item.followMinPrice
@@ -136,6 +136,7 @@ export class ParseService {
         return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0;
       };
       const price = cleanPrice(widgetStatesPrice?.cardPrice || widgetStatesPrice?.price);
+      const blackPrice = cleanPrice(widgetStatesPrice?.price);
       const oPrice = cleanPrice(widgetStatesPrice?.originalPrice);
       let str = widgetStatesScore?.text || ''
       const match = str.match(/([0-5](?:\.\d)?)[^0-9]*(\d[\d\s]*)/i)
@@ -166,13 +167,13 @@ export class ParseService {
         oPrice1: oPrice,
         rating,
         reviewCountLabel,
-        sellers,
         sellerNumber,
         sellerNumber1,
         followMinPrice,
         followMinPrice1,
         cover: goods.photo,
         nameLabel: goods.name,
+        blackPrice,
         ...goods
       }
     } catch (error) {

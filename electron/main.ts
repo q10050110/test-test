@@ -150,6 +150,7 @@ class ElectronApp {
       try {
         const isExecuteClose = operationStore.get('is-execute-close')
         if (!isExecuteClose) new CloseProcessService().run()
+        /*         new CloseProcessService().syncData() */
         operationStore.set('is-execute-close', false)
         createWindow()
         log.info('主窗口创建成功')

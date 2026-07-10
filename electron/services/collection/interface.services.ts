@@ -217,3 +217,39 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   }
   return result.length ? result.join(',') : 'success'
 }
+
+/** 
+ * 保存数据接口
+  */
+const saveData = async (data: { taskId: string, datas: any[] }) => {
+  try {
+    const res = await request<
+      { code: number; data: null; message: string },
+      { code: number; data: null; message: string }
+    >({
+      url: '/api/goods/autoTask/saveAutoPickRecords',
+      method: 'post',
+      data
+    })
+    return res
+  } catch (error: any) {
+    return {
+      code: 500,
+      message: error,
+      data: null
+    }
+  }
+}
+
+export const autoSaveData = async (data: { taskId: string, datas: any[] }) => {
+  const { datas } = data;
+  while (datas.length > 0) {
+    const chunk = datas.splice(0, 1000);
+    const { code, message } = await saveData({ taskId: data.taskId, datas: chunk });
+    if (code) {
+      log.error('保存数据失败', message)
+      return code
+    }
+  }
+  return 0
+}

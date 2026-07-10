@@ -27,6 +27,7 @@ export class ExcelService {
         { header: '品牌', key: 'brand', width: 20 },
         { header: '销售价格（₽）', key: 'price', width: 15 },
         { header: '原价（₽）', key: 'oPrice', width: 15 },
+        { header: '黑标价（₽）', key: 'blackPrice', width: 15 },
         { header: '商品评分', key: 'rating', width: 10 },
         { header: '评价次数', key: 'reviewCountLabel', width: 10 },
         { header: '跟卖人数', key: 'sellerNumber', width: 10 },

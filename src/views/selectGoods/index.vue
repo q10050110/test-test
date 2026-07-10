@@ -11,6 +11,7 @@ import {
   SearchOutlined,
   InfoCircleFilled,
   QuestionCircleOutlined,
+  EyeOutlined,
 } from '@ant-design/icons-vue'
 import TaskDialog from './components/taskDialog.vue'
 import feedback from '@/utils/feedback'
@@ -308,7 +309,7 @@ const bgColor = (value?: string) => {
   return value ? (value === 'success' ? '#6bb64b' : '#ff7875') : '#1a7aff'
 }
 
-const goErp = () => window.electronAPI.sendMessage('go-erp', 'batchRecord')
+const goErp = (url: string) => window.electronAPI.sendMessage('go-erp', url)
 
 // 改变采集任务并发数量
 const changeTaskQueueCount = () => {
@@ -411,7 +412,7 @@ onUnmounted(() => {
                   class="autoUp"
                   v-if="record.isUseAutoUpGoods"
                   :style="{ backgroundColor: bgColor(record.autoResult) }"
-                  @click="goErp"
+                  @click="goErp('batchRecord')"
                 >
                   <a-tooltip v-if="record.autoResult === undefined">
                     <template #title>任务完成后将会自动上架商品</template>
@@ -484,7 +485,7 @@ onUnmounted(() => {
               <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)"
                 >复制</a-button
               >
-              <a-tooltip placement="topRight">
+              <!-- <a-tooltip placement="topRight">
                 <template #title>
                   <span>{{
                     record.taskStatus === 'noExecuted'
@@ -503,7 +504,13 @@ onUnmounted(() => {
                   }"
                   >导出</a-button
                 >
-              </a-tooltip>
+              </a-tooltip> -->
+              <a-button
+                type="link"
+                :icon="h(EyeOutlined)"
+                @click="goErp(`purchaseRecord?taskId=${record._id}`)"
+                >查看</a-button
+              >
               <a-tooltip placement="topRight" v-if="record.isUseAutoUpGoods">
                 <template #title>
                   <span>将表格中的商品上架至OZON后台</span>

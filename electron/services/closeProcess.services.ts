@@ -13,6 +13,12 @@ export class CloseProcessService {
     await SysTemUtils.fileOperations.deleteFolder(excelDir)
   }
 
+  /*   async syncData() {
+      const taskList = operationStore.get('taskList') || []
+      const needAsyncList = taskList.filter((taskId: any) => !operationStore.get(taskId)?.isAsync)
+      if (needAsyncList.length) await TaskManager.getInstance().saveData(needAsyncList)
+    } */
+
   async run() {
     const token = operationStore.get('token')
     operationStore.set('is-execute-close', true)

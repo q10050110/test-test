@@ -10,9 +10,10 @@ import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
-import { autoUpGoods } from './interface.services.js'
+import { autoUpGoods, autoSaveData } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 import type { Query, Response } from './type.js'
+import { operationStore } from '../../store/index.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -31,6 +32,7 @@ export class Collection {
   private goodsNum = 0 // 获取商品的数量
   private writeError = false // 写入错误
   private isWrite = false // 是否写入
+  /*   private localTask: { isAsync: boolean, taskData: any[] } // 本地数据 */
   private writeQueue: any[] = []
   private expendShopCount = 0
   private total = 0
@@ -54,6 +56,11 @@ export class Collection {
     this.windowService = new WindowService(this.parseService)
     this.query.categories = [...new Set(task.categoryIds?.flat(2) || [])]
     this.initQueryParams(task)
+    /*     const taskList = operationStore.get('taskList') || []
+        this.localTask = { isAsync: false, taskData: [] }
+        taskList.push(task._id)
+        operationStore.set(task._id, this.localTask)
+        operationStore.set('taskList', [...new Set(taskList)]) */
   }
   run() {
     let timer: NodeJS.Timeout | undefined
@@ -118,14 +125,15 @@ export class Collection {
         }
         if (this.task.isUseAutoUpGoods)
           this.task.autoResult = await autoUpGoods(this.task, this.goodsData)
-        await this.reWriteTable()
+        // await this.reWriteTable()
         this.updateStatus('completed')
         this.outputLog('任务完成')
       } catch (error) {
-        console.log(error, '你出啥毛病了？')
-        if (this.reason) return
-        this.updateStatus('failed')
-        this.outputLog(`采集失败：${error}`)
+        log.error(error, 'run出错')
+        if (!this.reason) {
+          this.updateStatus('failed')
+          this.outputLog(`采集失败：${error}`)
+        }
       } finally {
         if (this.task.taskStatus === 'running') {
           switch (this.reason) {
@@ -203,6 +211,7 @@ export class Collection {
     for (const goods of filterData) {
       if (this.targetData >= (this.task.targetCount || Infinity)) return
       apiList.push(this.getHtmlDetailData(goods))
+      await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     const res = await Promise.all(apiList)
     res.forEach(item => {
@@ -529,14 +538,30 @@ export class Collection {
           reqDatas: [task],
           upMode: this.task.upMode
         })
-        this.writeQueue.push(detailData)
-        this.writeTable()
+        this.process--
+        if (detailData.length) await this.pushData(detailData)
+        // this.writeQueue.push(detailData)
+        // this.writeTable()
         safeResolve('单个商品处理完成')
       } catch (error) {
         log.error(error, '单个商品任务失败')
         safeReject(new Error('单个商品任务失败'), reject)
       }
     })
+  }
+
+  /** 
+   * 防止竞态写入
+    */
+  async pushData(detailData: any) {
+    const uuid = this.uuid
+    if (this.targetData < (this.task.targetCount || Infinity) &&
+      (this.reason === 'success' || this.reason === undefined) &&
+      this.uuid === uuid) {
+      this.goodsData.set(detailData[0]?.id, detailData[0])
+      const code = await autoSaveData({ taskId: this.task._id, datas: detailData })
+      if (!code) this.targetData++
+    }
   }
 
   /**
@@ -576,7 +601,7 @@ export class Collection {
   closeHandle = async () => {
     let uuid = this.uuid
     if (!this.reason && this.uuid === uuid) {
-      await this.reWriteTable()
+      // await this.reWriteTable()
       this.reason = 'failed'
       // await this.clearStatus()
       this.process = 0
@@ -644,7 +669,7 @@ export class Collection {
   async cancel() {
     if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
     this.reason = 'cancel'
-    this.reWriteTable()
+    // this.reWriteTable()
     // this.clearStatus(true)
     this.process = 0
     this.mainWindowService.destroy()
