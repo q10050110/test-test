@@ -13,7 +13,6 @@ import { randomUUID } from 'crypto'
 import { autoUpGoods, autoSaveData } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 import type { Query, Response } from './type.js'
-import { operationStore } from '../../store/index.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -193,6 +192,7 @@ export class Collection {
         const targetList = await this.parseService.ozonDetailListParser(dataList)
         this.outputLog(`获取商品成功。分类总数量${this.total}`)
         await this.categoryProcess(targetList)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
       if (!this.reason) this.reason = 'success'
     } catch (error) {
@@ -209,7 +209,7 @@ export class Collection {
     const baseData: any[] = []
     const apiList = []
     for (const goods of filterData) {
-      if (this.targetData >= (this.task.targetCount || Infinity)) return
+      if (this.targetData >= (this.task.targetCount || Infinity) || (this.reason && this.reason !== 'success')) return
       apiList.push(this.getHtmlDetailData(goods))
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
@@ -254,6 +254,7 @@ export class Collection {
         if (item.brand === 'без бренда') item.brand = ''
         item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD')
         item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
+        item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 1) * 100)?.toFixed(2)
       })
       return data.list || []
     } else {

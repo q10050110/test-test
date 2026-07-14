@@ -39,7 +39,7 @@ export class DataProcessService {
             item.discount = item?.discount?.toFixed(2)
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-            item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 0) * 100)?.toFixed(2)
+            item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 1) * 100)?.toFixed(2)
             if (item.goods_id) this.data.set(item.goods_id, item)
           })
       }
