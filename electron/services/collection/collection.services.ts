@@ -539,9 +539,9 @@ export class Collection {
           upMode: this.task.upMode
         })
         this.process--
-        if (detailData.length) await this.pushData(detailData)
-        // this.writeQueue.push(detailData)
+        if (detailData.length) this.writeQueue.push(detailData)
         // this.writeTable()
+        this.pushData()
         safeResolve('单个商品处理完成')
       } catch (error) {
         log.error(error, '单个商品任务失败')
@@ -553,15 +553,26 @@ export class Collection {
   /** 
    * 防止竞态写入
     */
-  async pushData(detailData: any) {
+  async pushData() {
     const uuid = this.uuid
-    if (this.targetData < (this.task.targetCount || Infinity) &&
-      (this.reason === 'success' || this.reason === undefined) &&
-      this.uuid === uuid) {
-      this.goodsData.set(detailData[0]?.id, detailData[0])
-      const code = await autoSaveData({ taskId: this.task._id, datas: detailData })
-      if (!code) this.targetData++
+    if (this.isWrite) return
+    this.isWrite = true
+    while (this.writeQueue.length) {
+      if (
+        this.targetData < (this.task.targetCount || Infinity) &&
+        (this.reason === 'success' || this.reason === undefined) &&
+        this.uuid === uuid
+      ) {
+        const detailData = this.writeQueue.shift()
+        this.goodsData.set(detailData[0]?.id, detailData[0])
+        const code = await autoSaveData({ taskId: this.task._id, datas: detailData })
+        if (!code) this.targetData++
+        this.outputLog('单个商品处理完成')
+      } else {
+        break
+      }
     }
+    this.isWrite = false
   }
 
   /**
