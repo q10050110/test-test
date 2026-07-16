@@ -156,9 +156,12 @@ export class ParseService {
         followMinPrice = priceList?.length ? Math.min(...priceList) : price
         followMinPrice1 = priceList?.length ? Math.min(...priceList) : price
       } else {
+        sellerNumber = undefined
+        sellerNumber1 = undefined
+        followMinPrice = price
+        followMinPrice1 = price
         log.error('获取跟卖数据失败')
       }
-
       return {
         id: goods._id,
         price,
