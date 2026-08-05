@@ -4,6 +4,7 @@ import { operationStore } from '../../store/index.js'
 import { compressData } from '../../utils/index.js'
 import log from '../../log/index.js'
 import { getRate, currencyConversion, getShopCurCode } from '../../utils/index.js'
+import dayjs from 'dayjs'
 import { runInNewContext } from 'node:vm'
 let configList: ConfigList = []
 let shopList: ShopData[] = []
@@ -197,21 +198,19 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       .map((item) => ({
         goods_id: item.id,
         name: '',
-        offer_id: config?.offerIdPrefix ? config.offerIdPrefix : '',
-        old_price: config?.cropPrice
-          ? (
-              (currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100
-            ).toFixed(2)
-          : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
-        origin_price: config?.cropPrice
-          ? (
-              (currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100
-            ).toFixed(2)
-          : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
-        price: config?.price
-          ? ((currencyConversion(item.resMoney, rate, task.unit) * config.price) / 100).toFixed(2)
-          : currencyConversion(item.resMoney, rate, task.unit),
-        goods_source_url: item?.['1688link'],
+        offer_id: config?.offerIdPrefix ? `${config?.offerIdPrefix}-${dayjs(Date.now()).format('YYMMDDHHmm')}-${Math.floor(
+          Math.random() * 100000000
+        )
+          .toString()
+          .padStart(8, '0')}` : `ob-${dayjs(Date.now()).format('YYMMDDHHmm')}-${Math.floor(
+            Math.random() * 100000000
+          )
+            .toString()
+            .padStart(8, '0')}`,
+        old_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        origin_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        price: config?.price ? (currencyConversion(item.resMoney, rate, task.unit) * config.price / 100).toFixed(2) : currencyConversion(item.resMoney, rate, task.unit),
+        goods_source_url: item?.['1688link']
       }))
       .filter((item) => item.price)
 
