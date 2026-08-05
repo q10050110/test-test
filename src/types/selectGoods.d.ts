@@ -83,7 +83,7 @@ export type Task = {
   weightRangeMax?: number // 重量范围
   packageLengthMin?: number // 包装长度
   packageLengthMax?: number // 包装长度
-  packageHeightMin?: number  // 包装高度
+  packageHeightMin?: number // 包装高度
   packageHeightMax?: number // 包装高度
   packageWidthMin?: number // 包装宽度
   packageWidthMax?: number // 包装宽度
@@ -193,7 +193,18 @@ export type ConditionForm = Pick<
 
 export type CategoryForm = Pick<
   Task,
-  'isUseCategorySelect' | 'categoryIds' | 'weightRangeMin' | 'weightRangeMax' | 'packageLengthMin' | 'packageLengthMax' | 'packageHeightMin' | 'packageHeightMax' | 'packageWidthMin' | 'packageWidthMax' | 'returnCancelRateMin' | 'returnCancelRateMax'
+  | 'isUseCategorySelect'
+  | 'categoryIds'
+  | 'weightRangeMin'
+  | 'weightRangeMax'
+  | 'packageLengthMin'
+  | 'packageLengthMax'
+  | 'packageHeightMin'
+  | 'packageHeightMax'
+  | 'packageWidthMin'
+  | 'packageWidthMax'
+  | 'returnCancelRateMin'
+  | 'returnCancelRateMax'
 >
 
 export type category = {

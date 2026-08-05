@@ -371,10 +371,10 @@ export class SysTemUtils {
         return null
       }
     },
-    /** 
+    /**
      * 拷贝文件
-     * @param filePath 文件路径 
-      */
+     * @param filePath 文件路径
+     */
     copyFile: async (filePath: string) => {
       const ext = extname(filePath)
       const originName = basename(filePath, ext)?.split('_')?.[0]
@@ -382,9 +382,7 @@ export class SysTemUtils {
       const { canceled, filePath: savePath } = await dialog.showSaveDialog({
         title: '保存文件',
         defaultPath: join(app.getPath('desktop'), newName),
-        filters: [
-          { name: 'Excel 文件', extensions: ['xlsx'] }
-        ]
+        filters: [{ name: 'Excel 文件', extensions: ['xlsx'] }],
       })
 
       if (canceled || !savePath) return
@@ -425,9 +423,9 @@ export class SysTemUtils {
         console.error('删除文件夹失败：', error)
       }
     },
-    /** 
+    /**
      * 拷贝文件夹
-      */
+     */
     copyFolder: (source: string, destination: string) => {
       try {
         if (existsSync(source)) {

@@ -3,3 +3,8 @@ export interface InterfaceResult<T> {
   data: T
   message: string
 }
+
+export interface PageParams {
+  pageNo: number
+  pageSize: number
+}

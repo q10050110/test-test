@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed } from 'vue'
+import { computed, type VNode } from 'vue'
 import type { MenuItem } from '@/types/menu'
 import { asyncRoutes } from '@/router'
 import type { RouteRecordRaw } from 'vue-router'
@@ -16,7 +16,7 @@ export const useMenuStore = defineStore('menu', () => {
             const menu: MenuItem = {
               title: child.meta.title as string,
               path: child.path,
-              icon: child.meta.icon as string,
+              icon: child.meta.icon as VNode,
               hidden: child.meta.hidden as boolean,
             }
 
@@ -32,7 +32,7 @@ export const useMenuStore = defineStore('menu', () => {
         menus.push({
           title: route.meta.title as string,
           path: route.path,
-          icon: route.meta.icon as string,
+          icon: route.meta.icon as VNode,
           hidden: route.meta.hidden as boolean,
         })
       }

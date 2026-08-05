@@ -2,7 +2,7 @@ import request from './request.js'
 import pako from 'pako'
 import Decimal from 'decimal.js'
 import log from '../log/index.js'
-import * as dns from 'node:dns';
+import * as dns from 'node:dns'
 export const compressData = (text: any) => {
   text = JSON.stringify(text)
   // 将文本数据转换为 Uint8Array
@@ -23,7 +23,7 @@ export const compressData = (text: any) => {
 }
 
 /**
- * 获取汇率 
+ * 获取汇率
  */
 export const getRate = async () => {
   try {
@@ -100,58 +100,58 @@ export const getShopCurCode = (code: keyof typeof codeMap) => {
   return getCurrencyName(code)
 }
 
-/** 
+/**
  * 检测网络是否可用
-  */
+ */
 export const checkNetworkStatus = (): Promise<boolean> => {
   return new Promise((resolve) => {
-    const TIMEOUT = 5000; // 5秒超时
-    const domains = ['qq.com', 'taobao.com', 'baidu.com']; // 备用域名列表
-    let isResolved = false;
+    const TIMEOUT = 5000 // 5秒超时
+    const domains = ['qq.com', 'taobao.com', 'baidu.com'] // 备用域名列表
+    let isResolved = false
 
     // 设置超时定时器
     const timer = setTimeout(() => {
       if (!isResolved) {
-        isResolved = true;
-        console.warn('网络检测超时');
-        resolve(false);
+        isResolved = true
+        console.warn('网络检测超时')
+        resolve(false)
       }
-    }, TIMEOUT);
+    }, TIMEOUT)
 
     // 创建独立的 DNS Resolver 实例，避免全局缓存影响
-    const resolver = new dns.Resolver();
+    const resolver = new dns.Resolver()
     const tryResolveDomain = (index: number) => {
       if (isResolved || index >= domains.length) {
         if (!isResolved) {
-          isResolved = true;
-          clearTimeout(timer);
-          console.error('所有域名解析失败，判定网络不可用');
-          resolve(false);
+          isResolved = true
+          clearTimeout(timer)
+          console.error('所有域名解析失败，判定网络不可用')
+          resolve(false)
         }
-        return;
+        return
       }
 
-      const domain = domains[index];
+      const domain = domains[index]
 
       // 使用 resolve4 强制 IPv4 解析，通常更稳定
       resolver.resolve4(domain, (err, addresses) => {
-        if (isResolved) return; // 如果已经得到结果，忽略后续回调
+        if (isResolved) return // 如果已经得到结果，忽略后续回调
 
         if (err) {
-          console.warn(`域名 ${domain} 解析失败: ${err.message}`);
+          console.warn(`域名 ${domain} 解析失败: ${err.message}`)
           // 当前域名失败，尝试下一个
-          tryResolveDomain(index + 1);
+          tryResolveDomain(index + 1)
         } else {
           // 解析成功
-          isResolved = true;
-          clearTimeout(timer);
-          console.log(`网络可用 (通过 ${domain} 检测, IP: ${addresses?.[0]})`);
-          resolve(true);
+          isResolved = true
+          clearTimeout(timer)
+          console.log(`网络可用 (通过 ${domain} 检测, IP: ${addresses?.[0]})`)
+          resolve(true)
         }
-      });
-    };
+      })
+    }
 
     // 开始尝试解析第一个域名
-    tryResolveDomain(0);
-  });
-};
+    tryResolveDomain(0)
+  })
+}

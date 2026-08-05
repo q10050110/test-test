@@ -1,3 +1,4 @@
+import { VNode } from 'vue'
 /**
  * 菜单项类型定义
  */
@@ -7,9 +8,9 @@ export interface MenuItem {
   // 菜单路径
   path: string
   // 菜单图标(可选)
-  icon?: string
+  icon?: VNode
   // 子菜单(可选)
-  children: MenuItem[]
+  children?: MenuItem[]
   // 是否隐藏(可选)
   hidden?: boolean
 }

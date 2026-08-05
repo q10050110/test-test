@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { computed, h } from 'vue'
 import type { MenuItem } from '@/types/menu'
 import type { MenuProps, ItemType } from 'ant-design-vue'
-import * as Icons from '@ant-design/icons-vue'
 
 const menuStore = useMenuStore()
 const router = useRouter()
@@ -24,9 +23,8 @@ const convertMenuItems = (menus: MenuItem[]): ItemType[] => {
       const menuItem: ItemType = {
         key: item.path,
         label: item.title,
-        icon: item.icon ? () => h((Icons as any)[item.icon!]) : undefined,
+        icon: item.icon,
       }
-
       // 如果有子菜单,递归处理
       if (item.children && item.children.length > 0) {
         menuItem.children = convertMenuItems(item.children)
@@ -38,7 +36,6 @@ const convertMenuItems = (menus: MenuItem[]): ItemType[] => {
 
 // 转换后的菜单数据
 const menuItems = computed(() => convertMenuItems(menuStore.menuList))
-
 // 菜单点击处理
 const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
   router.push(key as string)

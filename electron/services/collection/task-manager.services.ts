@@ -17,10 +17,12 @@ export class TaskManager {
   private maxConcurrentTasks
   private taskQueue: string[] = []
   private mainWindow: BrowserWindow | null = null
-  private filePathList: Map<string, { filePath: string; progress: any; autoResult?: string, upGoodsList: any[] }> =
-    new Map()
+  private filePathList: Map<
+    string,
+    { filePath: string; progress: any; autoResult?: string; upGoodsList: any[] }
+  > = new Map()
   private constructor() {
-    this.maxConcurrentTasks = (os.totalmem() / 1024 / 1024 / 1024) > 15 ? 8 : 4
+    this.maxConcurrentTasks = os.totalmem() / 1024 / 1024 / 1024 > 15 ? 8 : 4
   }
 
   public static getInstance(): TaskManager {
@@ -33,18 +35,19 @@ export class TaskManager {
   setMainWindow(window: BrowserWindow) {
     this.mainWindow = window
   }
-  /** 
+  /**
    * 获取当前并发任务数
-    */
+   */
   getConcurrentTaskCount() {
     return this.maxConcurrentTasks
   }
-  /** 
+  /**
    * 设置最大并发任务数
-    */
+   */
   setMaxConcurrentTasks(max: number) {
     this.maxConcurrentTasks = max
-    while (this.activeTasks.size < this.maxConcurrentTasks && this.taskQueue.length) this.processNextTask()
+    while (this.activeTasks.size < this.maxConcurrentTasks && this.taskQueue.length)
+      this.processNextTask()
   }
   /**
    * 添加任务（仅创建任务，不立即执行）

@@ -4,7 +4,10 @@ import { operationStore } from '../store/index.js'
 import { SysTemUtils } from '../utils/system.js'
 import { InterfaceResult } from '../types/index.js'
 import { TaskManager } from './collection/task-manager.services.js'
-export const accountHandle = async (type: 'register' | 'resetPassword', mainWindow: BrowserWindow) => {
+export const accountHandle = async (
+  type: 'register' | 'resetPassword',
+  mainWindow: BrowserWindow,
+) => {
   const env = SysTemUtils.getEnv() === 'development'
   const testUrl =
     type === 'register'
@@ -18,7 +21,10 @@ export const accountHandle = async (type: 'register' | 'resetPassword', mainWind
     await shell.openExternal(env ? testUrl : prodUrl)
   } catch (error) {
     await clipboard.writeText(env ? testUrl : prodUrl)
-    mainWindow.webContents.send('window-notify', { type: 'account', message: '您未设置默认浏览器，已将网址拷贝到剪切板，请手动打开浏览器访问网址。' })
+    mainWindow.webContents.send('window-notify', {
+      type: 'account',
+      message: '您未设置默认浏览器，已将网址拷贝到剪切板，请手动打开浏览器访问网址。',
+    })
   }
 }
 
@@ -33,10 +39,9 @@ export const login = async (data: { phone: string; pwd: string }) => {
     return {
       code: 400,
       message: error,
-      data: null
+      data: null,
     }
   }
-
 }
 export const getUserInfo = async (data: { token: string }) => {
   const res = await request<InterfaceResult<any>, InterfaceResult<any>>({

@@ -6,7 +6,6 @@ import {
   CloseOutlined,
   BorderOutlined,
   SwitcherOutlined,
-  PlayCircleOutlined,
 } from '@ant-design/icons-vue'
 const store = useAppStore()
 const isMax = ref(false)
@@ -22,10 +21,6 @@ const operationHandle = async (type: 'hide' | 'close' | 'maximize' | 'minimize')
   if (type === 'maximize' || type === 'minimize') isMax.value = !isMax.value
   window.electronAPI.sendMessage('window', type)
 }
-// 导出日志
-const downloadLog = () => {
-  window.electronAPI.invoke('export-all-logs', '')
-}
 
 // 检测更新
 const checkUpdateHandle = () => {
@@ -40,13 +35,7 @@ const checkUpdateHandle = () => {
 const clickHandle = () => {
   window.electronAPI.sendMessage('window', 'close')
 }
-// 跳转视频教程
-const openUrl = () => {
-  window.electronAPI.sendMessage(
-    'open-url',
-    'https://www.yuque.com/ozonbang/gg6t4m/lvqlqum40osgie1v?singleDoc#%20%E3%80%8A%E3%80%90%E8%A7%86%E9%A2%91%E3%80%91%E4%B8%8A%E5%93%81%E5%B8%AE%E8%87%AA%E5%8A%A8%E5%8C%96%E5%8A%A9%E6%89%8B%E6%95%99%E7%A8%8B%E3%80%8B',
-  )
-}
+
 const cancelHandle = () => {
   open.value = false
   desc.value = '请确认是否要退出，如有选品数据未导出请先导出，退出后将无法找回。'
@@ -74,13 +63,6 @@ window.electronAPI.on('unmaximize', () => {
     </div>
     <div class="drag"></div>
     <div class="right">
-      <div class="log">
-        <a-button type="link" @click="downloadLog">导出日志</a-button>
-      </div>
-      <div class="video" @click="openUrl">
-        <PlayCircleOutlined style="color: #1677ff; margin-right: -10px" />
-        <a-button type="link">视频教程</a-button>
-      </div>
       <div class="customer-service">
         <img src="@/assets/window/lianxikefu.png" alt="" />
         联系客服

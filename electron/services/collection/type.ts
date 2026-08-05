@@ -79,7 +79,7 @@ export interface Task {
   weightRangeMax?: number // 重量范围
   packageLengthMin?: number // 包装长度
   packageLengthMax?: number // 包装长度
-  packageHeightMin?: number  // 包装高度
+  packageHeightMin?: number // 包装高度
   packageHeightMax?: number // 包装高度
   packageWidthMin?: number // 包装宽度
   packageWidthMax?: number // 包装宽度
@@ -89,13 +89,12 @@ export interface Task {
 
 export type Reason = 'success' | 'cancel' | 'failed' | undefined
 
-
 export type ShopData = {
   client_id: string
   name: string
   stock: number
   warehouseId: string
-  currency_code: "CNY" | "USD" | "RUB" | "EUR" | "BYN" | "KZT"
+  currency_code: 'CNY' | 'USD' | 'RUB' | 'EUR' | 'BYN' | 'KZT'
 }
 
 export type Config = {

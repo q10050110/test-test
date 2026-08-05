@@ -48,7 +48,8 @@ export const useUserStore = defineStore('user', () => {
       await logoutAPI({ token: token.value! })
     } catch (error) {
       console.log(error)
-    } finally { }
+    } finally {
+    }
   }
 
   return { token, user, initUser, getUser, getToken, setToken, removeToken, logout }

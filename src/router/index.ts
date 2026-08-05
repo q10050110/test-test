@@ -2,7 +2,7 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 import Login from './modules/login'
 import Layout from '@/layout/index.vue'
 import selectGoods from './modules/selectGoods'
-
+import inspection from './modules/inspection'
 /**
  * 公共路由(无需权限)
  */
@@ -16,7 +16,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/',
     component: Layout,
-    children: [selectGoods],
+    children: [selectGoods, inspection],
   },
 ]
 

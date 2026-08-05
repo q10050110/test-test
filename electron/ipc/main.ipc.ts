@@ -5,11 +5,13 @@ import { windowIpc } from './system.ipc.js'
 import { collectionIpc } from './collection.ipc.js'
 import { registerLogIpc } from './log.ipc.js'
 import { globalBroadcast } from './broadcast.js'
+import { inspectionIpc } from './inspection.ipc.js'
 export const resisterAllIpc = (win: BrowserWindow) => {
   accountIpc(win)
   storeIpc()
   windowIpc(win)
   collectionIpc(win)
+  inspectionIpc(win)
   registerLogIpc()
   globalBroadcast.registerWindow(win)
   setTimeout(() => {

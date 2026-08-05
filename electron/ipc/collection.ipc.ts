@@ -6,7 +6,7 @@ import {
   getShopList,
   getLogisticsList,
   getConfigList,
-  getCategoryList
+  getCategoryList,
 } from '../services/collection/interface.services.js'
 import { join } from 'node:path'
 export const collectionIpc = (win: BrowserWindow) => {
@@ -168,7 +168,11 @@ export const collectionIpc = (win: BrowserWindow) => {
       const data = params?.pageNo
         ? await taskManager.getAllTasks(params)
         : await taskManager.getAllTasksList()
-      return data
+      return {
+        code: 200,
+        message: '获取任务列表成功',
+        data,
+      }
     } catch (error) {
       log.error('获取任务列表失败', error)
       return {
@@ -281,8 +285,7 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 跳转EPR
   ipcMain.on('go-erp', (event, data) => {
     const env = SysTemUtils.getEnv() === 'development'
-    const url = env ? 'https://test-plus.shopbang.cn/erp/#/'
-      : 'https://shopbang.cn/erp/#/'
+    const url = env ? 'https://test-plus.shopbang.cn/erp/#/' : 'https://shopbang.cn/erp/#/'
     shell.openExternal(`${url}${data}`)
   })
 
@@ -293,13 +296,13 @@ export const collectionIpc = (win: BrowserWindow) => {
       return {
         code: 500,
         message: res,
-        data: null
+        data: null,
       }
     } else {
       return {
         code: 200,
         message: '上架成功',
-        data: null
+        data: null,
       }
     }
   })

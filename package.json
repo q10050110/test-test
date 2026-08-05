@@ -1,6 +1,6 @@
 {
   "name": "electron_template",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -31,13 +31,15 @@
     "electron-updater": "^6.7.3",
     "exceljs": "^4.4.0",
     "lodash": "^4.17.23",
+    "p-queue": "^9.3.3",
     "pako": "^2.1.0",
     "pinia": "^3.0.4",
     "postcss-pxtorem": "^6.1.0",
     "rxjs": "^7.8.2",
     "sharp": "^0.34.5",
     "vue": "^3.5.26",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "xstate": "^5.32.5"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.3",

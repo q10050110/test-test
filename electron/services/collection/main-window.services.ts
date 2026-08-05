@@ -59,9 +59,9 @@ export class MainWindowService {
     })
   }
 
-  /** 
+  /**
    * 获取domin
-    */
+   */
   async getDomain() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) {
       return ''
@@ -228,9 +228,9 @@ export class MainWindowService {
     })
   }
 
-  /** 
+  /**
    * 通过接口获取页面数据
-    */
+   */
   async getDataByApi(id: string) {
     try {
       const target = `https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2?url=%2Fproduct%2Flastik-dlya-obuvi-sredstvo-dlya-suhoy-chistki-obuvi-${id}`

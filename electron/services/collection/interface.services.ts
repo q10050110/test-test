@@ -11,7 +11,7 @@ let rate: any = null
 
 /**
  * 获取物流
-  */
+ */
 export const getLogisticsList = async () => {
   try {
     const res = await request({
@@ -32,9 +32,9 @@ export const getLogisticsList = async () => {
   }
 }
 
-/** 
+/**
  * 获取列表
-  */
+ */
 export const getShopList = async () => {
   const user = operationStore.get('user')
   try {
@@ -43,8 +43,9 @@ export const getShopList = async () => {
       method: 'post',
       data: {},
     })
-    const data = res.data
-      .filter((item: any) => item.platform === 'OZON' && item.account_id === user._id)
+    const data = res.data.filter(
+      (item: any) => item.platform === 'OZON' && item.account_id === user._id,
+    )
     shopList = data
     return {
       code: 400,
@@ -59,9 +60,9 @@ export const getShopList = async () => {
   }
 }
 
-/** 
+/**
  * 获取配置
-  */
+ */
 export const getConfigList = async () => {
   try {
     const user = operationStore.get('user')
@@ -70,8 +71,9 @@ export const getConfigList = async () => {
       method: 'post',
       data: {},
     })
-    res.data.data = res.data.data
-      .filter((item: any) => item.platform === 'OZON' && item.user_id === user._id)
+    res.data.data = res.data.data.filter(
+      (item: any) => item.platform === 'OZON' && item.user_id === user._id,
+    )
     configList = res.data.data
     return {
       code: 400,
@@ -86,25 +88,26 @@ export const getConfigList = async () => {
   }
 }
 
-/** 
+/**
  * 获取分类
-  */
+ */
 export const getCategoryList = async () => {
   try {
     const versionRes = await request({
       url: '/api/goods/open/ozon/getOZONCategoryVersion',
-      method: 'post'
+      method: 'post',
     })
     const categoryVersion = operationStore.get('categoryVersion')
     const categoryList = operationStore.get('categoryList') || []
-    if (versionRes.data === categoryVersion && categoryList?.length) return {
-      code: 400,
-      data: categoryList,
-      message: '获取成功',
-    }
+    if (versionRes.data === categoryVersion && categoryList?.length)
+      return {
+        code: 400,
+        data: categoryList,
+        message: '获取成功',
+      }
     const category = await downloadFile({
       url: '/resources/docs/js/ozoncategory.js',
-      method: 'get'
+      method: 'get',
     })
     let jsContent = typeof category.data === 'string' ? category.data : category.data.toString()
     jsContent = jsContent.replace(/export\s+default\s+(\w+)/g, 'this.arr = $1;')
@@ -132,7 +135,6 @@ export const getCategoryList = async () => {
   }
 }
 
-
 /**
  * 批量上架接口
  */
@@ -151,7 +153,7 @@ export const batchUpGoods = async (data: any) => {
     return {
       code: 500,
       message: error,
-      data: null
+      data: null,
     }
   }
 }
@@ -165,10 +167,10 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   const source = Array.from(goodsData.values())
   const result = []
   let config: Config | undefined
-  if (task.upDataConfigId) config = configList?.find(item => item._id === task.upDataConfigId)
+  if (task.upDataConfigId) config = configList?.find((item) => item._id === task.upDataConfigId)
   if (!task.unit) {
     const shopId = config ? config?.shopData[0].client_id : task.client_id
-    const currency_code = shopList?.find(item => shopId === item.client_id)?.currency_code
+    const currency_code = shopList?.find((item) => shopId === item.client_id)?.currency_code
     task.unit = getShopCurCode(currency_code || 'CNY')
   }
   const baseParams = {
@@ -186,7 +188,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
     use_pack: true,
     warehouse_id: task.warehouse_id,
     total_num: goodsData.size,
-    ocType: "auto"
+    ocType: 'auto',
   }
 
   while (source.length > 0) {
@@ -196,10 +198,20 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
         goods_id: item.id,
         name: '',
         offer_id: config?.offerIdPrefix ? config.offerIdPrefix : '',
-        old_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
-        origin_price: config?.cropPrice ? ((currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100).toFixed(2) : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
-        price: config?.price ? (currencyConversion(item.resMoney, rate, task.unit) * config.price / 100).toFixed(2) : currencyConversion(item.resMoney, rate, task.unit),
-        goods_source_url: item?.['1688link']
+        old_price: config?.cropPrice
+          ? (
+              (currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100
+            ).toFixed(2)
+          : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        origin_price: config?.cropPrice
+          ? (
+              (currencyConversion(item.resMoney, rate, task.unit) * config.cropPrice || 1) / 100
+            ).toFixed(2)
+          : (currencyConversion(item.resMoney, rate, task.unit) * 1.6).toFixed(2),
+        price: config?.price
+          ? ((currencyConversion(item.resMoney, rate, task.unit) * config.price) / 100).toFixed(2)
+          : currencyConversion(item.resMoney, rate, task.unit),
+        goods_source_url: item?.['1688link'],
       }))
       .filter((item) => item.price)
 
@@ -218,10 +230,10 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   return result.length ? result.join(',') : 'success'
 }
 
-/** 
+/**
  * 保存数据接口
-  */
-const saveData = async (data: { taskId: string, datas: any[] }) => {
+ */
+const saveData = async (data: { taskId: string; datas: any[] }) => {
   try {
     const res = await request<
       { code: number; data: null; message: string },
@@ -229,23 +241,23 @@ const saveData = async (data: { taskId: string, datas: any[] }) => {
     >({
       url: '/api/goods/autoTask/saveAutoPickRecords',
       method: 'post',
-      data
+      data,
     })
     return res
   } catch (error: any) {
     return {
       code: 500,
       message: error,
-      data: null
+      data: null,
     }
   }
 }
 
-export const autoSaveData = async (data: { taskId: string, datas: any[] }) => {
-  const { datas } = data;
+export const autoSaveData = async (data: { taskId: string; datas: any[] }) => {
+  const { datas } = data
   while (datas.length > 0) {
-    const chunk = datas.splice(0, 1000);
-    const { code, message } = await saveData({ taskId: data.taskId, datas: chunk });
+    const chunk = datas.splice(0, 1000)
+    const { code, message } = await saveData({ taskId: data.taskId, datas: chunk })
     if (code) {
       log.error('保存数据失败', message)
       return code

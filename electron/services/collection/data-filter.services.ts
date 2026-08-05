@@ -4,7 +4,7 @@ import dayjs from 'dayjs'
 import { SysTemUtils } from '../../utils/system.js'
 export class DataProcessService {
   private data: Map<string, any> = new Map()
-  constructor() { }
+  constructor() {}
   /**
    * 获取基础数据
    */
@@ -39,7 +39,7 @@ export class DataProcessService {
             item.discount = item?.discount?.toFixed(2)
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
-            item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 1) * 100)?.toFixed(2)
+            item.clickRate = (((item.qtyViewPdp || 0) / (item.views || 1)) * 100)?.toFixed(2)
             if (item.goods_id) this.data.set(item.goods_id, item)
           })
       }
@@ -79,11 +79,12 @@ export class DataProcessService {
   /**
    * 获取详细数据
    */
-  async getDetailData(params: { taskId: string; reqDatas: any[], upMode?: 1 | 2 }) {
+  async getDetailData(params: { taskId: string; reqDatas: any[]; upMode?: 1 | 2 }) {
     try {
       const { taskId, reqDatas, upMode } = params
       const res = await request({
-        url: upMode != 2 ? '/api/auto/filterGoods/goodsFilter' : '/api/auto/filterGoods/goodsFilter2',
+        url:
+          upMode != 2 ? '/api/auto/filterGoods/goodsFilter' : '/api/auto/filterGoods/goodsFilter2',
         method: 'post',
         data: {
           taskId,
@@ -94,8 +95,10 @@ export class DataProcessService {
       let item = res.data[0]
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
-      if (!item.commissionRfbs) item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
-      if (!item.commissionFbp) item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
+      if (!item.commissionRfbs)
+        item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
+      if (!item.commissionFbp)
+        item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
       item.chineseName = await this.getChineseName(item.nameLabel)
       return [item]
     } catch (error) {
@@ -260,7 +263,11 @@ export class DataProcessService {
       },
       // 成交率校验
       (item: any) => {
-        const result = this.checkRange(item.nullableRedemptionRate, task.nullableRedemptionRateMin, task.nullableRedemptionRateMax)
+        const result = this.checkRange(
+          item.nullableRedemptionRate,
+          task.nullableRedemptionRateMin,
+          task.nullableRedemptionRateMax,
+        )
         return result
       },
       // 重量范围校验
@@ -285,7 +292,11 @@ export class DataProcessService {
       },
       // 退货取消率校验
       (item: any) => {
-        const result = this.checkRange(item.returnCancelRate, task.returnCancelRateMin, task.returnCancelRateMax)
+        const result = this.checkRange(
+          item.returnCancelRate,
+          task.returnCancelRateMin,
+          task.returnCancelRateMax,
+        )
         return result
       },
     ]
@@ -303,7 +314,11 @@ export class DataProcessService {
       },
       // 评论数校验
       (item: any) => {
-        const result = this.checkRange(item.reviewCountLabel, task.numberOfCommentsMin, task.numberOfCommentsMax)
+        const result = this.checkRange(
+          item.reviewCountLabel,
+          task.numberOfCommentsMin,
+          task.numberOfCommentsMax,
+        )
         return result
       },
       // 评分范围校验
@@ -320,25 +335,27 @@ export class DataProcessService {
           const overallResult = results.every((r) => r)
           return overallResult
         })
-        break;
+        break
       case 'detail':
         filteredData = data.filter((item) => {
           const results = filters2.map((filterFn) => filterFn(item))
           const overallResult = results.every((r) => r)
           return overallResult
         })
-        break;
+        break
       default:
-        filteredData = data.filter((item) => {
-          const results = filters.map((filterFn) => filterFn(item))
-          const overallResult = results.every((r) => r)
-          return overallResult
-        }).filter((item) => {
-          const results = filters2.map((filterFn) => filterFn(item))
-          const overallResult = results.every((r) => r)
-          return overallResult
-        })
-        break;
+        filteredData = data
+          .filter((item) => {
+            const results = filters.map((filterFn) => filterFn(item))
+            const overallResult = results.every((r) => r)
+            return overallResult
+          })
+          .filter((item) => {
+            const results = filters2.map((filterFn) => filterFn(item))
+            const overallResult = results.every((r) => r)
+            return overallResult
+          })
+        break
     }
 
     return filteredData

@@ -43,10 +43,12 @@ export class ParseService {
         .find('.tsBodyMBold')
         .text()
         .replace(/\u202F/g, ' ')
-      if (!str) str = $(element)
-        .parent().find('.tsBodyControl300XSmall')
-        .text()
-        .replace(/\u202F/g, ' ')
+      if (!str)
+        str = $(element)
+          .parent()
+          .find('.tsBodyControl300XSmall')
+          .text()
+          .replace(/\u202F/g, ' ')
 
       const match = str.match(/\s*([0-5]\.\d{1})\s*(\d[\d\s]*)\s*/i)
       const rating = match ? match[1] : 0
@@ -96,9 +98,13 @@ export class ParseService {
     for (const item of uniqueData) {
       const response = await this.windowService?.getSellingData(item.requestUrl)
       if (response?.success) {
-        const sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        const sellers = JSON.parse(
+          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
+        )
         item.sellerNumber = sellers?.sellers?.length || undefined
-        const priceList = sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < item.price)
+        const priceList = sellers?.sellers
+          ?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, ''))
+          .filter((subItem: any) => subItem && subItem < item.price)
         item.sellerNumber1 = item.sellerNumber
         item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
         item.followMinPrice1 = item.followMinPrice
@@ -112,32 +118,36 @@ export class ParseService {
     }
     return uniqueData
   }
-  /** 
+  /**
    * 商品去重
-    */
+   */
   async ozonDetailListParser(list: any[]) {
-    const uniqueData = list.filter(item => !this.ozonGoodsData.has(item._id))
-    uniqueData.forEach(item => {
+    const uniqueData = list.filter((item) => !this.ozonGoodsData.has(item._id))
+    uniqueData.forEach((item) => {
       this.ozonGoodsData.add(item._id)
     })
     return uniqueData
   }
   async ozonDetailParse(data: any, domain: string, goods: any) {
-    if (!data.success) return {};
+    if (!data.success) return {}
     try {
-      const widgetStatesPrice = JSON.parse(data.data.widgetStates?.['webPrice-3121879-default-1'] || '{}')
-      const widgetStatesScore = JSON.parse(data.data.widgetStates?.['webSingleProductScore-3386432-default-1'] || '{}')
+      const widgetStatesPrice = JSON.parse(
+        data.data.widgetStates?.['webPrice-3121879-default-1'] || '{}',
+      )
+      const widgetStatesScore = JSON.parse(
+        data.data.widgetStates?.['webSingleProductScore-3386432-default-1'] || '{}',
+      )
       const queryUrl = encodeURIComponent(
         `/modal/otherOffersFromSellers?product_id=${goods._id}&page_changed=true`,
       )
       const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
       const cleanPrice = (str: string | undefined) => {
-        if (!str) return 0;
-        return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0;
-      };
-      const price = cleanPrice(widgetStatesPrice?.cardPrice || widgetStatesPrice?.price);
-      const blackPrice = cleanPrice(widgetStatesPrice?.price);
-      const oPrice = cleanPrice(widgetStatesPrice?.originalPrice);
+        if (!str) return 0
+        return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0
+      }
+      const price = cleanPrice(widgetStatesPrice?.cardPrice || widgetStatesPrice?.price)
+      const blackPrice = cleanPrice(widgetStatesPrice?.price)
+      const oPrice = cleanPrice(widgetStatesPrice?.originalPrice)
       let str = widgetStatesScore?.text || ''
       const match = str.match(/([0-5](?:\.\d)?)[^0-9]*(\d[\d\s]*)/i)
       const rating = match ? match[1] : 0
@@ -149,9 +159,13 @@ export class ParseService {
         followMinPrice,
         followMinPrice1 = undefined
       if (response?.success) {
-        sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        sellers = JSON.parse(
+          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
+        )
         sellerNumber = sellers?.sellers?.length
-        const priceList = sellers?.sellers?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')).filter((subItem: any) => subItem && subItem < price)
+        const priceList = sellers?.sellers
+          ?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, ''))
+          .filter((subItem: any) => subItem && subItem < price)
         sellerNumber1 = sellerNumber
         followMinPrice = priceList?.length ? Math.min(...priceList) : price
         followMinPrice1 = priceList?.length ? Math.min(...priceList) : price
@@ -177,7 +191,7 @@ export class ParseService {
         cover: goods.photo,
         nameLabel: goods.name,
         blackPrice,
-        ...goods
+        ...goods,
       }
     } catch (error) {
       log.error('解析数据失败~~~')
@@ -209,27 +223,21 @@ export class ParseService {
   }
 
   async aoXiaParse(html: any) {
-    const $ = cheerio.load(html);
-    const row = $('.ant-table-row').first();
-    const goods = row.find('.infoItem--V27Uh_WV');
-    const str = row.attr('data-row-key') || '';
-    const cover2 =
-      goods.find('.infoItemContentImg--rjPgLM0F').attr('src') || '';
-    const price =
-      goods.find('.infoItemContentInfoPrice--wdNSIanc').text() || '';
-    const sourcePrice =
-      Number(price.replace(/[^\d.]/g, '')) || 0;
+    const $ = cheerio.load(html)
+    const row = $('.ant-table-row').first()
+    const goods = row.find('.infoItem--V27Uh_WV')
+    const str = row.attr('data-row-key') || ''
+    const cover2 = goods.find('.infoItemContentImg--rjPgLM0F').attr('src') || ''
+    const price = goods.find('.infoItemContentInfoPrice--wdNSIanc').text() || ''
+    const sourcePrice = Number(price.replace(/[^\d.]/g, '')) || 0
     // 链接
-    const link1688 =
-      str
-        ? `https://detail.1688.com/offer/${str}.html`
-        : '';
+    const link1688 = str ? `https://detail.1688.com/offer/${str}.html` : ''
 
     return {
       link1688,
       sourcePrice,
-      cover2
-    };
+      cover2,
+    }
   }
   /**
    * 获取商品数量

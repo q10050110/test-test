@@ -71,7 +71,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
-        upGoodsList: Array.from(this.goodsData.values())
+        upGoodsList: Array.from(this.goodsData.values()),
       })
     }
     const safeReject = (e: any, reject: Function) => {
@@ -81,7 +81,7 @@ export class Collection {
         filePath: this.task.tableFilePath || '',
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
-        upGoodsList: Array.from(this.goodsData.values())
+        upGoodsList: Array.from(this.goodsData.values()),
       })
     }
 
@@ -102,7 +102,9 @@ export class Collection {
         this.uuid = randomUUID()
         this.updateStatus('running')
         this.outputLog('窗口创建成功，任务开始执行')
-        await this.mainWindowService.createCollectionWindow(this.task.targetUrl || 'https://www.ozon.ru')
+        await this.mainWindowService.createCollectionWindow(
+          this.task.targetUrl || 'https://www.ozon.ru',
+        )
         if (this.task.isUseCategorySelect === 0) {
           this.outputLog(`分类选品模式`)
           await this.categoryMode(this.task.targetCount || Infinity)
@@ -139,15 +141,15 @@ export class Collection {
             case 'cancel':
               this.updateStatus('cancelled')
               this.outputLog('任务已取消')
-              break;
+              break
             case 'failed':
               this.updateStatus('failed')
               this.outputLog('任务失败')
-              break;
+              break
             default:
               this.updateStatus('completed')
               this.outputLog('任务成功')
-              break;
+              break
           }
         }
         log.info(
@@ -171,9 +173,9 @@ export class Collection {
     })
   }
 
-  /** 
+  /**
    * 分类选品模式
-  */
+   */
   async categoryMode(targetCount: number) {
     const dataList = await this.getCategoryGoodsList()
     const targetList = await this.parseService.ozonDetailListParser(dataList)
@@ -200,21 +202,25 @@ export class Collection {
     }
   }
 
-  /** 
+  /**
    * 分类模式处理
-    */
+   */
   async categoryProcess(list: any[]) {
     const filterData = await this.dataProcessService.filterData(list, this.task, 'base')
     if (!filterData.length) return
     const baseData: any[] = []
     const apiList = []
     for (const goods of filterData) {
-      if (this.targetData >= (this.task.targetCount || Infinity) || (this.reason && this.reason !== 'success')) return
+      if (
+        this.targetData >= (this.task.targetCount || Infinity) ||
+        (this.reason && this.reason !== 'success')
+      )
+        return
       apiList.push(this.getHtmlDetailData(goods))
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     const res = await Promise.all(apiList)
-    res.forEach(item => {
+    res.forEach((item) => {
       if (item.price) {
         const url = `https://www.ozon.ru/product/${item.id}`
         baseData.push({ href: url, ...item })
@@ -234,15 +240,15 @@ export class Collection {
     }
   }
 
-  /** 
+  /**
    * 获取商品列表
-    */
+   */
   async getCategoryGoodsList() {
     this.outputLog(`获取分类商品`)
     const { code, data } = await request<Response<any>, Response<any>>({
       url: '/api/goods/hotSales/v2/ozon/getReMaiData',
       method: 'post',
-      data: this.query
+      data: this.query,
     })
     if (!code) {
       if (!data.total || this.query.pageNo >= this.query.maxPage) this.reason = 'success'
@@ -254,7 +260,7 @@ export class Collection {
         if (item.brand === 'без бренда') item.brand = ''
         item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD')
         item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
-        item.clickRate = ((item.qtyViewPdp || 0) / (item.views || 1) * 100)?.toFixed(2)
+        item.clickRate = (((item.qtyViewPdp || 0) / (item.views || 1)) * 100)?.toFixed(2)
       })
       return data.list || []
     } else {
@@ -264,8 +270,8 @@ export class Collection {
     }
   }
 
-  /**  
-   * 获取详情页数据 
+  /**
+   * 获取详情页数据
    */
   async getHtmlDetailData(obj: any) {
     const res = await this.mainWindowService.getDataByApi(obj._id)
@@ -273,23 +279,40 @@ export class Collection {
     this.outputLog(`获取商品详情页数据`)
     return this.parseService.ozonDetailParse(res, domain, obj)
   }
-  /** 
+  /**
    * 拓店模式
-    */
+   */
   async expendShop() {
     if (!this.task.expendType || this.targetData >= (this.task.targetCount || Infinity)) return
     const expendShopHandle = async (goodsList: any[]) => {
       for (const item of goodsList) {
         let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
-        if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount || (this.reason === 'cancel' || this.reason === 'failed')) return true
-        const data = item?.sellers?.sellers?.filter((item: any) => {
-          item.ratingCount = item?.rating?.totalScore
-          item.priceNumber = item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')
-          return item.ratingCount > 4
-        }).toSorted((a: any, b: any) => b.ratingCount - a.ratingCount).toSorted((a: any, b: any) => b.priceNumber - a.priceNumber).slice(0, targetShopCount) || []
+        if (
+          this.targetData >= (this.task.targetCount || Infinity) ||
+          this.expendShopCount >= this.task.expendShopCount ||
+          this.reason === 'cancel' ||
+          this.reason === 'failed'
+        )
+          return true
+        const data =
+          item?.sellers?.sellers
+            ?.filter((item: any) => {
+              item.ratingCount = item?.rating?.totalScore
+              item.priceNumber = item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')
+              return item.ratingCount > 4
+            })
+            .toSorted((a: any, b: any) => b.ratingCount - a.ratingCount)
+            .toSorted((a: any, b: any) => b.priceNumber - a.priceNumber)
+            .slice(0, targetShopCount) || []
         for (const sellers of data) {
           this.reason = undefined
-          if (this.targetData >= (this.task.targetCount || Infinity) || this.expendShopCount >= this.task.expendShopCount || (this.reason === 'cancel' || this.reason === 'failed')) return true
+          if (
+            this.targetData >= (this.task.targetCount || Infinity) ||
+            this.expendShopCount >= this.task.expendShopCount ||
+            this.reason === 'cancel' ||
+            this.reason === 'failed'
+          )
+            return true
           this.expendShopCount++
           this.outputLog('拓店模式开启中，请稍等！')
           await this.mainWindowService.changeUrl(sellers.link, true)
@@ -308,10 +331,12 @@ export class Collection {
     for (const url of guessLikeList) {
       const response = await this.mainWindowService.getSellingData(url)
       const sellers = {
-        sellers: []
+        sellers: [],
       }
       if (response?.success) {
-        sellers.sellers = JSON.parse(response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}')
+        sellers.sellers = JSON.parse(
+          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
+        )
         sellersList.push(sellers)
       } else {
         log.error('获取跟卖数据失败')
@@ -537,7 +562,7 @@ export class Collection {
         let detailData = await this.dataProcessService.getDetailData({
           taskId: this.task._id,
           reqDatas: [task],
-          upMode: this.task.upMode
+          upMode: this.task.upMode,
         })
         this.process--
         if (detailData.length) this.writeQueue.push(detailData)
@@ -551,9 +576,9 @@ export class Collection {
     })
   }
 
-  /** 
+  /**
    * 防止竞态写入
-    */
+   */
   async pushData() {
     const uuid = this.uuid
     if (this.isWrite) return
@@ -626,7 +651,11 @@ export class Collection {
    * 等待任务结束
    */
   private async waitForAllTasks(): Promise<void> {
-    while (this.taskQueueService.getTaskCount() > 0 || this.taskQueueService.getActiveCount() || this.isWrite) {
+    while (
+      this.taskQueueService.getTaskCount() > 0 ||
+      this.taskQueueService.getActiveCount() ||
+      this.isWrite
+    ) {
       if (
         this.reason === 'cancel' ||
         this.reason === 'failed' ||
@@ -714,9 +743,9 @@ export class Collection {
     this.outputLog('清理完成')
   }
 
-  /** 
+  /**
    * 初始化查询参数
-    */
+   */
   async initQueryParams(task: Task) {
     this.query.weightRangeMin = task.weightRangeMin
     this.query.weightRangeMax = task.weightRangeMax

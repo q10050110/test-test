@@ -46,7 +46,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const openHandle = async (eventType: 'quit' | 'logout' = 'quit') => {
-    const data = await window.electronAPI.invoke<any>('collection-get-all-tasks', {})
+    const { data } = await window.electronAPI.invoke<any>('collection-get-all-tasks', {})
     const isRunning = data.some((item: Task) => item.taskStatus === 'running')
     if (isRunning) desc.value = '退出后，正在执行的任务将终止'
     closeType.value = eventType

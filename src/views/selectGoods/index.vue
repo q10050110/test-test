@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { ConfigList, LogisticsSimpleList, ShopList, Task } from '@/types/selectGoods'
+import type { ConfigList, LogisticsSimpleList, ShopList, Task, TaskList } from '@/types/selectGoods'
+import type { Response } from '@/types'
 import type { TableColumnsType, TableProps } from 'ant-design-vue'
 import { h } from 'vue'
 import {
@@ -97,16 +98,22 @@ const rowSelection: TableProps['rowSelection'] = {
   },
 }
 let listTimer: number | undefined = undefined
+const loading = ref(false)
 const getTaskList = async (reset?: boolean, resetPage?: boolean, isThrottle: boolean = false) => {
   if (isThrottle) {
     if (listTimer) return
     listTimer = setTimeout(() => (listTimer = undefined), 500)
   }
+  loading.value = true
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  const data = await window.electronAPI.invoke<any>('collection-get-all-tasks', toRaw(params.value))
+  const { data } = await window.electronAPI.invoke<Response<TaskList>>(
+    'collection-get-all-tasks',
+    toRaw(params.value),
+  )
   tableData.value = data.list
   total.value = data.total
+  loading.value = false
 }
 getTaskList()
 
@@ -334,158 +341,164 @@ onUnmounted(() => {
 
 <template>
   <div class="select-goods-page">
-    <a-form class="form" layout="inline">
-      <div class="form__left">
-        <a-form-item>
-          <a-input
-            placeholder="请输入任务名称"
-            style="width: 180px"
-            v-model:value="params.taskName"
-            @pressEnter="getTaskList(false, true)"
-            allowClear
-          >
-            <template #prefix>
-              <SearchOutlined />
-            </template>
-          </a-input>
-        </a-form-item>
-        <a-form-item>
-          <a-select
-            v-model:value="params.taskStatus"
-            allowClear
-            style="width: 140px"
-            placeholder="请选择状态"
-          >
-            <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{
-              item.label
-            }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
-          <a-button type="primary" style="margin: 0 10px" @click="openTaskDialogHandle()"
-            >新建任务</a-button
-          >
-          <a-button type="primary" style="margin-right: 10px" @click="batchStartHandle"
-            >批量开始</a-button
-          >
-          <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
-        </a-form-item>
-      </div>
-      <div class="form__right">
-        <a-form-item>
-          <InfoCircleFilled style="color: #faad14" />
-          同时进行任务数
-          <a-tooltip>
-            <template #title
-              >为保障软件稳定流畅运行，系统已根据您的设备配置
-              智能推荐可同时进行任务数，您可结合电脑运行状态
-              与资源占用，手动自定义调整同时运行的任务数量。</template
+    <div class="top">
+      <a-form class="form" layout="inline">
+        <div class="form__left">
+          <a-form-item>
+            <a-input
+              placeholder="请输入任务名称"
+              style="width: 180px"
+              v-model:value="params.taskName"
+              @pressEnter="getTaskList(false, true)"
+              allowClear
             >
-            <QuestionCircleOutlined />
-          </a-tooltip>
-          <a-select
-            v-model:value="taskQueueCount"
-            style="width: 80px; margin-left: 10px"
-            @change="changeTaskQueueCount"
+              <template #prefix>
+                <SearchOutlined />
+              </template>
+            </a-input>
+          </a-form-item>
+          <a-form-item>
+            <a-select
+              v-model:value="params.taskStatus"
+              allowClear
+              style="width: 140px"
+              placeholder="请选择状态"
+            >
+              <a-select-option
+                v-for="item in taskStatusList"
+                :key="item.value"
+                :value="item.value"
+                >{{ item.label }}</a-select-option
+              >
+            </a-select>
+          </a-form-item>
+          <a-form-item>
+            <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
+            <a-button type="primary" style="margin: 0 10px" @click="openTaskDialogHandle()"
+              >新建任务</a-button
+            >
+            <a-button type="primary" style="margin-right: 10px" @click="batchStartHandle"
+              >批量开始</a-button
+            >
+            <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
+          </a-form-item>
+        </div>
+        <div class="form__right">
+          <a-form-item>
+            <InfoCircleFilled style="color: #faad14" />
+            同时进行任务数
+            <a-tooltip>
+              <template #title
+                >为保障软件稳定流畅运行，系统已根据您的设备配置
+                智能推荐可同时进行任务数，您可结合电脑运行状态
+                与资源占用，手动自定义调整同时运行的任务数量。</template
+              >
+              <QuestionCircleOutlined />
+            </a-tooltip>
+            <a-select
+              v-model:value="taskQueueCount"
+              style="width: 80px; margin-left: 10px"
+              @change="changeTaskQueueCount"
+            >
+              <a-select-option :value="item" v-for="item in taskNumberList" :key="item">{{
+                item
+              }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </div>
+      </a-form>
+      <a-row style="margin-top: 20px" class="table">
+        <a-col :span="24">
+          <a-table
+            :dataSource="tableData"
+            :columns="columns"
+            :row-selection="rowSelection"
+            :pagination="false"
+            rowKey="_id"
+            :loading="loading"
           >
-            <a-select-option :value="item" v-for="item in taskNumberList" :key="item">{{
-              item
-            }}</a-select-option>
-          </a-select>
-        </a-form-item>
-      </div>
-    </a-form>
-    <a-row style="margin-top: 20px" class="table">
-      <a-col :span="24">
-        <a-table
-          :dataSource="tableData"
-          :columns="columns"
-          :row-selection="rowSelection"
-          :pagination="false"
-          rowKey="_id"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'taskName'">
-              <div style="font-weight: bold; color: #000" class="ellipsis-1">
-                <div
-                  class="autoUp"
-                  v-if="record.isUseAutoUpGoods"
-                  :style="{ backgroundColor: bgColor(record.autoResult) }"
-                  @click="goErp('batchRecord')"
-                >
-                  <a-tooltip v-if="record.autoResult === undefined">
-                    <template #title>任务完成后将会自动上架商品</template>
-                    <span>上架</span>
-                  </a-tooltip>
-                  <a-tooltip v-if="record.autoResult === 'success'">
-                    <template #title>自动上架成功，可前往【上品帮erp-上架记录查看】</template>
-                    <span>已上架</span>
-                  </a-tooltip>
-                  <a-tooltip v-if="record.autoResult && record.autoResult !== 'success'">
-                    <template #title>自动上架失败：{{ record.autoResult }}</template>
-                    <span>失败</span>
-                  </a-tooltip>
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'taskName'">
+                <div style="font-weight: bold; color: #000" class="ellipsis-1">
+                  <div
+                    class="autoUp"
+                    v-if="record.isUseAutoUpGoods"
+                    :style="{ backgroundColor: bgColor(record.autoResult) }"
+                    @click="goErp('batchRecord')"
+                  >
+                    <a-tooltip v-if="record.autoResult === undefined">
+                      <template #title>任务完成后将会自动上架商品</template>
+                      <span>上架</span>
+                    </a-tooltip>
+                    <a-tooltip v-if="record.autoResult === 'success'">
+                      <template #title>自动上架成功，可前往【上品帮erp-上架记录查看】</template>
+                      <span>已上架</span>
+                    </a-tooltip>
+                    <a-tooltip v-if="record.autoResult && record.autoResult !== 'success'">
+                      <template #title>自动上架失败：{{ record.autoResult }}</template>
+                      <span>失败</span>
+                    </a-tooltip>
+                  </div>
+                  {{ record.taskName }}
                 </div>
-                {{ record.taskName }}
-              </div>
-              <div>创建时间：{{ formatDate(record.createTime) }}</div>
-              <div>最近执行：{{ formatDate(record.lastRunningTime) }}</div>
-            </template>
-            <template v-if="column.key === 'status'">
-              <a-tag
-                :color="taskStatusList.find((item) => item.value === record.taskStatus)?.color"
-              >
-                {{
-                  taskStatusList.find((item) => item.value === record.taskStatus)?.label || '未执行'
-                }}
-              </a-tag>
-            </template>
-            <template v-if="column.key === 'progress'">
-              <div>
-                正在处理中商品
-                <span style="color: #2753ed">{{ record?.progress?.current || 0 }}</span> 个
-              </div>
-              <div>
-                累计已爬取商品
-                <span style="color: #2753ed">{{ record?.progress?.total || 0 }}</span> 个
-              </div>
-              <div>
-                符合条件商品
-                <span style="color: #17bd3e">{{ record?.progress?.totalCount || 0 }}</span> 个
-              </div>
-            </template>
-            <template v-if="column.key === 'action'">
-              <a-button
-                type="link"
-                :icon="h(CaretRightOutlined)"
-                v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
-                @click="startTask(record as Task, true)"
-                >开始</a-button
-              >
-              <a-button
-                type="link"
-                v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
-                :icon="h(PauseCircleFilled)"
-                @click="cancelTask(record._id)"
-                >终止</a-button
-              >
-              <a-tooltip placement="topRight">
-                <template #title>
-                  <span>任务执行中不允许编辑</span>
-                </template>
+                <div>创建时间：{{ formatDate(record.createTime) }}</div>
+                <div>最近执行：{{ formatDate(record.lastRunningTime) }}</div>
+              </template>
+              <template v-if="column.key === 'status'">
+                <a-tag
+                  :color="taskStatusList.find((item) => item.value === record.taskStatus)?.color"
+                >
+                  {{
+                    taskStatusList.find((item) => item.value === record.taskStatus)?.label ||
+                    '未执行'
+                  }}
+                </a-tag>
+              </template>
+              <template v-if="column.key === 'progress'">
+                <div>
+                  正在处理中商品
+                  <span style="color: #2753ed">{{ record?.progress?.current || 0 }}</span> 个
+                </div>
+                <div>
+                  累计已爬取商品
+                  <span style="color: #2753ed">{{ record?.progress?.total || 0 }}</span> 个
+                </div>
+                <div>
+                  符合条件商品
+                  <span style="color: #17bd3e">{{ record?.progress?.totalCount || 0 }}</span> 个
+                </div>
+              </template>
+              <template v-if="column.key === 'action'">
                 <a-button
                   type="link"
-                  :icon="h(EditOutlined)"
-                  @click="openTaskDialogHandle(record as Task)"
-                  :disabled="record.taskStatus === 'running'"
-                  >编辑</a-button
+                  :icon="h(CaretRightOutlined)"
+                  v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
+                  @click="startTask(record as Task, true)"
+                  >开始</a-button
                 >
-              </a-tooltip>
-              <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)"
-                >复制</a-button
-              >
-              <!-- <a-tooltip placement="topRight">
+                <a-button
+                  type="link"
+                  v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
+                  :icon="h(PauseCircleFilled)"
+                  @click="cancelTask(record._id)"
+                  >终止</a-button
+                >
+                <a-tooltip placement="topRight">
+                  <template #title>
+                    <span>任务执行中不允许编辑</span>
+                  </template>
+                  <a-button
+                    type="link"
+                    :icon="h(EditOutlined)"
+                    @click="openTaskDialogHandle(record as Task)"
+                    :disabled="record.taskStatus === 'running'"
+                    >编辑</a-button
+                  >
+                </a-tooltip>
+                <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)"
+                  >复制</a-button
+                >
+                <!-- <a-tooltip placement="topRight">
                 <template #title>
                   <span>{{
                     record.taskStatus === 'noExecuted'
@@ -505,46 +518,47 @@ onUnmounted(() => {
                   >导出</a-button
                 >
               </a-tooltip> -->
-              <a-button
-                type="link"
-                :icon="h(EyeOutlined)"
-                @click="goErp(`purchaseRecord?taskId=${record._id}`)"
-                >查看</a-button
-              >
-              <a-tooltip placement="topRight" v-if="record.isUseAutoUpGoods">
-                <template #title>
-                  <span>将表格中的商品上架至OZON后台</span>
-                </template>
                 <a-button
                   type="link"
-                  :icon="h(DownloadOutlined)"
-                  :disabled="
-                    record?.autoResult === 'success' ||
-                    !record?.tableFilePath ||
-                    record?.taskStatus === 'noExecuted' ||
-                    record?.taskStatus === 'running' ||
-                    record?.taskStatus === 'pending'
-                  "
-                  @click="upGoods(record as Task)"
-                  >上架</a-button
+                  :icon="h(EyeOutlined)"
+                  @click="goErp(`purchaseRecord?taskId=${record._id}`)"
+                  >查看</a-button
                 >
-              </a-tooltip>
+                <a-tooltip placement="topRight" v-if="record.isUseAutoUpGoods">
+                  <template #title>
+                    <span>将表格中的商品上架至OZON后台</span>
+                  </template>
+                  <a-button
+                    type="link"
+                    :icon="h(DownloadOutlined)"
+                    :disabled="
+                      record?.autoResult === 'success' ||
+                      !record?.tableFilePath ||
+                      record?.taskStatus === 'noExecuted' ||
+                      record?.taskStatus === 'running' ||
+                      record?.taskStatus === 'pending'
+                    "
+                    @click="upGoods(record as Task)"
+                    >上架</a-button
+                  >
+                </a-tooltip>
+              </template>
             </template>
-          </template>
-        </a-table>
-      </a-col>
-    </a-row>
-    <a-row class="pagination">
-      <a-pagination
-        v-model:current="params.pageNo"
-        :defaultPageSize="params.pageSize"
-        :total="total"
-        show-less-items
-        :show-total="(total) => `每页10条 共${total}条记录`"
-        :showSizeChanger="false"
-        @change="pageChange"
-      />
-    </a-row>
+          </a-table>
+        </a-col>
+      </a-row>
+      <a-row class="pagination">
+        <a-pagination
+          v-model:current="params.pageNo"
+          :defaultPageSize="params.pageSize"
+          :total="total"
+          show-less-items
+          :show-total="(total) => `每页10条 共${total}条记录`"
+          :showSizeChanger="false"
+          @change="pageChange"
+        />
+      </a-row>
+    </div>
     <a-row class="tabs">
       <a-col :span="24">
         <Tabs ref="tabsRef" />
@@ -568,9 +582,24 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+
+  .top {
+    padding: 0 10px;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+    border-radius: 10px;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 20px;
+  }
+
   .form {
+    flex-shrink: 0;
+    margin-top: 20px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
     &__left,
     &__right {
       display: flex;
@@ -578,15 +607,18 @@ onUnmounted(() => {
   }
   .table {
     flex: 1;
+    min-height: 0;
     overflow: hidden;
     overflow-y: auto;
   }
 
   .pagination {
+    flex-shrink: 0;
     height: 60px;
     justify-content: flex-end;
     align-items: center;
     margin-bottom: 10px;
+    background-color: #fff;
   }
 
   .tabs {
@@ -594,6 +626,7 @@ onUnmounted(() => {
     padding: 10px 20px;
     background-color: #fff;
     height: 160px;
+    border-radius: 10px;
   }
 
   .autoUp {

@@ -26,6 +26,7 @@ declare module 'vue' {
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
     APagination: typeof import('ant-design-vue/es')['Pagination']
+    APopconfirm: typeof import('ant-design-vue/es')['Popconfirm']
     AProgress: typeof import('ant-design-vue/es')['Progress']
     ARadio: typeof import('ant-design-vue/es')['Radio']
     ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
@@ -42,6 +43,7 @@ declare module 'vue' {
     CLoading: typeof import('./components/c-loading.vue')['default']
     CModal: typeof import('./components/c-modal.vue')['default']
     CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
+    CTabsLog: typeof import('./components/c-tabs-log.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -63,6 +65,7 @@ declare global {
   const AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
   const AModal: typeof import('ant-design-vue/es')['Modal']
   const APagination: typeof import('ant-design-vue/es')['Pagination']
+  const APopconfirm: typeof import('ant-design-vue/es')['Popconfirm']
   const AProgress: typeof import('ant-design-vue/es')['Progress']
   const ARadio: typeof import('ant-design-vue/es')['Radio']
   const ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
@@ -79,6 +82,7 @@ declare global {
   const CLoading: typeof import('./components/c-loading.vue')['default']
   const CModal: typeof import('./components/c-modal.vue')['default']
   const CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
+  const CTabsLog: typeof import('./components/c-tabs-log.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

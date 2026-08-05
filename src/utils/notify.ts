@@ -1,6 +1,6 @@
-import feedback from "./feedback"
+import feedback from './feedback'
 export default {
   account: {
-    callback: (message: string) => feedback.notifyError(message)
-  }
+    callback: (message: string) => feedback.notifyError(message),
+  },
 }

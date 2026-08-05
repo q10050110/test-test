@@ -131,9 +131,7 @@ export class ExcelWriter {
           if (row.cover2) {
             const res = await fetch(row.cover2)
             const buffer = Buffer.from(await res.arrayBuffer())
-            const convertedBuffer = await sharp(buffer)
-              .png()
-              .toBuffer()
+            const convertedBuffer = await sharp(buffer).png().toBuffer()
 
             const imageId = this.workbook.addImage({
               buffer: convertedBuffer as any,
@@ -174,7 +172,7 @@ export class ExcelWriter {
         // 删除旧文件（Windows 下 rename 覆盖容易 EPERM）
         try {
           await fsPromises.unlink(this.filePath)
-        } catch { }
+        } catch {}
 
         // 临时文件替换正式文件
         await fsPromises.rename(tempPath, this.filePath)
@@ -317,7 +315,7 @@ export class ExcelWriter {
 
     Object.keys(style).forEach((key) => {
       if (!['font', 'fill', 'border'].includes(key)) {
-        ; (row as any)[key] = (style as any)[key]
+        ;(row as any)[key] = (style as any)[key]
       }
     })
   }
