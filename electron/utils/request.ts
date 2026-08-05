@@ -20,6 +20,10 @@ request.interceptors.request.use(
     if (isTokenFailure && !config.url?.includes('login'))
       return Promise.reject(new Error('token失效'))
     if (token && config.data) config.data.token = token
+    if (config.data) {
+      config.data.pluginVersion = "3.2.0"
+      config.data.from_type = 'auto'
+    }
     /*     if (config.url?.includes('getReMaiData')) console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`) */
     return config
   },
