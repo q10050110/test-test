@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio'
 import { MainWindowService } from './main-window.services.js'
 import log from '../../log/index.js'
+import { sleep } from '../../utils/index.js'
 
 export class ParseService {
   protected ozonGoodsData: Set<string> = new Set()
@@ -88,7 +89,7 @@ export class ParseService {
     for (const item of uniqueData) {
       if (this.taskStatus.status === 'completed') break
       const response = await this.windowService?.getSellingData(item.requestUrl)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await sleep(100, 500)
       if (response?.success) {
         const sellers = JSON.parse(
           response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',

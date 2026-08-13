@@ -155,3 +155,13 @@ export const checkNetworkStatus = (): Promise<boolean> => {
     tryResolveDomain(0)
   })
 }
+
+// 随机延迟，更像人类
+export const sleep = (min: number, max: number) =>
+  new Promise(resolve => {
+    const delay = Math.floor(
+      Math.random() * (max - min + 1) + min
+    )
+
+    setTimeout(resolve, delay)
+  })

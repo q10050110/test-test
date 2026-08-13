@@ -6,6 +6,7 @@ import { ParseService } from './parse.services.js'
 import log from '../../log/index.js'
 import dayjs from 'dayjs'
 import { memoryMonitor } from '../memory-monitor.services.js'
+import { sleep } from '../../utils/index.js'
 export class InspectionServices {
   private inspection: Inspection
   private mainWindowService: MainWindowService
@@ -101,13 +102,13 @@ export class InspectionServices {
           log.info(`${this.inspection.shopName}-滚动到底部3次，结束任务`)
           break
         }
-        await new Promise((resolve) => setTimeout(resolve, 4000))
+        await sleep(2000, 4000)
         if (this.inspection.status !== 'running') break;
         const result = await this.mainWindowService.scrollPage()
         scrollAttempts++
         if (!result) {
           bottomOutCount++
-          await new Promise((resolve) => setTimeout(resolve, 5000))
+          await sleep(2000, 5000)
           continue
         }
         if (this.inspection.status !== 'running') break;

@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto'
 import { autoUpGoods, autoSaveData } from './interface.services.js'
 import { memoryMonitor } from '../memory-monitor.services.js'
 import type { Query, Response } from './type.js'
+import { sleep } from '../../utils/index.js'
 export class Collection {
   private uuid: string | undefined = undefined
   private task: Task // 任务信息
@@ -217,7 +218,7 @@ export class Collection {
       )
         return
       apiList.push(this.getHtmlDetailData(goods))
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await sleep(1000, 4000)
     }
     const res = await Promise.all(apiList)
     res.forEach((item) => {
@@ -378,7 +379,7 @@ export class Collection {
           return
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        await sleep(3000, 5000)
         this.outputLog(
           `滚动页面加载数据中，(${scrollAttempts}/${maxScrollAttempts})，已收集${this.parseService.getDataCount()}`,
         )
@@ -386,7 +387,7 @@ export class Collection {
         scrollAttempts++
         if (!result) {
           bottomOutCount++
-          await new Promise((resolve) => setTimeout(resolve, 5000))
+          await sleep(3000, 5000)
           continue
         }
 

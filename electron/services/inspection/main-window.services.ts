@@ -122,7 +122,7 @@ export class MainWindowService {
           const windowHeight = window.innerHeight;
           const documentHeight = document.documentElement.scrollHeight;
 
-          const scrollAmount = Math.floor(windowHeight * 0.8);
+          const scrollAmount = Math.floor(windowHeight * (0.65 + Math.random() * 0.25))
           const targetY = Math.min(
             startY + scrollAmount,
             documentHeight - windowHeight
@@ -133,7 +133,7 @@ export class MainWindowService {
             return;
           }
 
-          const duration = 3000; // 滚动时长 ms
+          const duration = 1000 + Math.random() * 3000; // 滚动时长 ms
           const startTime = performance.now();
 
           function step(now) {

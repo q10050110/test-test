@@ -177,7 +177,6 @@ export class TaskManager {
     } else {
       const inspection = new InspectionServices(data, this.mainWindow!)
       this.notifyTaskUpdate(data._id, 'cancelled')
-      this.runningTasks.set(data._id, inspection)
       try {
         await inspection.stopTask()
       } catch (error) {
