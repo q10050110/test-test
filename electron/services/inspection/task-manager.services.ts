@@ -12,7 +12,7 @@ export class TaskManager {
   private runningTasks = new Map<string, any>()
   private mainWindow: BrowserWindow | null = null
   constructor() {
-    this.queue = new PQueue({ concurrency: 10 })
+    this.queue = new PQueue({ concurrency: 4 })
   }
   public static getInstance(): TaskManager {
     if (!TaskManager.instance) {
@@ -154,8 +154,8 @@ export class TaskManager {
 
   // 执行任务
   async executeTask(task: Inspection) {
-    const { data } = await this.getRunningTaskList()
-    if (data.length >= 4) return
+    const runningIds = this.queue.runningTasks.map(item => item.id)
+    if (runningIds.includes(task._id)) return
     this.queue.add(async () => {
       const inspection = new InspectionServices(task, this.mainWindow!)
       const taskInfo = inspection.getTaskInfo()
@@ -166,7 +166,7 @@ export class TaskManager {
       } catch (error) { }
       this.notifyTaskUpdate(task._id, taskInfo.status)
       this.runningTasks.delete(task._id)
-    })
+    }, { id: task._id })
   }
 
   // 停止任务
