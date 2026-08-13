@@ -4,7 +4,7 @@ export type Inspection = {
   shopName: string
   shopUrl: string
   executionMethod: 'AUTO' | 'MANUAL'
-  autoExecutionTime: number
+  autoExecutionTime: string
   status: TaskStatus
   user_id: string
   inspectedCount: number
@@ -45,7 +45,7 @@ export type SaveSellDataParams = {
   followMinPrice: number
   followMaxPrice: number
   sellerNumber: number
-  followList: object[]
+  followList?: object[]
 }
 
 export type BatchSaveSellDataParams = {
@@ -114,6 +114,16 @@ export type GoodsDetailParams = {
   id: string
 }
 
+export type FollowDetail = {
+  sku: string,
+  name: string
+  logoImageUrl: string
+  coverImage: string
+  price: any
+  rating: any
+  credentials: string[]
+}
+
 export type GoodsDetail = {
   /** 记录唯一ID */
   _id: string
@@ -136,7 +146,7 @@ export type GoodsDetail = {
   /** 当前跟卖卖家数量 */
   sellerNumber: number
   /** 跟卖者详细列表 */
-  followList: string[]
+  followList: FollowDetail[]
   /** 用户ID */
   user_id: string
   /** 创建时间 (ISO 8601 字符串) */
@@ -154,3 +164,16 @@ export type Shop = {
 }
 
 export type ShopList = Shop[]
+
+export type Sell = {
+  sku: string
+  name: string
+  logoImageUrl: string
+  coverImage: string
+  price: any
+  credentials: string[]
+}
+export type SellListParams = {
+  dataId: string
+  items: Sell[]
+}

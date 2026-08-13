@@ -97,24 +97,30 @@ export class ParseService {
 
     for (const item of uniqueData) {
       const response = await this.windowService?.getSellingData(item.requestUrl)
+      await new Promise(resolve => setTimeout(resolve, 1000))
       if (response?.success) {
         const sellers = JSON.parse(
           response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
         )
-        item.sellerNumber = sellers?.sellers?.length || undefined
+        item.sellerNumber = sellers?.sellers?.length || 0
         const priceList = sellers?.sellers
           ?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, ''))
           .filter((subItem: any) => subItem && subItem < item.price)
-        item.sellerNumber1 = item.sellerNumber
         item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
-        item.followMinPrice1 = item.followMinPrice
         item.followMaxPrice = priceList?.length ? Math.max(...priceList) : item.price
-        item.followList = sellers?.sellers || []
+        item.followList = sellers?.sellers?.map((item: any) => ({
+          sku: item?.sku,
+          name: item?.name,
+          logoImageUrl: item?.logoImageUrl,
+          coverImage: item?.coverImage,
+          price: item?.price,
+          rating: item?.rating,
+          credentials: item?.credentials,
+          link: item?.link
+        })) || []
       } else {
         item.sellerNumber = undefined
-        item.sellerNumber1 = undefined
         item.followMinPrice = item.price
-        item.followMinPrice1 = item.price
         item.followMaxPrice = item.price
         item.followList = []
         log.error('获取跟卖数据失败')

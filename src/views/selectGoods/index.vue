@@ -383,7 +383,7 @@ onUnmounted(() => {
             <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
           </a-form-item>
         </div>
-        <div class="form__right">
+        <!--         <div class="form__right">
           <a-form-item>
             <InfoCircleFilled style="color: #faad14" />
             同时进行任务数
@@ -405,7 +405,7 @@ onUnmounted(() => {
               }}</a-select-option>
             </a-select>
           </a-form-item>
-        </div>
+        </div> -->
       </a-form>
       <a-row style="margin-top: 20px" class="table">
         <a-col :span="24">

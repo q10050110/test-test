@@ -1,7 +1,7 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import { TaskManager } from '../services/inspection/task-manager.services.js'
 import { PageParams } from '../types'
-import { TaskParams, Inspection, InspectionDetailParams, } from '../services/inspection/type'
+import { TaskParams, Inspection, InspectionDetailParams, GoodsDetailParams } from '../services/inspection/type'
 import { BrowserWindow } from 'electron'
 export const inspectionIpc = (window: BrowserWindow) => {
   const taskManager = TaskManager.getInstance()
@@ -20,7 +20,15 @@ export const inspectionIpc = (window: BrowserWindow) => {
       }
     }
   })
-
+  // 获取正在执行的任务
+  ipcMain.handle('inspection-get-running-task', async () => {
+    try {
+      const { data, code, message } = await taskManager.getRunningTaskList()
+      return { data, code, message }
+    } catch (error) {
+      return error
+    }
+  })
   // 创建任务
   ipcMain.handle('inspection-create-task', async (event, params: TaskParams) => {
     try {
@@ -74,7 +82,10 @@ export const inspectionIpc = (window: BrowserWindow) => {
 
 
 
-
+  // 跳转至OZON详情页
+  ipcMain.on('go-ozon-detail', (event, url: string) => {
+    shell.openExternal(url)
+  })
 
 
   // 获取商品列表
@@ -83,6 +94,32 @@ export const inspectionIpc = (window: BrowserWindow) => {
     async (event, params: InspectionDetailParams) => {
       try {
         const { data, code, message } = await taskManager.getGoodsList(params)
+        return { data, code, message }
+      } catch (error) {
+        return error
+      }
+    },
+  )
+
+  // 获取商品详情
+  ipcMain.handle(
+    'inspection-get-goods-detail',
+    async (event, params: GoodsDetailParams) => {
+      try {
+        const { data, code, message } = await taskManager.getGoodsDetail(params)
+        return { data, code, message }
+      } catch (error) {
+        return error
+      }
+    },
+  )
+
+  // 获取店铺列表
+  ipcMain.handle(
+    'inspection-get-shop-list',
+    async (event, params: PageParams) => {
+      try {
+        const { data, code, message } = await taskManager.getShopList(params)
         return { data, code, message }
       } catch (error) {
         return error

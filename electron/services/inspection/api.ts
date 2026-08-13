@@ -11,7 +11,9 @@ import {
   ShopList,
   BatchSaveSellDataParams,
   InspectionDetailParams,
-  InspectionDetailList
+  InspectionDetailList,
+  Inspection,
+  SellListParams
 } from './type'
 import { InterfaceResult, PageParams } from '../../types/index'
 
@@ -23,9 +25,17 @@ export const getTaskListAPI = (data: PageParams) =>
     data,
   })
 
+// 获取定时任务列表
+export const getTimerTaskListAPI = () =>
+  request<InterfaceResult<Inspection[]>, InterfaceResult<Inspection[]>>({
+    url: '/api/auto/followSellTask/getAllFollowSellTaskList',
+    method: 'post',
+    data: {}
+  })
+
 // 创建任务
 export const createTaskAPI = (data: TaskParams) =>
-  request<InterfaceResult<{ taskId: string }>, InterfaceResult<{ taskId: string }>>({
+  request<InterfaceResult<Inspection>, InterfaceResult<Inspection>>({
     url: '/api/auto/followSellTask/createFollowSellTask',
     method: 'post',
     data,
@@ -33,7 +43,7 @@ export const createTaskAPI = (data: TaskParams) =>
 
 // 更新任务状态
 export const updateTaskStatusAPI = (data: UpdateTaskStatusParams) =>
-  request<InterfaceResult<string>, InterfaceResult<string>>({
+  request<InterfaceResult<Inspection>, InterfaceResult<Inspection>>({
     url: '/api/auto/followSellTask/updateFollowSellTaskStatus',
     method: 'post',
     data,
@@ -49,7 +59,7 @@ export const deleteTaskAPI = (data: { taskIds: string[] }) =>
 
 // 修改任务
 export const updateTaskAPI = (data: UpdateTaskParams) =>
-  request<InterfaceResult<string>, InterfaceResult<string>>({
+  request<InterfaceResult<Inspection>, InterfaceResult<Inspection>>({
     url: '/api/auto/followSellTask/editFollowSellTask',
     method: 'post',
     data,
@@ -65,11 +75,18 @@ export const saveSellDataAPI = (data: SaveSellDataParams) =>
 
 // 批量保存跟卖数据
 export const batchSaveSellDataAPI = (data: BatchSaveSellDataParams) =>
-  request<InterfaceResult<string>, InterfaceResult<string>>({
+  request<InterfaceResult<{ sku: string, dataId: string }[]>, InterfaceResult<{ sku: string, dataId: string }[]>>({
     url: '/api/auto/followSellTask/addFollowSellDataBatch',
     method: 'post',
     data,
   })
+
+// 保存跟卖列表数据
+export const saveSellListDataAPI = (data: SellListParams) => request<InterfaceResult<string>, InterfaceResult<string>>({
+  url: '/api/auto/followSellTask/addFollowListItems',
+  method: 'post',
+  data
+})
 
 // 获取巡查详情
 export const getInspectionDetailAPI = (data: InspectionDetailParams) =>
@@ -82,7 +99,7 @@ export const getInspectionDetailAPI = (data: InspectionDetailParams) =>
 // 获取商品详情
 export const getGoodsDetailAPI = (data: GoodsDetailParams) =>
   request<InterfaceResult<GoodsDetail>, InterfaceResult<GoodsDetail>>({
-    url: '/api/auto/followSellTask/getFollowSellDataById',
+    url: '/api/auto/followSellTask/getFollowSellDataBySku',
     method: 'post',
     data,
   })

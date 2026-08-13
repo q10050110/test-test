@@ -14,9 +14,16 @@ const initFormData = ref<TaskParams>({
   autoExecutionTime: undefined,
 })
 const rules: Record<string, Rule[]> = {
-  shopName: [{ required: true, message: '请输入店铺名称', trigger: 'blur' }],
-  shopUrl: [{ required: true, message: '请输入店铺链接', trigger: 'blur' }],
-  executionMethod: [{ required: true, message: '请选择执行方式', trigger: 'change' }],
+  shopName: [{ required: true, message: '请输入店铺名称', trigger: ['blur', 'change'] }],
+  shopUrl: [
+    { required: true, message: '请输入店铺链接', trigger: ['blur', 'change'] },
+    {
+      pattern: /^https?:\/\/www\.ozon\.ru\/seller\//,
+      message: '请输入正确的链接',
+      trigger: ['blur', 'change'],
+    },
+  ],
+  executionMethod: [{ required: true, message: '请选择执行方式', trigger: ['blur', 'change'] }],
 }
 const formData = ref<TaskParams>({ ...initFormData.value })
 const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
@@ -27,29 +34,32 @@ const handleExecMethodChange = () => {
 }
 // 创建任务
 const handleOk = async () => {
-  await formRef.value?.validate()
-  if (formData.value.executionMethod === 'AUTO' && !formData.value.autoExecutionTime)
-    return feedback.warning('请选择执行时间')
-  const params = toRaw(formData.value)
-  const { data, code, message } = formData.value.taskId
-    ? await window.electronAPI.invoke<Response<{ taskId: string }>>(
-        'inspection-update-task',
-        params,
-      )
-    : await window.electronAPI.invoke<Response<{ taskId: string }>>(
-        'inspection-create-task',
-        params,
-      )
-  if (!code) {
-    open.value = false
-    emit('refresh')
-    feedback.success('创建任务成功')
-    return
-  }
-  feedback.error(message || '系统繁忙')
+  try {
+    await formRef.value?.validate()
+    if (formData.value.executionMethod === 'AUTO' && !formData.value.autoExecutionTime)
+      return feedback.warning('请选择执行时间')
+    const params = toRaw(formData.value)
+    const { data, code, message } = formData.value.taskId
+      ? await window.electronAPI.invoke<Response<{ taskId: string }>>(
+          'inspection-update-task',
+          params,
+        )
+      : await window.electronAPI.invoke<Response<{ taskId: string }>>(
+          'inspection-create-task',
+          params,
+        )
+    if (!code) {
+      handleCancel()
+      emit('refresh')
+      feedback.success('创建任务成功')
+      return
+    }
+    feedback.error(message || '系统繁忙')
+  } catch (error) {}
 }
 // 重置表单数据
-const handleCancel = () => {
+const handleCancel = async () => {
+  open.value = false
   formData.value = { ...initFormData.value }
   formRef.value?.resetFields()
 }
@@ -65,8 +75,9 @@ defineExpose({
     title="新增巡查任务"
     width="50vw"
     :footer="null"
-    @ok="handleOk"
     @cancel="handleCancel"
+    destroy-on-close
+    :maskClosable="false"
   >
     <div class="dialog-content">
       <a-form

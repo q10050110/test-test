@@ -11,7 +11,7 @@ export type Inspection = {
   inspectedCount: number
   followedCount: number
   createTime: number
-  lastRunningTime: number
+  lastRunningTime: number | string
 }
 
 export type InspectionList = {
@@ -59,11 +59,11 @@ export interface FollowTrendItem {
 
 export type InspectionDetailParams = {
   /** 任务ID */
-  taskId: string
+  taskId?: string
   /** 商品ID或相关标识 */
-  id: string
+  id?: string
   /** 是否被跟卖 */
-  isFollowed: boolean
+  isFollowed?: boolean
   /** 当前页码 */
   pageNo: number
   /** 每页条数 */
@@ -111,6 +111,16 @@ export type GoodsDetailParams = {
   id: string
 }
 
+export type FollowDetail = {
+  sku: string,
+  name: string
+  logoImageUrl: string
+  coverImage: string
+  price: any
+  rating: any
+  credentials: string[]
+}
+
 export type GoodsDetail = {
   /** 记录唯一ID */
   _id: string
@@ -133,7 +143,7 @@ export type GoodsDetail = {
   /** 当前跟卖卖家数量 */
   sellerNumber: number
   /** 跟卖者详细列表 */
-  followList: string[]
+  followList: FollowDetail[]
   /** 用户ID */
   user_id: string
   /** 创建时间 (ISO 8601 字符串) */
@@ -142,4 +152,10 @@ export type GoodsDetail = {
   updateTime: string
   /** 跟卖趋势历史数据 */
   followTrends: FollowTrendItem[]
+}
+
+export type Shop = {
+  _id: string
+  shopName: string
+  shopUrl: string
 }

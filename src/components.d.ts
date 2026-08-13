@@ -41,9 +41,9 @@ declare module 'vue' {
     ATooltip: typeof import('ant-design-vue/es')['Tooltip']
     CCloseModal: typeof import('./components/c-close-modal.vue')['default']
     CLoading: typeof import('./components/c-loading.vue')['default']
+    CLogTab: typeof import('./components/c-log-tab.vue')['default']
     CModal: typeof import('./components/c-modal.vue')['default']
     CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
-    CTabsLog: typeof import('./components/c-tabs-log.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -80,9 +80,9 @@ declare global {
   const ATooltip: typeof import('ant-design-vue/es')['Tooltip']
   const CCloseModal: typeof import('./components/c-close-modal.vue')['default']
   const CLoading: typeof import('./components/c-loading.vue')['default']
+  const CLogTab: typeof import('./components/c-log-tab.vue')['default']
   const CModal: typeof import('./components/c-modal.vue')['default']
   const CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
-  const CTabsLog: typeof import('./components/c-tabs-log.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

@@ -173,6 +173,7 @@ export class MainWindowService {
           `)
       return response
     } catch (error) {
+      console.log(error)
       return false
     }
   }

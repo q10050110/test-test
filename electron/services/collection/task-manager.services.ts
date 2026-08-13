@@ -22,7 +22,7 @@ export class TaskManager {
     { filePath: string; progress: any; autoResult?: string; upGoodsList: any[] }
   > = new Map()
   private constructor() {
-    this.maxConcurrentTasks = os.totalmem() / 1024 / 1024 / 1024 > 15 ? 8 : 4
+    this.maxConcurrentTasks = 4
   }
 
   public static getInstance(): TaskManager {

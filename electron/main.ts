@@ -5,6 +5,7 @@ import { CloseProcessService } from './services/closeProcess.services.js'
 import { globalBroadcast } from './ipc/broadcast.js'
 import { operationStore } from './store/index.js'
 import { memoryMonitor } from './services/memory-monitor.services.js'
+import { StartProcessService } from './services/startProcess.services.js'
 app.commandLine.appendSwitch('disable-logging')
 app.commandLine.appendSwitch('log-level', '3')
 
@@ -146,12 +147,12 @@ class ElectronApp {
       if (restartCount > 0) {
         log.info(`当前为第 ${restartCount} 次重启`)
       }
-
       try {
         const isExecuteClose = operationStore.get('is-execute-close')
         if (!isExecuteClose) new CloseProcessService().run()
-        /*         new CloseProcessService().syncData() */
         operationStore.set('is-execute-close', false)
+        const startProcessService = new StartProcessService()
+        startProcessService.start()
         createWindow()
         log.info('主窗口创建成功')
       } catch (error) {

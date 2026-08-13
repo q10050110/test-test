@@ -13,36 +13,36 @@ import InspectionDialog from './components/inspectionDialog.vue'
 import { h } from 'vue'
 import feedback from '@/utils/feedback'
 import dayjs from 'dayjs'
+import cLogTab from '@/components/c-log-tab.vue'
 const columns = ref<TableColumnsType<Inspection>>([
   {
     title: '店铺名称',
     dataIndex: 'shopName',
     key: 'shopName',
-    width: '20%',
+    width: 120,
   },
   {
     title: '巡查方式',
     dataIndex: 'executionMethod',
     key: 'executionMethod',
-    width: '20%',
+    width: 180,
   },
   {
     title: '巡查状态',
     dataIndex: 'status',
     key: 'status',
-    width: '15%',
+    width: 120,
   },
   {
     title: '上次执行',
     dataIndex: 'lastRunningTime',
     key: 'lastRunningTime',
-    width: '25%',
   },
   {
     title: '操作',
     dataIndex: 'operation',
     key: 'operation',
-    width: '20%',
+    width: 300,
     fixed: 'right', // 固定列
   },
 ])
@@ -72,7 +72,7 @@ const taskStatusList = ref([
     color: 'error',
   },
   {
-    label: '已结束',
+    label: '已取消',
     value: 'cancelled',
     color: 'warning',
   },
@@ -104,6 +104,7 @@ const getInspectionTaskList = async (reset?: boolean, resetPage?: boolean) => {
     'inspection-get-task-list',
     toRaw(params.value),
   )
+  console.log(params.value)
   tableData.value = data.list
   total.value = data.total
   loading.value = false
@@ -119,6 +120,7 @@ const pageChange = (page: number, pageSize: number) => {
 
 // 删除任务
 const deleteHandle = async (record: Inspection) => {
+  if (record.status === 'running') return feedback.error('请先终止任务')
   const { data, code } = await window.electronAPI.invoke<Response<string>>(
     'inspection-delete-task',
     { taskIds: [record._id] },
@@ -130,12 +132,25 @@ const deleteHandle = async (record: Inspection) => {
 }
 
 // 格式化时间
-const formatDate = (date: string) => {
+const formatDate = (date: number) => {
   return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
 }
 
 // 开始任务
+let startTimer: number | undefined = undefined
+const taskId = ref()
 const startHandle = async (record: Inspection) => {
+  if (startTimer && taskId.value == record._id) return feedback.error('请勿频繁点击！')
+  taskId.value = record._id
+  startTimer = setTimeout(() => {
+    startTimer = undefined
+  }, 3000)
+  const { data: list } = await window.electronAPI.invoke<Response<Inspection[]>>(
+    'inspection-get-running-task',
+    {},
+  )
+  if (list.length >= 4) return feedback.error('任务数量已达上限')
+  record.lastRunningTime = formatDate(Date.now())
   const data = toRaw(record)
   const { code, message } = await window.electronAPI.invoke<Response<string>>(
     'inspection-execute-task',
@@ -155,13 +170,35 @@ const stopTask = async (record: Inspection) => {
 }
 
 // 获取任务进度
+const tabsRef = ref<InstanceType<typeof cLogTab>>()
 const getProgress = async (data?: any) => {
   const { inspectionTask, log } = data
   let obj = tableData.value?.find((item) => item._id === inspectionTask._id)
   if (obj) Object.assign(obj, inspectionTask)
+  tabsRef.value?.writeLog(inspectionTask._id, log)
+}
+
+// 获取执行中的任务
+const getRunningTask = async () => {
+  const { data } = await window.electronAPI.invoke<Response<Inspection[]>>(
+    'inspection-get-running-task',
+    {},
+  )
+  if (tabsRef.value && data.length) {
+    data.forEach((item) => {
+      tabsRef.value?.getTaskStackList({ task: item, status: item.status })
+    })
+  }
+}
+
+// 跳转结果页
+const router = useRouter()
+const goResult = (id: string) => {
+  router.push(`/inspection/result?id=${id}`)
 }
 
 onMounted(async () => {
+  getRunningTask()
   window.electronAPI.on('inspection-progress', getProgress)
 })
 
@@ -183,11 +220,13 @@ onUnmounted(() => {
         :pagination="false"
         rowKey="_id"
         style="margin-bottom: 16px"
+        :loading="loading"
+        class="table"
       >
         <template #bodyCell="{ column, record }">
           <!-- 店铺名称列 -->
           <template v-if="column.key === 'shopName'">
-            {{ record.shopName }}
+            <span class="ellipsis-1" style="width: 120px">{{ record.shopName }}</span>
           </template>
 
           <!-- 巡查方式列 -->
@@ -210,9 +249,9 @@ onUnmounted(() => {
 
           <!-- 上次执行列 -->
           <template v-if="column.key === 'lastRunningTime'">
-            <div class="execute-time-cell">
+            <div class="execute-time-cell" v-if="record.lastRunningTime">
               {{ formatDate(record.lastRunningTime) }}
-              <div v-if="record.status === 'completed'" class="result-info">
+              <div v-if="record.status !== 'noExecuted'" class="result-info">
                 <span class="success-badge">巡查数量：{{ record.inspectedCount }}</span>
                 <span class="warning-badge">被跟数量：{{ record.followedCount }}</span>
               </div>
@@ -238,12 +277,18 @@ onUnmounted(() => {
               >
                 终止
               </a-button>
-              <a-button type="link" :icon="h(SearchOutlined)"> 查看 </a-button>
+              <a-button
+                type="link"
+                :icon="h(SearchOutlined)"
+                @click="goResult(record._id as string)"
+              >
+                查看
+              </a-button>
               <a-button
                 type="link"
                 :icon="h(EditOutlined)"
                 @click="showInspectionDialog(record as Inspection)"
-                :disabled="record.taskStatus === 'running'"
+                :disabled="record.status === 'running'"
               >
                 编辑
               </a-button>
@@ -267,11 +312,18 @@ onUnmounted(() => {
           :defaultPageSize="params.pageSize"
           :total="total"
           show-less-items
-          :show-total="(total) => `每页10条 共${total}条记录`"
-          :showSizeChanger="false"
+          showQuickJumper
+          :show-total="
+            (total) =>
+              `第 ${(params.pageNo - 1) * params.pageSize + 1}-${params.pageNo * params.pageSize} 条/总共 ${total} 条`
+          "
+          :showSizeChanger="true"
           @change="pageChange"
         />
       </div>
+    </div>
+    <div class="log">
+      <c-log-tab ref="tabsRef" event-name="inspection-task-status-update" />
     </div>
   </div>
   <InspectionDialog ref="inspectionDialogRef" @refresh="getInspectionTaskList(false, false)" />
@@ -279,20 +331,41 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .inspection-task-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
   .table-container {
+    flex: 3;
+    overflow: hidden;
+    overflow-y: auto;
     border-radius: 10px;
     background-color: #fff;
     padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+    .table {
+      overflow: hidden;
+      overflow-y: auto;
+      flex: 1;
+    }
     .action-bar {
+      height: 30px;
       margin-bottom: 20px;
       .ant-btn {
         border-radius: 4px;
       }
     }
     .pagination {
+      height: 40px;
       margin-top: 16px;
       text-align: right;
     }
+  }
+
+  .log {
+    flex: 1;
+    margin-top: 20px;
   }
 
   .status-tag {
@@ -303,28 +376,43 @@ onUnmounted(() => {
   }
 
   .execute-time-cell {
-    text-align: left;
-    padding-left: 10px;
-    display: flex;
     .result-info {
       display: flex;
       gap: 8px;
       margin-top: 4px;
 
       .success-badge {
-        background-color: #e6f7ff;
-        color: #108ee9;
+        background-color: #d5f4e3;
+        color: #18bd66;
         padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 12px;
+        border-radius: 5px;
+        font-size: 14px;
+        &::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          display: inline-block;
+          border-radius: 50%;
+          background-color: #18bd66;
+          margin-right: 5px;
+        }
       }
 
       .warning-badge {
-        background-color: #fffbe6;
-        color: #faad14;
+        background-color: rgba($color: #faad13, $alpha: 0.2);
+        color: #faad13;
         padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 12px;
+        border-radius: 5px;
+        font-size: 14px;
+        &::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          display: inline-block;
+          border-radius: 50%;
+          background-color: #faad13;
+          margin-right: 5px;
+        }
       }
     }
   }
