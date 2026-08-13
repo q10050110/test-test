@@ -12,11 +12,14 @@ export class InspectionServices {
   private parseService: ParseService
   private mainWindow: BrowserWindow | null = null
   private progress = { inspectedCount: 0, followedCount: 0 }
+  private taskStatus: { status: 'running' | 'completed' } = {
+    status: 'running'
+  }
   constructor(inspection: Inspection, window: BrowserWindow) {
     this.mainWindow = window
     this.inspection = inspection
     this.mainWindowService = new MainWindowService(this.closeHandle)
-    this.parseService = new ParseService(this.mainWindowService)
+    this.parseService = new ParseService(this.mainWindowService, this.taskStatus)
   }
 
   /**
@@ -133,6 +136,7 @@ export class InspectionServices {
     if (this.inspection.status !== 'completed' && this.inspection.status !== 'cancelled') {
       await this.updateTaskStatus('failed')
       this.outputLog('窗口异常关闭')
+      this.taskStatus.status = 'completed'
     }
   }
 
@@ -156,6 +160,7 @@ export class InspectionServices {
     this.mainWindowService.destroy()
     await this.updateTaskStatus('cancelled')
     this.outputLog('任务取消')
+    this.taskStatus.status = 'completed'
   }
 
   /**
@@ -201,7 +206,6 @@ export class InspectionServices {
     }
     if (target?.length) this.outputLog('数据保存成功')
   }
-
   /**
   * 获取任务信息
   */
@@ -212,7 +216,10 @@ export class InspectionServices {
    * 日志输出
    */
   outputLog(taskLog: string) {
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+    if (this.taskStatus.status === 'completed') {
+      console.log(this.inspection.status, '嘿嘿嘿~~~')
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.taskStatus.status === 'running') {
       this.mainWindow.webContents.send('inspection-progress', {
         inspectionTask: { ...this.inspection, ...this.progress },
         log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },

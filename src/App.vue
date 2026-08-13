@@ -17,9 +17,14 @@ const progress = ref<Progress>({
   speed: '0',
   downloaded: '0',
 })
-window.electronAPI.on('request', (data) => {
+
+const logoutHandle = (data: any) => {
   feedback.error(data.message)
   store.logout()
+}
+
+window.electronAPI.on('request', (data) => {
+  logoutHandle(data)
 })
 
 window.electronAPI.on('task-completed', (data) => {
@@ -84,8 +89,12 @@ const onResize = debounce(() => {
 }, 100)
 
 window.addEventListener('resize', onResize)
-
+const router = useRoute()
 onMounted(async () => {
+  if (router.path !== '/login') {
+    const { expired } = await window.electronAPI.invoke<{ expired: boolean }>('get-auth-status', {})
+    expired && logoutHandle({ message: '登录已过期，请重新登录' })
+  }
   await nextTick()
   await appStore.initAppInfo()
   window.electronAPI.sendMessage('check-update-app', '')

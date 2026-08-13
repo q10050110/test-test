@@ -125,7 +125,6 @@ const getProductList = async (reset?: boolean, resetPage?: boolean) => {
     toRaw(params.value),
   )
   tableData.value = data.list
-  currentImage.value = data.list?.[0]?.cover || ''
   total.value = data.total
   loading.value = false
 }
@@ -190,8 +189,6 @@ const copyHandle = (text: string) => {
   }
 }
 
-const currentImage = ref('')
-
 // 跳转详情页
 const goDetail = (url: string) => {
   window.electronAPI.sendMessage('go-ozon-detail', url)
@@ -245,7 +242,6 @@ onMounted(() => {
           :columns="columns"
           :pagination="false"
           rowKey="sku"
-          style="margin-bottom: 16px"
           :scroll="{ x: width }"
           :loading="loading"
         >
@@ -254,12 +250,27 @@ onMounted(() => {
             <template v-if="column.key === 'productInfo'">
               <div class="product-info-cell" style="width: 225px">
                 <div style="width: 40px; margin-right: 10px">
-                  <img
-                    :src="record.cover"
-                    alt="商品图片"
-                    style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px"
-                    @click="currentImage = record.cover"
-                  />
+                  <a-tooltip
+                    color="white"
+                    placement="right"
+                    :autoAdjustOverflow="false"
+                    :mouseEnterDelay="0"
+                  >
+                    <template #title>
+                      <img
+                        style="max-height: 200px; max-width: 200px; object-fit: contain"
+                        :src="record?.cover"
+                        alt=""
+                      />
+                    </template>
+                    <div style="position: relative">
+                      <img
+                        style="height: 50px; width: 50px; object-fit: contain"
+                        :src="record?.cover"
+                        alt=""
+                      />
+                    </div>
+                  </a-tooltip>
                 </div>
                 <span
                   class="product-name"
@@ -325,15 +336,11 @@ onMounted(() => {
         :defaultPageSize="params.pageSize"
         :total="total"
         show-less-items
-        :show-total="
-          (total) =>
-            `第 ${(params.pageNo - 1) * params.pageSize + 1}-${params.pageNo * params.pageSize} 条/总共 ${total} 条`
-        "
+        showQuickJumper
+        :show-total="(total) => `共 ${total} 条数据`"
+        showSizeChange
         @change="pageChange"
       />
-    </a-row>
-    <a-row style="flex: 1">
-      <img :src="currentImage" alt="" style="width: 200px; height: 200px" v-if="currentImage" />
     </a-row>
     <chartDialog ref="chartRef" />
     <viewDialog ref="viewRef" />
@@ -364,14 +371,14 @@ onMounted(() => {
     }
   }
   .table-container {
-    flex: 4;
+    flex: 1;
     overflow: hidden;
     overflow-y: auto;
   }
 
   .pagination {
-    height: 20px;
     margin-top: 16px;
+    height: 40px;
     text-align: right;
   }
 

@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { accountHandle, getUserInfo, login, logout } from '../services/account.services.js'
-
+import { operationStore } from '../store/index.js'
 export const accountIpc = (win: BrowserWindow) => {
   ipcMain.on('account', (event, args: 'register' | 'resetPassword') => {
     accountHandle(args, win)
@@ -18,6 +18,12 @@ export const accountIpc = (win: BrowserWindow) => {
       return await login(data)
     },
   )
+
+  ipcMain.handle('get-auth-status', async (event, data: any) => {
+    return {
+      expired: operationStore.get('expired')
+    }
+  })
 
   ipcMain.handle('getUserInfo', async (event, data: { token: string }) => {
     return await getUserInfo(data)

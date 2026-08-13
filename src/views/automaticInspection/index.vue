@@ -140,11 +140,11 @@ const formatDate = (date: number) => {
 let startTimer: number | undefined = undefined
 const taskId = ref()
 const startHandle = async (record: Inspection) => {
-  if (startTimer && taskId.value == record._id) return feedback.error('请勿频繁点击！')
+  /*   if (startTimer && taskId.value == record._id) return feedback.error('请勿频繁点击！')
   taskId.value = record._id
   startTimer = setTimeout(() => {
     startTimer = undefined
-  }, 3000)
+  }, 3000) */
   const { data: list } = await window.electronAPI.invoke<Response<Inspection[]>>(
     'inspection-get-running-task',
     {},
@@ -313,11 +313,8 @@ onUnmounted(() => {
           :total="total"
           show-less-items
           showQuickJumper
-          :show-total="
-            (total) =>
-              `第 ${(params.pageNo - 1) * params.pageSize + 1}-${params.pageNo * params.pageSize} 条/总共 ${total} 条`
-          "
-          :showSizeChanger="true"
+          :show-total="(total) => `共 ${total} 条数据`"
+          showSizeChanger
           @change="pageChange"
         />
       </div>

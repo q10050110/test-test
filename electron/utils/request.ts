@@ -41,12 +41,16 @@ request.interceptors.response.use(
       if (code === 401 || code === 402) {
         if (isTokenFailure) return Promise.reject(message)
         isTokenFailure = true
+        operationStore.set('expired', true)
         globalBroadcast.broadcast('request', { code, message })
         TaskManager.getInstance().stopAllTasks()
       }
       return Promise.reject(message)
     }
-    if (isTokenFailure) isTokenFailure = false
+    if (isTokenFailure) {
+      isTokenFailure = false
+      operationStore.set('expired', false)
+    }
     return response.data
   },
   (error) => {

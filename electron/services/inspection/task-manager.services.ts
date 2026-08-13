@@ -154,8 +154,8 @@ export class TaskManager {
 
   // 执行任务
   async executeTask(task: Inspection) {
-    const runningIds = this.queue.runningTasks.map(item => item.id)
-    if (runningIds.includes(task._id)) return
+    const { data } = await this.getRunningTaskList()
+    if (data.length >= 4 || data.find(item => item._id === task._id)) return
     this.queue.add(async () => {
       const inspection = new InspectionServices(task, this.mainWindow!)
       const taskInfo = inspection.getTaskInfo()
@@ -166,7 +166,7 @@ export class TaskManager {
       } catch (error) { }
       this.notifyTaskUpdate(task._id, taskInfo.status)
       this.runningTasks.delete(task._id)
-    }, { id: task._id })
+    })
   }
 
   // 停止任务
@@ -178,7 +178,11 @@ export class TaskManager {
       const inspection = new InspectionServices(data, this.mainWindow!)
       this.notifyTaskUpdate(data._id, 'cancelled')
       this.runningTasks.set(data._id, inspection)
-      await inspection.stopTask()
+      try {
+        await inspection.stopTask()
+      } catch (error) {
+
+      }
     }
   }
   /**
