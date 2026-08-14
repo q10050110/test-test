@@ -100,12 +100,17 @@ const getInspectionTaskList = async (reset?: boolean, resetPage?: boolean) => {
   loading.value = true
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  const { data } = await window.electronAPI.invoke<Response<InspectionList>>(
+  const { data, code, message } = await window.electronAPI.invoke<Response<InspectionList>>(
     'inspection-get-task-list',
     toRaw(params.value),
   )
-  tableData.value = data.list
-  total.value = data.total
+  if (!code) {
+    tableData.value = data.list
+    total.value = data.total
+    loading.value = false
+    return
+  }
+  feedback.error(message)
   loading.value = false
 }
 getInspectionTaskList()

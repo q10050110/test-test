@@ -39,25 +39,7 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'resMoney',
     key: 'resMoney',
     customRender: (record: any) => {
-      return `${record.text} ₽`
-    },
-    width: 124,
-  },
-  {
-    title: '跟卖最低价',
-    dataIndex: 'followMinPrice',
-    key: 'followMinPrice',
-    customRender: (record: any) => {
-      return `${record.text} ₽`
-    },
-    width: 124,
-  },
-  {
-    title: '跟卖最高价',
-    dataIndex: 'followMaxPrice',
-    key: 'followMaxPrice',
-    customRender: (record: any) => {
-      return `${record.text} ₽`
+      return `₽${record.text}`
     },
     width: 124,
   },
@@ -66,9 +48,27 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'sellerNumber',
     key: 'sellerNumber',
     customRender: (record: any) => {
-      return `${record.text === undefined ? '获取失败' : record.text}`
+      return `${record.text === undefined || record.text === null ? '获取失败' : record.text}`
     },
     width: 104,
+  },
+  {
+    title: '跟卖最低价',
+    dataIndex: 'followMinPrice',
+    key: 'followMinPrice',
+    customRender: (record: any) => {
+      return record?.record?.sellerNumber ? `₽${record.text}` : '-'
+    },
+    width: 124,
+  },
+  {
+    title: '跟卖最高价',
+    dataIndex: 'followMaxPrice',
+    key: 'followMaxPrice',
+    customRender: (record: any) => {
+      return record?.record?.sellerNumber ? `₽${record.text}` : '-'
+    },
+    width: 124,
   },
   {
     title: '巡查时间',
@@ -120,12 +120,17 @@ const getProductList = async (reset?: boolean, resetPage?: boolean) => {
   loading.value = true
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  const { data } = await window.electronAPI.invoke<Response<InspectionDetailList>>(
+  const { data, code, message } = await window.electronAPI.invoke<Response<InspectionDetailList>>(
     'inspection-get-goods-list',
     toRaw(params.value),
   )
-  tableData.value = data.list
-  total.value = data.total
+  if (!code) {
+    tableData.value = data.list
+    total.value = data.total
+    loading.value = false
+    return
+  }
+  feedback.error(message)
   loading.value = false
 }
 // 获取店铺列表
@@ -231,98 +236,97 @@ onMounted(() => {
 
     <!-- 商品列表表格 -->
     <a-row class="table-container">
-      <a-col :span="24">
-        <a-table
-          :dataSource="tableData"
-          :columns="columns"
-          :pagination="false"
-          rowKey="sku"
-          :scroll="{ x: width }"
-          :loading="loading"
-        >
-          <!-- 商品信息列 -->
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'productInfo'">
-              <div class="product-info-cell" style="width: 225px">
-                <div style="width: 40px; margin-right: 10px">
-                  <a-tooltip
-                    color="white"
-                    placement="right"
-                    :autoAdjustOverflow="false"
-                    :mouseEnterDelay="0"
-                  >
-                    <template #title>
-                      <img
-                        style="max-height: 200px; max-width: 200px; object-fit: contain"
-                        :src="record?.cover"
-                        alt=""
-                      />
-                    </template>
-                    <div style="position: relative">
-                      <img
-                        style="height: 50px; width: 50px; object-fit: contain"
-                        :src="record?.cover"
-                        alt=""
-                      />
-                    </div>
-                  </a-tooltip>
-                </div>
-                <span
-                  class="product-name"
-                  :title="record.nameLabel"
-                  @click="goDetail(record.link as string)"
-                  >{{ record.nameLabel }}</span
+      <a-table
+        style="flex: 1"
+        :dataSource="tableData"
+        :columns="columns"
+        :pagination="false"
+        rowKey="sku"
+        :scroll="{ x: width }"
+        :loading="loading"
+      >
+        <!-- 商品信息列 -->
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'productInfo'">
+            <div class="product-info-cell" style="width: 225px">
+              <div style="width: 40px; margin-right: 10px">
+                <a-tooltip
+                  color="white"
+                  placement="right"
+                  :autoAdjustOverflow="false"
+                  :mouseEnterDelay="0"
                 >
-              </div>
-            </template>
-            <template v-if="column.key === 'goodsId'">
-              <div style="display: flex; align-items: center">
-                {{ record.id }}
-                <img
-                  src="@/assets/view/copy-blue.png"
-                  style="width: 16px; height: 16px; margin-left: 10px"
-                  @click="copyHandle(record.id as string)"
-                />
-              </div>
-            </template>
-            <template v-if="column.key === 'operation'">
-              <div class="operation-cell">
-                <a-button type="link" @click="handleView(record as InspectionDetail)">
-                  <div style="display: flex; align-items: center">
+                  <template #title>
                     <img
-                      src="@/assets/view/view.png"
-                      style="width: 16px; height: 16px; margin-right: 4px"
+                      style="max-height: 200px; max-width: 200px; object-fit: contain"
+                      :src="record?.cover"
+                      alt=""
                     />
-                    查看
+                  </template>
+                  <div style="position: relative">
+                    <img
+                      style="height: 50px; width: 50px; object-fit: contain"
+                      :src="record?.cover"
+                      alt=""
+                    />
                   </div>
-                </a-button>
-                <a-tooltip>
-                  <template #title> 复制所有跟卖SKU </template>
-                  <a-button type="link" @click="handleCopy(record as InspectionDetail)"
-                    ><div style="display: flex; align-items: center">
-                      <img
-                        src="@/assets/view/copy-blue.png"
-                        style="width: 16px; height: 16px; margin-right: 4px"
-                      />复制
-                    </div></a-button
-                  >
-                </a-tooltip>
-                <a-tooltip>
-                  <template #title>保存15天内巡查记录，查看跟卖趋势</template>
-                  <a-button type="link" @click="handleTrend(record as InspectionDetail)"
-                    ><div style="display: flex; align-items: center">
-                      <img
-                        src="@/assets/view/charts.png"
-                        style="width: 16px; height: 16px; margin-right: 4px"
-                      />趋势
-                    </div></a-button
-                  >
                 </a-tooltip>
               </div>
-            </template>
+              <span
+                class="product-name"
+                :title="record.nameLabel"
+                @click="goDetail(record.link as string)"
+                >{{ record.nameLabel }}</span
+              >
+            </div>
           </template>
-        </a-table>
-      </a-col>
+          <template v-if="column.key === 'goodsId'">
+            <div style="display: flex; align-items: center">
+              {{ record.id }}
+              <img
+                src="@/assets/view/copy-blue.png"
+                style="width: 16px; height: 16px; margin-left: 10px; cursor: pointer"
+                @click="copyHandle(record.id as string)"
+              />
+            </div>
+          </template>
+          <template v-if="column.key === 'operation'">
+            <div class="operation-cell">
+              <a-button type="link" @click="handleView(record as InspectionDetail)">
+                <div style="display: flex; align-items: center">
+                  <img
+                    src="@/assets/view/view.png"
+                    style="width: 16px; height: 16px; margin-right: 4px"
+                  />
+                  查看
+                </div>
+              </a-button>
+              <a-tooltip>
+                <template #title> 复制所有跟卖SKU </template>
+                <a-button type="link" @click="handleCopy(record as InspectionDetail)"
+                  ><div style="display: flex; align-items: center">
+                    <img
+                      src="@/assets/view/copy-blue.png"
+                      style="width: 16px; height: 16px; margin-right: 4px"
+                    />复制
+                  </div></a-button
+                >
+              </a-tooltip>
+              <a-tooltip>
+                <template #title>保存15天内巡查记录，查看跟卖趋势</template>
+                <a-button type="link" @click="handleTrend(record as InspectionDetail)"
+                  ><div style="display: flex; align-items: center">
+                    <img
+                      src="@/assets/view/charts.png"
+                      style="width: 16px; height: 16px; margin-right: 4px"
+                    />趋势
+                  </div></a-button
+                >
+              </a-tooltip>
+            </div>
+          </template>
+        </template>
+      </a-table>
     </a-row>
     <!-- 分页器 -->
     <a-row class="pagination" justify="end">

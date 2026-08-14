@@ -107,12 +107,17 @@ const getTaskList = async (reset?: boolean, resetPage?: boolean, isThrottle: boo
   loading.value = true
   if (reset) params.value = { ...initParams.value }
   if (resetPage) params.value.pageNo = 1
-  const { data } = await window.electronAPI.invoke<Response<TaskList>>(
+  const { data, code, message } = await window.electronAPI.invoke<Response<TaskList>>(
     'collection-get-all-tasks',
     toRaw(params.value),
   )
-  tableData.value = data.list
-  total.value = data.total
+  if (code == 200) {
+    tableData.value = data.list
+    total.value = data.total
+    loading.value = false
+    return
+  }
+  feedback.error(message)
   loading.value = false
 }
 getTaskList()
@@ -333,7 +338,6 @@ const getRunningTask = async () => {
     'collection-get-running-task',
     {},
   )
-  console.log(data)
   if (tabsRef.value && data.length) {
     data.forEach((item) => {
       tabsRef.value?.getTaskStackList({ task: item, status: 'running' })

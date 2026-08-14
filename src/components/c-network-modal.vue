@@ -14,7 +14,7 @@ const handleCheckNetwork = async () => {
 }
 
 const handleExportAndExit = async () => {
-  await window.electronAPI.invoke('download-all-tables', '')
+  // await window.electronAPI.invoke('download-all-tables', '')
   visible.value = false
   window.electronAPI.sendMessage('app-quit', '')
 }
@@ -42,14 +42,12 @@ window.electronAPI.on('network-error', (data) => {
         <div class="network-error__desc">
           当前网络连接已中断，任务无法继续执行。
           <br />
-          您可以尝试重新检测网络，或先导出已获取的数据后退出程序。
-          <br />
-          <span style="color: red">tips：导出的数据将会在桌面的sp_bang文价夹中~</span>
+          您可以尝试重新检测网络或退出程序。
         </div>
 
         <div class="network-error__actions">
           <a-button @click="handleCheckNetwork" :loading="loading"> 检测网络 </a-button>
-          <a-button type="primary" @click="handleExportAndExit"> 导出表格并退出 </a-button>
+          <a-button type="primary" @click="handleExportAndExit"> 退出 </a-button>
         </div>
       </div>
     </a-modal>

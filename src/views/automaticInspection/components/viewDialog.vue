@@ -46,9 +46,11 @@ const columns = [
       return priceA - priceB
     },
     customRender: (record: any) => {
-      return (
-        record?.text?.cardPrice?.price?.replace(/s/g, '') || record.text?.price?.replace(/s/g, '')
-      )
+      const priceStr =
+        record?.text?.cardPrice?.price?.replace(/\s/g, '') || record.text?.price?.replace(/\s/g, '')
+      const price = priceStr.replace(/[^0-9.]/g, '')
+      const unit = priceStr.replace(price, '')
+      return `${unit}${price}`
     },
   },
   {
@@ -158,6 +160,7 @@ defineExpose({
           <span
             style="color: #1f5fff; width: 160px; cursor: pointer"
             class="ellipsis-1"
+            :title="record.name"
             @click="goShop(record.link as string)"
             >{{ record.name }}</span
           >
