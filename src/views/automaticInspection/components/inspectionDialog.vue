@@ -49,9 +49,9 @@ const handleOk = async () => {
           params,
         )
     if (!code) {
+      formData.value.taskId ? feedback.success('更新任务成功') : feedback.success('创建任务成功')
       handleCancel()
       emit('refresh')
-      feedback.success('创建任务成功')
       return
     }
     feedback.error(message || '系统繁忙')

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { FollowDetail } from '@/types/inspection'
+import type { Response } from '@/types'
+import type { FollowDetail, GoodsDetail, InspectionDetail } from '@/types/inspection'
 import feedback from '@/utils/feedback'
 import { h } from 'vue'
 const open = ref(false)
@@ -65,10 +66,6 @@ const columns = [
     },
   },
 ]
-const showDialog = (data: FollowDetail[]) => {
-  tableData.value = data
-  open.value = true
-}
 
 // 复制sku
 const getPrice = (record: any) => {
@@ -99,8 +96,36 @@ const goShop = (link: string) => {
   const url = `https://www.ozon.ru${link}`
   window.electronAPI.sendMessage('go-ozon-detail', url)
 }
+
+const loading = ref(false)
+const record = ref<InspectionDetail | null>()
+const getData = async (record: InspectionDetail) => {
+  loading.value = true
+  const { data, code, message } = await window.electronAPI.invoke<Response<GoodsDetail>>(
+    'inspection-get-goods-detail',
+    { taskId: record.taskId, id: record.id },
+  )
+  loading.value = false
+  if (!code && record._id === data._id) tableData.value = data.followList
+}
+
+watch(
+  () => record.value?.id,
+  async (val) => {
+    if (record.value) await getData(record.value)
+  },
+)
+
+const closeHandle = () => {
+  open.value = false
+  record.value = null
+  tableData.value = []
+}
+
 defineExpose({
-  showDialog,
+  open,
+  record,
+  getData,
 })
 </script>
 
@@ -113,6 +138,8 @@ defineExpose({
       style="margin-top: 20px"
       :scroll="{ y: 400 }"
       :pagination="false"
+      :loading="loading"
+      @cancel="closeHandle"
     >
       <template #headerCell="{ column }">
         <template v-if="column.key === 'sku'">

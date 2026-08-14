@@ -183,6 +183,16 @@ export const collectionIpc = (win: BrowserWindow) => {
     }
   })
 
+  // 获取正在执行的任务
+  ipcMain.handle('collection-get-running-task', async (event, data) => {
+    const list = await taskManager.getActiveTasks()
+    return {
+      code: 200,
+      message: '获取成功',
+      data: list
+    }
+  })
+
   // 取消任务
   ipcMain.handle('collection-cancel-task', async (event, taskId: string) => {
     try {

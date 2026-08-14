@@ -104,7 +104,6 @@ const getInspectionTaskList = async (reset?: boolean, resetPage?: boolean) => {
     'inspection-get-task-list',
     toRaw(params.value),
   )
-  console.log(params.value)
   tableData.value = data.list
   total.value = data.total
   loading.value = false
@@ -320,7 +319,7 @@ onUnmounted(() => {
       </div>
     </div>
     <div class="log">
-      <c-log-tab ref="tabsRef" event-name="inspection-task-status-update" />
+      <c-log-tab ref="tabsRef" event-name="inspection-task-status-update" name="shopName" />
     </div>
   </div>
   <InspectionDialog ref="inspectionDialogRef" @refresh="getInspectionTaskList(false, false)" />

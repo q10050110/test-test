@@ -20,6 +20,7 @@ export const inspectionIpc = (window: BrowserWindow) => {
       }
     }
   })
+
   // 获取正在执行的任务
   ipcMain.handle('inspection-get-running-task', async () => {
     try {
@@ -29,6 +30,7 @@ export const inspectionIpc = (window: BrowserWindow) => {
       return error
     }
   })
+
   // 创建任务
   ipcMain.handle('inspection-create-task', async (event, params: TaskParams) => {
     try {

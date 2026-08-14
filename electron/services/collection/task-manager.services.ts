@@ -227,6 +227,12 @@ export class TaskManager {
     return task ? task.getTaskInfo() : null
   }
 
+  /** 
+   * 获取活跃任务
+    */
+  getActiveTasks() {
+    return Array.from(this.activeTasks.values()).map((task) => this.tasks.get(task)?.getTaskInfo()).filter(Boolean)
+  }
   /**
    * 获取任务列表（包括状态）
    */

@@ -16,7 +16,7 @@ import {
 } from '@ant-design/icons-vue'
 import TaskDialog from './components/taskDialog.vue'
 import feedback from '@/utils/feedback'
-import Tabs from './components/tabs.vue'
+import cLogTab from '@/components/c-log-tab.vue'
 import dayjs from 'dayjs'
 // 表单参数
 const initParams = ref({
@@ -218,7 +218,7 @@ const deleteTask = async () => {
   feedback.error(message)
 }
 // 获取任务进度
-const tabsRef = ref<InstanceType<typeof Tabs>>()
+const tabsRef = ref<InstanceType<typeof cLogTab>>()
 const getProgress = async (data?: any) => {
   const { collectionTask, log } = data
   let obj = tableData.value?.find((item) => item._id === collectionTask._id)
@@ -327,7 +327,21 @@ const refreshTaskList = () => {
   getTaskList()
 }
 
+// 获取执行中的任务
+const getRunningTask = async () => {
+  const { data } = await window.electronAPI.invoke<Response<any[]>>(
+    'collection-get-running-task',
+    {},
+  )
+  console.log(data)
+  if (tabsRef.value && data.length) {
+    data.forEach((item) => {
+      tabsRef.value?.getTaskStackList({ task: item, status: 'running' })
+    })
+  }
+}
 onMounted(async () => {
+  getRunningTask()
   taskQueueCount.value = await window.electronAPI.invoke('get-current-task-count', {})
   window.electronAPI.on('task-progress', getProgress)
   window.electronAPI.on('refresh-task-list', refreshTaskList)
@@ -561,7 +575,7 @@ onUnmounted(() => {
     </div>
     <a-row class="tabs">
       <a-col :span="24">
-        <Tabs ref="tabsRef" />
+        <c-log-tab ref="tabsRef" event-name="task-status-update" name="taskName" />
       </a-col>
     </a-row>
   </div>
@@ -589,7 +603,7 @@ onUnmounted(() => {
     flex-direction: column;
     background-color: #fff;
     border-radius: 10px;
-    flex: 1;
+    flex: 3;
     min-height: 0;
     margin-bottom: 20px;
   }
@@ -622,11 +636,7 @@ onUnmounted(() => {
   }
 
   .tabs {
-    margin-top: auto;
-    padding: 10px 20px;
-    background-color: #fff;
-    height: 160px;
-    border-radius: 10px;
+    flex: 1;
   }
 
   .autoUp {

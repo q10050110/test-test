@@ -39,7 +39,7 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'resMoney',
     key: 'resMoney',
     customRender: (record: any) => {
-      return `${record.text}₽`
+      return `${record.text} ₽`
     },
     width: 124,
   },
@@ -48,7 +48,7 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'followMinPrice',
     key: 'followMinPrice',
     customRender: (record: any) => {
-      return `${record.text}₽`
+      return `${record.text} ₽`
     },
     width: 124,
   },
@@ -57,7 +57,7 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'followMaxPrice',
     key: 'followMaxPrice',
     customRender: (record: any) => {
-      return `${record.text}₽`
+      return `${record.text} ₽`
     },
     width: 124,
   },
@@ -141,15 +141,10 @@ getShopList()
 // 方法
 const viewRef = ref<InstanceType<typeof viewDialog>>()
 const handleView = async (record: InspectionDetail) => {
-  const { data, code, message } = await window.electronAPI.invoke<Response<GoodsDetail>>(
-    'inspection-get-goods-detail',
-    { taskId: record.taskId, id: record.id },
-  )
-  if (viewRef.value && !code) {
-    viewRef.value.showDialog(data.followList)
-    return
+  if (viewRef.value) {
+    viewRef.value.open = true
+    viewRef.value.record = record
   }
-  feedback.error(message)
 }
 
 const handleCopy = async (record: InspectionDetail) => {

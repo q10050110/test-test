@@ -2,6 +2,7 @@
 import { DesktopOutlined } from '@ant-design/icons-vue'
 const props = defineProps<{
   eventName: string
+  name: string
 }>()
 // 标签页
 const activeKey = ref()
@@ -30,7 +31,7 @@ const getTaskStackList = (data?: any) => {
 
   if (status === 'running') {
     if (!taskStackList.value.map((item) => item._id).includes(task._id)) {
-      taskStackList.value.unshift({ ...task, taskName: task?.shopName })
+      taskStackList.value.unshift(task)
       activeKey.value = task._id
     }
   } else {
@@ -66,7 +67,7 @@ defineExpose({
 <template>
   <div class="container">
     <a-tabs v-model:activeKey="activeKey" v-if="taskStackList.length">
-      <a-tab-pane :key="item._id" :tab="item.taskName" v-for="(item, i) in taskStackList">
+      <a-tab-pane :key="item._id" :tab="item[name]" v-for="(item, i) in taskStackList">
         <div class="log-container" :ref="(el) => setLogRef(el as HTMLElement, item._id as string)">
           <div v-for="(log, i) in item.log" :key="i" class="log-item" v-if="item?.log?.length">
             {{ log.date }}
@@ -85,7 +86,7 @@ defineExpose({
 
 <style lang="scss" scoped>
 .log-container {
-  height: 80px;
+  height: 100px;
   overflow-y: auto;
 }
 
