@@ -115,7 +115,7 @@ export class ParseService {
         item.followMinPrice = item.price
         item.followMaxPrice = item.price
         item.followList = []
-        log.error('获取跟卖数据失败')
+        log.error(response, '【跟卖巡查】获取跟卖数据失败')
       }
     }
     return uniqueData

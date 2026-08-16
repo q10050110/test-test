@@ -1,5 +1,6 @@
 import { CronServices } from './cron.services.js'
 import { TaskManager } from './inspection/task-manager.services.js'
+import { SharpServices } from './sharp.services.js'
 import log from '../log/index.js';
 export class StartProcessService {
   public static instance: StartProcessService;
@@ -14,6 +15,9 @@ export class StartProcessService {
   async start() {
     const taskManager = TaskManager.getInstance()
     const cronServices = CronServices.getInstance()
+    const sharpServices = SharpServices.getInstance()
+    const result = await sharpServices.findPuzzleTarget('https://cdn2.ozone.ru/s3/abt-challenge/cpt/10/d1319a89.png', 'https://cdn2.ozone.ru/s3/abt-challenge/cpt/10/e3c78120.png')
+    console.log(result, '啦啦啦~~~')
     const { data } = await taskManager.getCronTaskList()
     data.forEach(item => {
       try {

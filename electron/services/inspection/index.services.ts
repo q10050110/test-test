@@ -84,7 +84,7 @@ export class InspectionServices {
   async getHtmlData() {
     try {
       let scrollAttempts = 0
-      const maxScrollAttempts = 10
+      const maxScrollAttempts = 100
       let bottomOutCount = 0
       this.outputLog('页面加载成功')
       const { html, domain } = await this.mainWindowService.getHTML()
@@ -98,7 +98,7 @@ export class InspectionServices {
           log.info(`${this.inspection.shopName}-10次无法获取商品数据，结束任务`)
           break
         }
-        if (bottomOutCount >= 3) {
+        if (bottomOutCount >= 300) {
           log.info(`${this.inspection.shopName}-滚动到底部3次，结束任务`)
           break
         }

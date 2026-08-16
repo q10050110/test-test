@@ -35,6 +35,7 @@ export class MainWindowService {
           backgroundThrottling: false,
         },
       })
+      this.browserWindow.webContents.openDevTools()
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()
@@ -166,14 +167,39 @@ export class MainWindowService {
   async getSellingData(requestUrl: string) {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return
     try {
-      const response = await this.browserWindow.webContents.executeJavaScript(`
-            fetch(${JSON.stringify(requestUrl)}, { credentials: 'include' })
-            .then(response => response.json())
-            .then(data => ({ success: true, data: data }))
-          `)
-      return response
+      return await this.browserWindow.webContents.executeJavaScript(`
+      (async () => {
+        try {
+          const response = await fetch(
+            ${JSON.stringify(requestUrl)},
+            {
+              credentials: 'include'
+            }
+          )
+          const contentType =
+            response.headers.get('content-type') || ''
+          let data
+          if (contentType.includes('application/json')) {
+            data = await response.json()
+          } else {
+            data = await response.text()
+          }
+          return {
+            success: response.ok,
+            status: response.status,
+            contentType,
+            data
+          }
+        } catch (error) {
+          return {
+            success: false,
+            status: 0,
+            error: error?.message || String(error)
+          }
+        }
+      })()
+    `)
     } catch (error) {
-      console.log(error)
       return false
     }
   }
