@@ -41,9 +41,7 @@ export class CronServices {
   */
   register(options: CronTaskOptions) {
     const { name, expression, handler, autoStart = true } = options
-    if (this.tasks.has(name)) {
-      throw new Error(`任务 "${name}" 已经存在`)
-    }
+    if (this.tasks.has(name)) return
     const task = cron.schedule(expression, async () => {
       await handler()
     }, { timezone: 'Asia/Shanghai' })
