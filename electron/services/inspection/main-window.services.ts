@@ -47,6 +47,13 @@ export class MainWindowService {
       this.browserWindow.webContents.once('dom-ready', async () => {
         log.info('页面 DOM 已准备就绪')
         clearTimeout(timeoutId)
+        await this.browserWindow?.webContents.executeJavaScript(`
+          ()=>{
+            const script = document.createElement('script')
+            script.src = 'https://docs.opencv.org/4.5.4/opencv.js'
+            document.body.appendChild(script)
+          }  
+        `)
         await new Promise((resolve) => setTimeout(resolve, 3000))
         safeResolve(this.browserWindow)
       })
@@ -103,6 +110,532 @@ export class MainWindowService {
       `)
       log.info('点击结果:', result)
       if (result?.ok) await new Promise((resolve) => setTimeout(resolve, 2000))
+      await wc.executeJavaScript(`async () => {
+          const cv = (window as any).cv;
+          const bgImg = document.querySelector('#image');
+          const puzzleImg = document.querySelector('#puzzle');
+          const slider = document.querySelector('#slider');
+          if (!cv?.imread) {
+            console.error('OpenCV 未加载');
+            return;
+          }
+          if (!bgImg || !puzzleImg || !slider) {
+            console.error('找不到 #image / #puzzle / #slider');
+            return;
+          }
+          // =========================================================
+          // Image -> Canvas
+          // =========================================================
+          function imageToCanvas(img: any) {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d', {
+              willReadFrequently: true
+            });
+            ctx?.drawImage(img, 0, 0);
+            return canvas;
+          }
+          // =========================================================
+          // Alpha Bounds
+          // =========================================================
+          function getAlphaBounds(img: any) {
+            const canvas = imageToCanvas(img);
+            const ctx = canvas.getContext('2d', {
+              willReadFrequently: true
+            });
+            const {
+              width,
+              height
+            } = canvas;
+            const data =
+              ctx?.getImageData(
+                0,
+                0,
+                width,
+                height
+              ).data;
+            let minX = width;
+            let minY = height;
+            let maxX = -1;
+            let maxY = -1;
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+
+                const alpha =
+                  data?.[
+                  (y * width + x) * 4 + 3
+                  ];
+
+                if (alpha && alpha > 20) {
+
+                  if (x < minX) minX = x;
+                  if (y < minY) minY = y;
+
+                  if (x > maxX) maxX = x;
+                  if (y > maxY) maxY = y;
+                }
+              }
+            }
+
+            return {
+              canvas,
+
+              left: minX,
+              top: minY,
+
+              right: maxX,
+              bottom: maxY,
+
+              width: maxX - minX + 1,
+              height: maxY - minY + 1
+            };
+          }
+
+          // =========================================================
+          // Canvas -> Mat
+          // =========================================================
+
+          function canvasToMat(canvas: any) {
+            return cv.imread(canvas);
+          }
+
+          // =========================================================
+          // OpenCV
+          // Alpha Crop + Edge
+          // =========================================================
+
+          function findTargetX(alpha: any) {
+
+            const bgCanvas =
+              imageToCanvas(bgImg);
+
+            const bg =
+              canvasToMat(bgCanvas);
+
+            const puzzle =
+              canvasToMat(alpha.canvas);
+
+            const bgGray =
+              new cv.Mat();
+
+            const puzzleGray =
+              new cv.Mat();
+
+            cv.cvtColor(
+              bg,
+              bgGray,
+              cv.COLOR_RGBA2GRAY
+            );
+
+            cv.cvtColor(
+              puzzle,
+              puzzleGray,
+              cv.COLOR_RGBA2GRAY
+            );
+
+            // =======================================================
+            // Alpha Crop
+            // =======================================================
+
+            const roi =
+              new cv.Rect(
+                alpha.left,
+                alpha.top,
+                alpha.width,
+                alpha.height
+              );
+
+            const puzzleCrop =
+              puzzleGray.roi(roi);
+
+            // =======================================================
+            // Edge
+            // =======================================================
+
+            const bgEdge =
+              new cv.Mat();
+
+            const puzzleEdge =
+              new cv.Mat();
+
+            cv.Canny(
+              bgGray,
+              bgEdge,
+              40,
+              120
+            );
+
+            cv.Canny(
+              puzzleCrop,
+              puzzleEdge,
+              40,
+              120
+            );
+
+            // =======================================================
+            // Match
+            // =======================================================
+
+            const result =
+              new cv.Mat();
+
+            cv.matchTemplate(
+              bgEdge,
+              puzzleEdge,
+              result,
+              cv.TM_CCOEFF_NORMED
+            );
+
+            const mm =
+              cv.minMaxLoc(result);
+
+            const contentX =
+              mm.maxLoc.x;
+
+            // =======================================================
+            // 转换为 Puzzle canvas left
+            // =======================================================
+
+            const puzzleLeft =
+              contentX - alpha.left;
+
+            // =======================================================
+            // 清理
+            // =======================================================
+
+            bg.delete();
+            puzzle.delete();
+
+            bgGray.delete();
+            puzzleGray.delete();
+
+            puzzleCrop.delete();
+
+            bgEdge.delete();
+            puzzleEdge.delete();
+
+            result.delete();
+
+            return {
+              contentX,
+              puzzleLeft,
+              score: mm.maxVal
+            };
+          }
+
+          // =========================================================
+          // 计算
+          // =========================================================
+
+          const alpha =
+            getAlphaBounds(puzzleImg);
+
+          const result =
+            findTargetX(alpha);
+
+          const puzzleInitialLeft =
+            parseFloat(
+              getComputedStyle(puzzleImg).left
+            );
+
+          const puzzleMove =
+            result.puzzleLeft -
+            puzzleInitialLeft;
+
+          // =========================================================
+          // 你的页面实际比例
+          // =========================================================
+
+          const ratio =
+            0.6862940987394774;
+
+          const sliderMove =
+            puzzleMove / ratio;
+
+          // =========================================================
+          // Slider 当前 DOM
+          // =========================================================
+
+          const sliderRect =
+            slider.getBoundingClientRect();
+
+          const sliderStartX =
+            sliderRect.left +
+            sliderRect.width / 2;
+
+          const sliderStartY =
+            sliderRect.top +
+            sliderRect.height / 2;
+
+          const sliderInitialLeft =
+            parseFloat(
+              getComputedStyle(slider).left
+            );
+
+          // =========================================================
+          // 输出计算结果
+          // =========================================================
+
+          console.table({
+            'OpenCV content X':
+              result.contentX,
+
+            'Puzzle Alpha left':
+              alpha.left,
+
+            'OpenCV Puzzle left':
+              result.puzzleLeft,
+
+            'Puzzle 当前 left':
+              puzzleInitialLeft,
+
+            'Puzzle 移动距离':
+              puzzleMove,
+
+            'Slider 当前 left':
+              sliderInitialLeft,
+
+            'Slider 滑动距离':
+              sliderMove,
+
+            'OpenCV score':
+              result.score
+          });
+
+          // =========================================================
+          // 防止 OpenCV 匹配明显错误
+          // =========================================================
+
+          if (
+            !Number.isFinite(sliderMove) ||
+            result.score < 0.45
+          ) {
+            console.error(
+              'OpenCV 匹配结果可信度不足，取消拖动',
+              result
+            );
+
+            return;
+          }
+
+          // =========================================================
+          // 模拟 PointerEvent
+          // =========================================================
+
+          function dispatchPointer(
+            type: string,
+            x: any,
+            y: any,
+            buttons: any
+          ) {
+            const event =
+              new PointerEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+                pointerId: 1,
+                pointerType: 'mouse',
+                isPrimary: true,
+                clientX: x,
+                clientY: y,
+                screenX: x,
+                screenY: y,
+                buttons,
+                button: 0,
+
+                pressure:
+                  buttons ? 0.5 : 0
+              });
+
+            slider?.dispatchEvent(event);
+          }
+
+          // =========================================================
+          // 生成拖动轨迹
+          // =========================================================
+
+          function createTrack(distance: any) {
+
+            const track = [];
+
+            const duration = 700;
+
+            const steps = 45;
+
+            for (let i = 1; i <= steps; i++) {
+
+              const t =
+                i / steps;
+
+              // easeInOut
+              const ease =
+                t < 0.5
+                  ? 2 * t * t
+                  : 1 -
+                  Math.pow(
+                    -2 * t + 2,
+                    2
+                  ) / 2;
+
+              const x =
+                distance * ease;
+
+              track.push({
+                x,
+                delay:
+                  duration / steps
+              });
+            }
+
+            return track;
+          }
+
+          // =========================================================
+          // 开始拖动
+          // =========================================================
+
+          console.log(
+            '开始拖动:',
+            {
+              sliderStartX,
+              sliderStartY,
+              sliderMove
+            }
+          );
+
+          dispatchPointer(
+            'pointerover',
+            sliderStartX,
+            sliderStartY,
+            0
+          );
+
+          dispatchPointer(
+            'pointerenter',
+            sliderStartX,
+            sliderStartY,
+            0
+          );
+
+          dispatchPointer(
+            'pointermove',
+            sliderStartX,
+            sliderStartY,
+            0
+          );
+
+          // =========================================================
+          // pointerdown
+          // =========================================================
+
+          dispatchPointer(
+            'pointerdown',
+            sliderStartX,
+            sliderStartY,
+            1
+          );
+
+          // =========================================================
+          // pointermove
+          // =========================================================
+
+          const track =
+            createTrack(sliderMove);
+
+          let previousX = 0;
+
+          for (const point of track) {
+
+            const currentX =
+              sliderStartX + point.x;
+
+            // 使用 window/document 派发，
+            // 兼容页面监听 document/window pointermove 的情况
+
+            const event =
+              new PointerEvent(
+                'pointermove',
+                {
+                  bubbles: true,
+                  cancelable: true,
+                  composed: true,
+
+                  pointerId: 1,
+                  pointerType: 'mouse',
+                  isPrimary: true,
+
+                  clientX: currentX,
+                  clientY: sliderStartY,
+
+                  screenX: currentX,
+                  screenY: sliderStartY,
+                  movementX:
+                    currentX -
+                    (
+                      sliderStartX +
+                      previousX
+                    ),
+
+                  movementY: 0,
+
+                  buttons: 1,
+                  button: 0,
+
+                  pressure: 0.5
+                }
+              );
+
+            document.dispatchEvent(event);
+
+            previousX = point.x;
+
+            await new Promise(
+              resolve =>
+                setTimeout(
+                  resolve,
+                  point.delay
+                )
+            );
+          }
+
+          // =========================================================
+          // pointerup
+          // =========================================================
+
+          const finalX =
+            sliderStartX +
+            sliderMove;
+
+          dispatchPointer(
+            'pointermove',
+            finalX,
+            sliderStartY,
+            1
+          );
+
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                80
+              )
+          );
+
+          dispatchPointer(
+            'pointerup',
+            finalX,
+            sliderStartY,
+            0
+          );
+
+          dispatchPointer(
+            'pointerout',
+            finalX,
+            sliderStartY,
+            0
+          );
+        }`)
     }
 
     const html = await wc.executeJavaScript('document.documentElement.outerHTML')

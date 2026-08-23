@@ -15,9 +15,6 @@ export class StartProcessService {
   async start() {
     const taskManager = TaskManager.getInstance()
     const cronServices = CronServices.getInstance()
-    const sharpServices = SharpServices.getInstance()
-    const result = await sharpServices.findPuzzleTarget('https://cdn2.ozone.ru/s3/abt-challenge/cpt/10/a4a08680.png', 'https://cdn2.ozone.ru/s3/abt-challenge/cpt/10/e87d001c.png')
-    console.log(result, '啦啦啦~~~')
     const { data } = await taskManager.getCronTaskList()
     data.forEach(item => {
       try {
