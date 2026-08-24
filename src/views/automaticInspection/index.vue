@@ -14,7 +14,8 @@ import { h } from 'vue'
 import feedback from '@/utils/feedback'
 import dayjs from 'dayjs'
 import cLogTab from '@/components/c-log-tab.vue'
-const columns = ref<TableColumnsType<Inspection>>([
+import { useTableHeight } from '@/hooks/index'
+const columns: TableColumnsType<Inspection> = [
   {
     title: '店铺名称',
     dataIndex: 'shopName',
@@ -37,15 +38,16 @@ const columns = ref<TableColumnsType<Inspection>>([
     title: '上次执行',
     dataIndex: 'lastRunningTime',
     key: 'lastRunningTime',
+    width: 350,
   },
   {
     title: '操作',
     dataIndex: 'operation',
     key: 'operation',
-    width: 300,
+    width: 420,
     fixed: 'right', // 固定列
   },
-])
+]
 
 const tableData = ref<Inspection[]>([])
 const total = ref()
@@ -209,6 +211,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.electronAPI.off('inspection-progress', getProgress)
 })
+
+const { height, width } = useTableHeight('.table-container', 260, columns)
 </script>
 <template>
   <div class="inspection-task-page">
@@ -226,6 +230,7 @@ onUnmounted(() => {
         style="margin-bottom: 16px"
         :loading="loading"
         class="table"
+        :scroll="{ x: width, y: height }"
       >
         <template #bodyCell="{ column, record }">
           <!-- 店铺名称列 -->
@@ -347,7 +352,6 @@ onUnmounted(() => {
     flex-direction: column;
     .table {
       overflow: hidden;
-      overflow-y: auto;
       flex: 1;
     }
     .action-bar {

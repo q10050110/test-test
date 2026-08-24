@@ -12,6 +12,7 @@ import chartDialog from './components/chartDialog.vue'
 import viewDialog from './components/viewDialog.vue'
 import feedback from '@/utils/feedback'
 import type { ColumnType } from 'ant-design-vue/es/table'
+import { useTableHeight } from '@/hooks/index'
 // 表格数据
 const tableData = ref<InspectionDetail[]>([])
 // 表格列配置
@@ -21,12 +22,7 @@ const columns: ColumnType<InspectionDetail>[] = [
     dataIndex: 'productInfo',
     key: 'productInfo',
     width: 250,
-  },
-  {
-    title: 'SKU',
-    dataIndex: 'goodsId',
-    key: 'goodsId',
-    width: 180,
+    fixed: true,
   },
   {
     title: '店铺名称',
@@ -88,7 +84,6 @@ const columns: ColumnType<InspectionDetail>[] = [
   },
 ]
 
-const width = columns.reduce((sum, col) => sum + ((col.width as number) || 0), 0)
 // 获取巡查任务列表
 const loading = ref(false)
 const initParams = ref<InspectionDetailParams>({
@@ -200,6 +195,8 @@ onMounted(() => {
   if (id) params.value.taskId = id
   getProductList()
 })
+
+const { height, width } = useTableHeight('.table-container', 55, columns)
 </script>
 
 <template>
@@ -228,8 +225,8 @@ onMounted(() => {
         style="width: 180px; margin-right: 16px"
         allowClear
       >
-        <a-select-option :value="1">是</a-select-option>
-        <a-select-option :value="0">否</a-select-option>
+        <a-select-option :value="1">被跟卖</a-select-option>
+        <a-select-option :value="0">未被跟卖</a-select-option>
       </a-select>
       <a-button type="primary" @click="getProductList(false, true)">查询</a-button>
     </a-row>
@@ -237,12 +234,11 @@ onMounted(() => {
     <!-- 商品列表表格 -->
     <a-row class="table-container">
       <a-table
-        style="flex: 1"
         :dataSource="tableData"
         :columns="columns"
         :pagination="false"
         rowKey="sku"
-        :scroll="{ x: width }"
+        :scroll="{ x: width, y: height }"
         :loading="loading"
       >
         <!-- 商品信息列 -->
@@ -272,22 +268,25 @@ onMounted(() => {
                   </div>
                 </a-tooltip>
               </div>
-              <span
-                class="product-name"
-                :title="record.nameLabel"
-                @click="goDetail(record.link as string)"
-                >{{ record.nameLabel }}</span
-              >
-            </div>
-          </template>
-          <template v-if="column.key === 'goodsId'">
-            <div style="display: flex; align-items: center">
-              {{ record.id }}
-              <img
-                src="@/assets/view/copy-blue.png"
-                style="width: 16px; height: 16px; margin-left: 10px; cursor: pointer"
-                @click="copyHandle(record.id as string)"
-              />
+              <div class="product-name">
+                <span
+                  class="product-name"
+                  :title="record.nameLabel"
+                  @click="goDetail(record.link as string)"
+                >
+                  {{ record.nameLabel }}
+                </span>
+                <div>
+                  <div style="display: flex; align-items: center">
+                    {{ record.id }}
+                    <img
+                      src="@/assets/view/copy-blue.png"
+                      style="width: 16px; height: 16px; margin-left: 10px; cursor: pointer"
+                      @click="copyHandle(record.id as string)"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
           <template v-if="column.key === 'operation'">
@@ -372,7 +371,6 @@ onMounted(() => {
   .table-container {
     flex: 1;
     overflow: hidden;
-    overflow-y: auto;
   }
 
   .pagination {

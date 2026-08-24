@@ -19,7 +19,7 @@ const rules: Record<string, Rule[]> = {
     { required: true, message: '请输入店铺链接', trigger: ['blur', 'change'] },
     {
       pattern: /^https?:\/\/www\.ozon\.ru\/seller\//,
-      message: '请输入正确的链接',
+      message: '请输入正确的Ozon店铺链接',
       trigger: ['blur', 'change'],
     },
   ],

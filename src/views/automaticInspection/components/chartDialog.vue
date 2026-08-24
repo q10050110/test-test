@@ -130,7 +130,7 @@ defineExpose({
 </script>
 
 <template>
-  <a-modal style="width: 50vw" v-model:open="open" :footer="false">
+  <a-modal style="width: 50vw" v-model:open="open" :footer="false" :maskClosable="false">
     <div ref="chartRef" style="width: 100%; height: 400px" v-if="open"></div>
   </a-modal>
 </template>

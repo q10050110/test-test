@@ -132,7 +132,12 @@ defineExpose({
 </script>
 
 <template>
-  <a-modal v-model:open="open" :footer="null" style="width: 80vw; height: 500px">
+  <a-modal
+    v-model:open="open"
+    :footer="null"
+    style="width: 80vw; height: 500px"
+    :maskClosable="false"
+  >
     <a-table
       :dataSource="tableData"
       :columns="columns"

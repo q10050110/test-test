@@ -23,6 +23,12 @@ export default {
     buildResources: 'build', // 构建资源目录（图标、安装包模板等）
   },
   asar: true,
+  extraResources: [
+    {
+      from: 'electron/preloads/opencv.js',
+      to: 'preloads/opencv.js',
+    },
+  ],
   // 文件排除规则
   files: [
     'dist-electron/**/*', // Electron 主进程编译后的文件
