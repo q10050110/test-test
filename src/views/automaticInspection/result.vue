@@ -196,7 +196,7 @@ onMounted(() => {
   getProductList()
 })
 
-const { height, width } = useTableHeight('.table-container', 55, columns)
+const { height, width } = useTableHeight('.table-container', 60, columns)
 </script>
 
 <template>

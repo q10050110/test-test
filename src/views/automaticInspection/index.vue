@@ -212,7 +212,7 @@ onUnmounted(() => {
   window.electronAPI.off('inspection-progress', getProgress)
 })
 
-const { height, width } = useTableHeight('.table-container', 260, columns)
+const { height, width } = useTableHeight('.table-container', 240, columns)
 </script>
 <template>
   <div class="inspection-task-page">

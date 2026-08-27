@@ -40,7 +40,6 @@ export class MainWindowService {
           webSecurity: false
         },
       })
-      this.browserWindow.webContents.openDevTools()
       const timeoutId = setTimeout(() => {
         if (this.browserWindow) {
           this.destroy()
@@ -73,8 +72,7 @@ export class MainWindowService {
       // 1. 注入 OpenCV 并等待加载完成
       const opencvPath = app.isPackaged
         ? path.join(process.resourcesPath, 'preloads', 'opencv.js')
-        : path.join(__dirname, 'preloads', 'opencv.js')
-      log.info(opencvPath, 'opencvPath')
+        : path.join(__dirname, '..', '..', 'preloads', 'opencv.js');
       if (!fs.existsSync(opencvPath)) {
         throw new Error(`OpenCV file not found at ${opencvPath}`)
       }
@@ -175,11 +173,13 @@ export class MainWindowService {
           }
         })()
       `)
-      log.info(result2, '喂喂喂~~~')
       if (result2?.ok) {
-        await this.injectOpenCV()
-        const result = await this.sliderVerification()
-        log.info(result, '')
+        try {
+          await this.injectOpenCV()
+          await this.sliderVerification()
+        } catch (error) {
+          log.error('注入opencv失败')
+        }
       }
     }
   }
@@ -293,7 +293,8 @@ export class MainWindowService {
   async sliderVerification() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return
     const wc = this.browserWindow.webContents
-    await wc.executeJavaScript(`
+    try {
+      await wc.executeJavaScript(`
         (async () => {
           try {
             const cv = window.cv;
@@ -519,6 +520,9 @@ export class MainWindowService {
           }
         })()
       `);
+    } catch (error) {
+      log.error(error, '滑块验证错误')
+    }
   }
 
   /**

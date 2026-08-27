@@ -1,6 +1,5 @@
 import { CronServices } from './cron.services.js'
 import { TaskManager } from './inspection/task-manager.services.js'
-import { SharpServices } from './sharp.services.js'
 import log from '../log/index.js';
 export class StartProcessService {
   public static instance: StartProcessService;
@@ -18,14 +17,10 @@ export class StartProcessService {
     const { data } = await taskManager.getCronTaskList()
     data.forEach(item => {
       try {
-        const now = new Date()
-        const nextMinute = new Date(
-          now.getTime() + 60 * 1000
-        )
-        const autoExecutionTime = item.autoExecutionTime.split(':')?.[0]
-        const expression = `${nextMinute.getMinutes()} ${nextMinute.getHours()} * * *`
+        const [hours, minutes] = item.autoExecutionTime.split(':').map(Number);
+        const expression = `${minutes} ${hours} * * *`
         cronServices.register({
-          name: item.shopName,
+          name: item._id,
           expression,
           handler: async () => {
             await taskManager.executeTask(item)

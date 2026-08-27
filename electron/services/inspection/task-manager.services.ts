@@ -11,8 +11,10 @@ export class TaskManager {
   private queue: PQueue
   private runningTasks = new Map<string, any>()
   private mainWindow: BrowserWindow | null = null
+  private cronServices: CronServices
   constructor() {
     this.queue = new PQueue({ concurrency: 4 })
+    this.cronServices = CronServices.getInstance()
   }
   public static getInstance(): TaskManager {
     if (!TaskManager.instance) {
@@ -72,14 +74,10 @@ export class TaskManager {
       try {
         const { data, code, message } = await createTaskAPI(params)
         if (!code) {
-          const cronServices = CronServices.getInstance()
           if (data.executionMethod === 'AUTO') {
-            const now = new Date()
-            const nextMinute = new Date(
-              now.getTime() + 60 * 1000
-            )
-            const expression = `${nextMinute.getMinutes()} ${nextMinute.getHours()} * * *`
-            cronServices.register({
+            const [hours, minutes] = data.autoExecutionTime.split(':').map(Number);
+            const expression = `${minutes} ${hours} * * *`
+            this.cronServices.register({
               name: data._id,
               expression,
               handler: async () => {
@@ -87,7 +85,7 @@ export class TaskManager {
               }
             })
           } else {
-            cronServices.delete(data._id)
+            this.cronServices.delete(data._id)
           }
         }
         resolve({
@@ -107,14 +105,10 @@ export class TaskManager {
       try {
         const { data, code, message } = await updateTaskAPI(params)
         if (!code) {
-          const cronServices = CronServices.getInstance()
           if (data.executionMethod === 'AUTO') {
-            const now = new Date()
-            const nextMinute = new Date(
-              now.getTime() + 60 * 1000
-            )
-            const expression = `${nextMinute.getMinutes()} ${nextMinute.getHours()} * * *`
-            cronServices.register({
+            const [hours, minutes] = data.autoExecutionTime.split(':').map(Number);
+            const expression = `${minutes} ${hours} * * *`
+            this.cronServices.register({
               name: data._id,
               expression,
               handler: async () => {
@@ -122,7 +116,7 @@ export class TaskManager {
               }
             })
           } else {
-            cronServices.delete(data._id)
+            this.cronServices.delete(data._id)
           }
         }
         resolve({
@@ -141,6 +135,7 @@ export class TaskManager {
     return new Promise(async (resolve, reject) => {
       try {
         const { data, code, message } = await deleteTaskAPI(params)
+        this.cronServices.delete(params.taskIds[0])
         resolve({
           code,
           data,

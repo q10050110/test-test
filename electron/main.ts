@@ -96,7 +96,6 @@ class ElectronApp {
 
     // 检查特定的致命错误类型
     const fatalPatterns = [
-      /object has been destroyed/i, // Electron对象被销毁
       /context is isolated/i, // 上下文隔离相关错误
       /cannot read property/i, // 属性读取错误
       /destroyed|disposed/i, // 对象已销毁
@@ -256,7 +255,7 @@ class ElectronApp {
       // 检查拒绝的原因是否为致命错误
       if (reason instanceof Error && this.isFatalError(reason) && app.isReady()) {
         this.isAppCrashed = true // 标记应用崩溃
-        log.info('检测到致命Promise拒绝，执行重启策略...')
+        log.info(reason, '检测到致命Promise拒绝，执行重启策略...')
 
         if (this.shouldAllowRestart()) {
           log.info('符合重启条件，正在重启应用...')
