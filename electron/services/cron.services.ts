@@ -41,7 +41,12 @@ export class CronServices {
   */
   register(options: CronTaskOptions) {
     const { name, expression, handler, autoStart = true } = options
-    if (this.tasks.has(name)) return
+    if (this.tasks.has(name)) {
+      const oldTask = this.tasks.get(name)
+      oldTask?.stop()
+      oldTask?.destroy()
+      this.tasks.delete(name)
+    }
     const task = cron.schedule(expression, async () => {
       await handler()
     }, { timezone: 'Asia/Shanghai' })
