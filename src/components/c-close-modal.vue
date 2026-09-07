@@ -12,12 +12,13 @@ const clickHandle = () => {
 
 <template>
   <a-modal
+    :getContainer="false"
     v-model:open="store.closeOpen"
-    @cancel="store.closeOpenHandle()"
     class="modal"
+    @cancel="store.closeOpenHandle()"
     :footer="null"
     centered
-    style="width: 400px"
+    style="width: 520px"
   >
     <div class="container">
       <div class="bg"></div>
@@ -38,28 +39,37 @@ const clickHandle = () => {
 </template>
 
 <style lang="scss" scoped>
+:deep(.ant-modal-content) {
+  background: url('@/assets/window/logout-bg.png');
+  background-size: cover;
+}
 .modal {
   .container {
-    position: relative;
-    height: 200px;
-    padding-top: 60px;
+    height: 290px;
+    padding-top: 120px;
     text-align: center;
     -webkit-app-region: no-drag !important;
 
     .bg {
       position: absolute;
-      background: url('@/assets/window/bg2.png') no-repeat;
+      background: url('@/assets/window/job.png') no-repeat;
+      width: 95px;
+      height: 95px;
       background-size: contain;
-      inset: 0;
-      top: -120px;
+      top: 32px;
       left: 50%;
       transform: translateX(-50%) scale(0.8);
     }
 
     .title {
-      font-weight: 700;
+      font-weight: 400;
       font-size: 20px;
       margin-bottom: 10px;
+    }
+
+    .desc {
+      font-size: 16px;
+      color: #666666;
     }
   }
 

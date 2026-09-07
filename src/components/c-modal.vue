@@ -17,7 +17,6 @@ const config = ref<{
 })
 const store = useAppStore()
 const open = ref(false)
-const showUpdateDialog = ref(false)
 const updateHandle = async () => {
   store.setUpdate('download')
   window.electronAPI.sendMessage('start-update-app', {})
@@ -71,26 +70,28 @@ defineExpose({
 </script>
 
 <template>
-  <a-modal v-model:open="open" @cancel="open = false" style="width: 400px" :footer="null">
-    <div v-if="store.updateStatus === 'hasUpdate'">
-      <div class="c-modal">
-        <div class="icon"><img src="@/assets/window/update.png" /></div>
-        <div class="title">发现新版本</div>
-        <div class="version">
-          <div>V{{ store.updateInfo?.version }}可用</div>
-          <div>{{ formatSize(store.updateInfo?.size || 0) }}</div>
-          <div>{{ formatDate(store.updateInfo?.date || '') }}发布</div>
-        </div>
-        <div class="desc">
-          有新版本可用，是否立即下载更新？<span
-            style="cursor: pointer; color: #1a6be8"
-            @click="showUpdateDialog = true"
-            >查看更新</span
-          >
+  <a-modal
+    v-model:open="open"
+    @cancel="open = false"
+    :style="{ width: store.updateStatus === 'hasUpdate' ? '867px' : '400px' }"
+    :footer="null"
+  >
+    <div class="update-tips" v-if="store.updateStatus === 'hasUpdate'">
+      <img src="@/assets/window/new-version.png" alt="" class="bg" />
+      <div class="title">
+        <div>发现最新版本 for Windows V{{ store.updateInfo?.version }}</div>
+        <div>当前版本 V{{ store.appInfo?.version }}</div>
+      </div>
+      <div class="content">
+        <div class="content-title">版本更新说明</div>
+        <div class="content-desc">
+          <div class="u-item" v-if="config.feature.length">
+            <p v-for="(item, i) in config.feature" :key="i">{{ i + 1 }}.{{ item }}</p>
+          </div>
         </div>
       </div>
 
-      <a-row justify="center">
+      <a-row justify="center" class="btns">
         <a-button type="primary" style="margin-right: 20px" @click="updateHandle"
           >立即更新</a-button
         >
@@ -113,9 +114,14 @@ defineExpose({
         <div>下载速度：{{ progress?.speed }}MB/s</div>
       </div>
     </div>
-    <div v-if="store.updateStatus === 'downloaded'">
-      <img src="@/assets/window/download.png" alt="" style="margin-bottom: 20px" />
-      <a-row justify="center">
+    <div class="download-completed" v-if="store.updateStatus === 'downloaded'">
+      <img
+        src="@/assets/window/download-completed.png"
+        alt=""
+        style="margin-bottom: 20px"
+        class="d-bg"
+      />
+      <a-row justify="center" class="d-btns">
         <a-button type="primary" style="margin-right: 20px" @click="installHandle"
           >立即安装</a-button
         >
@@ -135,47 +141,6 @@ defineExpose({
       </div>
     </div>
   </a-modal>
-  <a-modal
-    v-model:open="showUpdateDialog"
-    title="更新内容"
-    :footer="null"
-    @cancel="showUpdateDialog = false"
-    style="width: 400px; -webkit-app-region: no-drag"
-  >
-    <div class="u-item" v-if="config.feature.length">
-      <div class="title">
-        <img src="@/assets/layout/feature.png" alt="" class="u-icon" />
-        新功能
-      </div>
-      <ul class="desc">
-        <li v-for="(item, i) in config.feature" :key="i">
-          {{ item }}
-        </li>
-      </ul>
-    </div>
-    <div class="u-item" v-if="config.optimize.length">
-      <div class="title">
-        <img src="@/assets/layout/optimize.png" alt="" class="u-icon" />
-        优化
-      </div>
-      <ul class="desc">
-        <li v-for="(item, i) in config.optimize" :key="i">
-          {{ item }}
-        </li>
-      </ul>
-    </div>
-    <div class="u-item" v-if="config.repair.length">
-      <div class="title">
-        <img src="@/assets/layout/bug.png" alt="" class="u-icon" />
-        修复
-      </div>
-      <ul class="desc">
-        <li v-for="(item, i) in config.repair" :key="i">
-          {{ item }}
-        </li>
-      </ul>
-    </div>
-  </a-modal>
 </template>
 
 <style lang="scss" scoped>
@@ -188,41 +153,54 @@ defineExpose({
   -webkit-app-region: no-drag;
 }
 
-.c-modal {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 20px;
-  -webkit-app-region: no-drag !important;
-  z-index: 9999999999;
-
-  .icon {
-    height: 130px;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-
-    img {
-      height: 200px;
-      width: auto;
-    }
+.update-tips {
+  .bg {
+    position: absolute;
+    inset: 0;
+    top: 0;
+    left: 0;
   }
 
   .title {
-    font-size: 30px;
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    div {
+      width: 100vw;
+      &:first-child {
+        color: #333;
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      &:last-child {
+        font-size: 16px;
+        color: #666666;
+      }
+    }
   }
 
-  .version {
-    font-size: 20px;
-    color: #1da5ae;
-    margin-bottom: 10px;
-    text-align: center;
+  .content {
+    position: absolute;
+    top: 142px;
+    left: 49px;
+    &-title {
+      font-weight: 600;
+      font-size: 18px;
+      color: #333333;
+      margin-bottom: 8px;
+    }
+    &-desc {
+      width: 320px;
+      height: 145px;
+      overflow-y: auto;
+    }
   }
 
-  .desc {
-    font-size: 14px;
-    margin-bottom: 10px;
+  .btns {
+    position: absolute;
+    left: 42px;
+    top: 393px;
   }
 }
 
@@ -340,24 +318,26 @@ defineExpose({
 }
 
 .u-item {
-  margin-bottom: 10px;
-  .title {
-    display: flex;
-    align-items: center;
-    font-weight: bold;
-    margin-bottom: 10px;
-    .u-icon {
-      width: 32px;
-      height: 32px;
-      margin-right: 10px;
-      vertical-align: middle;
-    }
+  p {
+    font-size: 16px;
+    color: #333333;
   }
-  .desc {
-    list-style-position: outside;
-    box-sizing: border-box;
-    list-style: disc;
-    padding-left: 24px;
+}
+
+.download-completed {
+  .d-bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    background-size: contain;
+  }
+
+  .d-btns {
+    width: 100vw;
+    position: absolute;
+    top: 176px;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 </style>

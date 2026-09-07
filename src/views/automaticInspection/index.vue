@@ -424,8 +424,6 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
 
   .operation-cell {
     display: flex;
-    gap: 8px;
-
     .ant-btn-dangerous {
       color: #f5222d;
     }

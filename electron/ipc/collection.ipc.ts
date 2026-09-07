@@ -295,7 +295,7 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 跳转EPR
   ipcMain.on('go-erp', (event, data) => {
     const env = SysTemUtils.getEnv() === 'development'
-    const url = env ? 'https://test-plus.shopbang.cn/erp/#/' : 'https://shopbang.cn/erp/#/'
+    const url = env ? 'https://test-ozon.shopbang.cn/erp/#/' : 'https://ozon.shopbang.cn/erp/#/'
     shell.openExternal(`${url}${data}`)
   })
 

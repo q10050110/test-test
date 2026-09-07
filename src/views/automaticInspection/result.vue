@@ -203,28 +203,18 @@ const { height, width } = useTableHeight('.table-container', 60, columns)
   <div class="inspection-page">
     <!-- 搜索区域 -->
     <a-row class="search-bar">
-      <a-input
-        v-model:value="params.id"
-        placeholder="请输入SKU"
-        style="width: 200px; margin-right: 16px"
-        allowClear
-      />
+      <a-input v-model:value="params.id" placeholder="请输入SKU" style="width: 200px" allowClear />
       <a-select
         v-model:value="params.taskId"
         placeholder="选择店铺名称"
-        style="width: 180px; margin-right: 16px"
+        style="width: 180px"
         allowClear
       >
         <a-select-option :value="item._id" v-for="item in shopList" :key="item._id">{{
           item.shopName
         }}</a-select-option>
       </a-select>
-      <a-select
-        v-model:value="isFollowed"
-        placeholder="是否被跟卖"
-        style="width: 180px; margin-right: 16px"
-        allowClear
-      >
+      <a-select v-model:value="isFollowed" placeholder="是否被跟卖" style="width: 180px" allowClear>
         <a-select-option :value="1">被跟卖</a-select-option>
         <a-select-option :value="0">未被跟卖</a-select-option>
       </a-select>
@@ -357,7 +347,7 @@ const { height, width } = useTableHeight('.table-container', 60, columns)
   .search-bar {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
     padding: 10px 0;
     .ant-input,
     .ant-select-selection-item {
@@ -396,7 +386,6 @@ const { height, width } = useTableHeight('.table-container', 60, columns)
 
   .operation-cell {
     display: flex;
-    gap: 8px;
   }
 }
 </style>

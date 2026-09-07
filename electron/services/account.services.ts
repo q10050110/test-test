@@ -11,12 +11,12 @@ export const accountHandle = async (
   const env = SysTemUtils.getEnv() === 'development'
   const testUrl =
     type === 'register'
-      ? 'https://test-plus.shopbang.cn/erp/#/register'
-      : 'https://test-plus.shopbang.cn/erp/#/forgetPassword'
+      ? 'https://test-ozon.shopbang.cn/erp/#/register'
+      : 'https://test-ozon.shopbang.cn/erp/#/forgetPassword'
   const prodUrl =
     type === 'register'
-      ? 'https://shopbang.cn/erp/#/register'
-      : 'https://shopbang.cn/erp/#/forgetPassword'
+      ? 'https://ozon.shopbang.cn/erp/#/register'
+      : 'https://ozon.shopbang.cn/erp/#/forgetPassword'
   try {
     await shell.openExternal(env ? testUrl : prodUrl)
   } catch (error) {

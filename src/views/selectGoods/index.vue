@@ -360,71 +360,33 @@ onUnmounted(() => {
 <template>
   <div class="select-goods-page">
     <div class="top">
-      <a-form class="form" layout="inline">
-        <div class="form__left">
-          <a-form-item>
-            <a-input
-              placeholder="请输入任务名称"
-              style="width: 180px"
-              v-model:value="params.taskName"
-              @pressEnter="getTaskList(false, true)"
-              allowClear
-            >
-              <template #prefix>
-                <SearchOutlined />
-              </template>
-            </a-input>
-          </a-form-item>
-          <a-form-item>
-            <a-select
-              v-model:value="params.taskStatus"
-              allowClear
-              style="width: 140px"
-              placeholder="请选择状态"
-            >
-              <a-select-option
-                v-for="item in taskStatusList"
-                :key="item.value"
-                :value="item.value"
-                >{{ item.label }}</a-select-option
-              >
-            </a-select>
-          </a-form-item>
-          <a-form-item>
-            <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
-            <a-button type="primary" style="margin: 0 10px" @click="openTaskDialogHandle()"
-              >新建任务</a-button
-            >
-            <a-button type="primary" style="margin-right: 10px" @click="batchStartHandle"
-              >批量开始</a-button
-            >
-            <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
-          </a-form-item>
-        </div>
-        <!--         <div class="form__right">
-          <a-form-item>
-            <InfoCircleFilled style="color: #faad14" />
-            同时进行任务数
-            <a-tooltip>
-              <template #title
-                >为保障软件稳定流畅运行，系统已根据您的设备配置
-                智能推荐可同时进行任务数，您可结合电脑运行状态
-                与资源占用，手动自定义调整同时运行的任务数量。</template
-              >
-              <QuestionCircleOutlined />
-            </a-tooltip>
-            <a-select
-              v-model:value="taskQueueCount"
-              style="width: 80px; margin-left: 10px"
-              @change="changeTaskQueueCount"
-            >
-              <a-select-option :value="item" v-for="item in taskNumberList" :key="item">{{
-                item
-              }}</a-select-option>
-            </a-select>
-          </a-form-item>
-        </div> -->
-      </a-form>
+      <div class="form" layout="inline">
+        <a-input
+          placeholder="请输入任务名称"
+          style="width: 180px"
+          v-model:value="params.taskName"
+          @pressEnter="getTaskList(false, true)"
+          allowClear
+        >
+          <template #prefix>
+            <SearchOutlined />
+          </template>
+        </a-input>
+        <a-select
+          v-model:value="params.taskStatus"
+          allowClear
+          style="width: 140px"
+          placeholder="请选择状态"
+        >
+          <a-select-option v-for="item in taskStatusList" :key="item.value" :value="item.value">{{
+            item.label
+          }}</a-select-option>
+        </a-select>
+        <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
+        <a-button type="primary" @click="openTaskDialogHandle()">新建任务</a-button>
+        <a-button type="primary" @click="batchStartHandle">批量开始</a-button>
+        <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
+      </div>
       <a-row style="margin-top: 20px" class="table">
         <a-col :span="24">
           <a-table
@@ -615,13 +577,9 @@ onUnmounted(() => {
   .form {
     flex-shrink: 0;
     margin-top: 20px;
+    gap: 20px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    &__left,
-    &__right {
-      display: flex;
-    }
   }
   .table {
     flex: 1;
