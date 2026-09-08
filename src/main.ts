@@ -4,7 +4,7 @@ import App from './App.vue'
 import router from './router'
 import '@/styles/reset.scss'
 import './permissions'
-
+import '@/styles/index.css'
 import 'ant-design-vue/dist/reset.css'
 import 'dayjs/locale/zh-cn'
 

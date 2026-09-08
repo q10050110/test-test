@@ -10,14 +10,13 @@ import {
   DownloadOutlined,
   PauseCircleFilled,
   SearchOutlined,
-  InfoCircleFilled,
-  QuestionCircleOutlined,
   EyeOutlined,
 } from '@ant-design/icons-vue'
 import TaskDialog from './components/taskDialog.vue'
 import feedback from '@/utils/feedback'
 import cLogTab from '@/components/c-log-tab.vue'
 import dayjs from 'dayjs'
+import { useTableHeight } from '@/hooks'
 // 表单参数
 const initParams = ref({
   pageNo: 1,
@@ -65,7 +64,7 @@ const taskNumberList = Array.from({ length: 19 }, (_, i) => i + 2)
 // 表格数据&配置
 const tableData = ref<Task[]>()
 const total = ref(0)
-const columns = ref<TableColumnsType<Task>>([
+const columns = ref([
   {
     title: '任务名称',
     dataIndex: 'taskName',
@@ -88,6 +87,7 @@ const columns = ref<TableColumnsType<Task>>([
     key: 'action',
   },
 ])
+const { width, height } = useTableHeight('.table', 60, columns.value)
 const selectData = ref<string[]>()
 const rowSelection: TableProps['rowSelection'] = {
   get selectedRowKeys() {
@@ -396,6 +396,7 @@ onUnmounted(() => {
             :pagination="false"
             rowKey="_id"
             :loading="loading"
+            :scroll="{ x: width, y: height }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'taskName'">

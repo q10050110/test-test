@@ -325,7 +325,7 @@ const { height, width } = useTableHeight('.table-container', 60, columns)
         :total="total"
         show-less-items
         showQuickJumper
-        :show-total="(total) => `共 ${total} 条数据`"
+        :show-total="(total:any) => `共 ${total} 条数据`"
         showSizeChange
         @change="pageChange"
       />
@@ -348,7 +348,7 @@ const { height, width } = useTableHeight('.table-container', 60, columns)
     display: flex;
     align-items: center;
     gap: 20px;
-    padding: 10px 0;
+    padding: 20px 0;
     .ant-input,
     .ant-select-selection-item {
       border-radius: 4px;

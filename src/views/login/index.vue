@@ -314,6 +314,7 @@ const operationHandle = (type: 'hide' | 'close') => {
   }
 
   .link {
+    cursor: pointer;
     color: #1f71ff;
   }
 }
