@@ -769,6 +769,9 @@ export class Collection {
     this.query.soldCountMax = task.soldCountMax
     this.query.shelfDateMin = task.upGoodsTimeMin
     this.query.shelfDateMax = task.upGoodsTimeMax
+    if (task.upGoodsTimeMin || task.upGoodsTimeMax) {
+      this.query.upGoodsTime = this.getUpDate(task.upGoodsTimeMax, task.upGoodsTimeMin)
+    }
     this.query.salesDynamicsMin = task.monthDynamicsMin
     this.query.salesDynamicsMax = task.monthDynamicsMax
     this.query.drrMin = task.adFeeMin
@@ -786,5 +789,18 @@ export class Collection {
     this.query.pdpToCartConversionMin = task.cardRateMin
     this.query.pdpToCartConversionMax = task.cardRateMax
     this.query.salesSchema = task.salesSchema
+  }
+
+  /** 
+   * 获取上架时间
+    */
+  getUpDate(startNum: number = 0, endNum: number = 0) {
+    const startOfDay = dayjs().startOf('day')
+    const endOfDay = dayjs().endOf('day')
+    const startTargetDate = startOfDay.subtract(startNum, 'day')
+    const endTargetDate = endOfDay.subtract(endNum, 'day')
+    const startTimestamp = startTargetDate.valueOf()
+    const endTimestamp = endTargetDate.valueOf()
+    return [startTimestamp, endTimestamp]
   }
 }

@@ -7,7 +7,6 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers';
-import tailwindcss from '@tailwindcss/vite'
 // @ts-ignore
 import postcssPxToRem from 'postcss-pxtorem'
 
@@ -17,7 +16,6 @@ export default defineConfig({
     vue(),
     vueJsx(),
     vueDevTools(),
-    tailwindcss(),
     AutoImport({
       imports: ['vue', 'vue-router', 'pinia'],
       dts: 'src/auto-import.d.ts'

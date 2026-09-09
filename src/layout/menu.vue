@@ -85,6 +85,12 @@ initOpenKeys()
 </template>
 
 <style lang="scss" scoped>
+:deep(.ant-menu-submenu-selected) {
+  .ant-menu-item-icon {
+    filter: invert(40%) sepia(90%) saturate(3000%) hue-rotate(200deg);
+  }
+}
+
 .menu-container {
   height: 100%;
   background-color: #fff;

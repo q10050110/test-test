@@ -14,7 +14,6 @@ import type {
 } from '@/types/selectGoods'
 import feedback from '@/utils/feedback'
 import { getShopCurCode } from '@/enums/index'
-import { divide } from 'lodash'
 const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
@@ -622,7 +621,7 @@ defineExpose({
           <section>
             <h3 class="section-title">基础信息</h3>
             <div class="form-section">
-              <a-row :gutter="[16, 16]" class="mb-[15px]">
+              <a-row :gutter="[16, 16]" class="mb-15">
                 <a-col :span="12">
                   <a-form-item required label="任务名称" name="taskName">
                     <a-input placeholder="请输入任务名称" v-model:value="formData.taskName" />
@@ -675,7 +674,7 @@ defineExpose({
                         </a-radio>
                       </a-radio-group>
                     </template>
-                    <div class="mt-[10px]">
+                    <div class="mt-10">
                       <a-input
                         placeholder="请输入URL"
                         v-model:value="formData.targetUrl"
@@ -712,12 +711,12 @@ defineExpose({
               <a-switch
                 :checked="formData.isUseAutoUpGoods"
                 size="small"
-                class="ml-[10px]"
+                class="ml-10"
                 @change="autoUpHandle"
               />
             </h3>
             <div class="form-section">
-              <div class="mb-[15px]">
+              <div class="mb-15">
                 <a-radio-group v-model:value="changeMode">
                   <a-radio :value="true">单店铺</a-radio>
                   <a-radio :value="false">上架配置</a-radio>
@@ -826,14 +825,14 @@ defineExpose({
               </div>
             </h3>
             <div class="form-section">
-              <div class="mb-[15px]">
+              <div class="mb-15">
                 <a-radio-group v-model:value="changeVersion">
                   <a-radio :value="1">新版本</a-radio>
                   <a-radio :value="2">旧版本</a-radio>
                 </a-radio-group>
               </div>
-              <div v-if="formData.upMode === 1">
-                <a-row :gutter="[16, 16]">
+              <div v-if="formData.upMode === 2">
+                <a-row :gutter="[16, 16]" class="mb-15">
                   <a-col :span="12">
                     <a-form-item name="myProfitPercent">
                       <template #label>
@@ -900,30 +899,9 @@ defineExpose({
                     </a-form-item>
                   </a-col>
                 </a-row>
-                <a-row :gutter="[16, 16]">
-                  <a-col :span="12">
-                    <a-form-item required name="sourceType">
-                      <template #label>
-                        <label class="flex-center">
-                          1688货源
-                          <a-tooltip
-                            title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
-                          >
-                            <QuestionCircleOutlined class="info-icon" />
-                          </a-tooltip>
-                        </label>
-                      </template>
-                      <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
-                        <a-radio value="0">综合</a-radio>
-                        <a-radio value="1">价格最低</a-radio>
-                        <a-radio value="2">销量最高</a-radio>
-                      </a-radio-group>
-                    </a-form-item>
-                  </a-col>
-                </a-row>
               </div>
               <div v-else>
-                <a-row :gutter="[16, 16]">
+                <a-row :gutter="[16, 16]" class="mb-15">
                   <a-col :span="8">
                     <a-form-item>
                       <template #label>
@@ -1054,31 +1032,35 @@ defineExpose({
                     </a-form-item>
                   </a-col>
                 </a-row>
-                <a-row :gutter="[16, 16]">
-                  <a-col :span="12">
-                    <a-form-item required name="sourceType">
-                      <template #label>
-                        <label class="flex-center">
-                          1688货源
-                          <a-tooltip
-                            title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
-                          >
-                            <QuestionCircleOutlined class="info-icon" />
-                          </a-tooltip>
-                        </label>
-                      </template>
-                      <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
-                        <a-radio value="0">综合</a-radio>
-                        <a-radio value="1">价格最低</a-radio>
-                        <a-radio value="2">销量最高</a-radio>
-                      </a-radio-group>
-                    </a-form-item>
-                  </a-col>
-                </a-row>
               </div>
             </div>
           </section>
-
+          <section>
+            <h3 class="section-title">1688货源</h3>
+            <div class="form-section">
+              <a-row :gutter="[16, 16]">
+                <a-col :span="12">
+                  <a-form-item required name="sourceType">
+                    <template #label>
+                      <label class="flex-center">
+                        1688货源
+                        <a-tooltip
+                          title="1688以图找货源时的规则，如价格最低：则会将价格最低的商品价格作为货源成本价，进行定价"
+                        >
+                          <QuestionCircleOutlined class="info-icon" />
+                        </a-tooltip>
+                      </label>
+                    </template>
+                    <a-radio-group v-model:value="formData.sourceType" style="width: 100%">
+                      <a-radio value="0">综合</a-radio>
+                      <a-radio value="1">价格最低</a-radio>
+                      <a-radio value="2">销量最高</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </div>
+          </section>
           <!-- 选品条件 -->
           <section>
             <h3 class="section-title">选品条件</h3>
@@ -1110,7 +1092,7 @@ defineExpose({
                   </a-form-item>
                 </a-col>
               </a-row>
-              <div v-if="formData.aiSelectType === 1">
+              <div v-if="formData.aiSelectType === 1" class="custom mt-15">
                 <a-row :gutter="[16, 16]">
                   <a-col :span="12">
                     <a-form-item label="月销量范围">
@@ -1657,7 +1639,7 @@ defineExpose({
                   </a-col>
                 </a-row>
               </div>
-              <div v-if="formData.aiSelectType === 2">
+              <div v-if="formData.aiSelectType === 2" class="custom">
                 <a-row :gutter="[16, 16]">
                   <a-col :span="12">
                     <a-form-item label="月销量范围">
@@ -1785,6 +1767,9 @@ defineExpose({
 
 section {
   margin-bottom: 24px;
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .form-section {
@@ -1846,6 +1831,7 @@ section {
 
 // 表单项样式优化
 :deep(.ant-form-item) {
+  margin-bottom: 0;
   .ant-form-item-label {
     padding-bottom: 4px;
 
@@ -1931,5 +1917,27 @@ section {
   .ant-radio-inner {
     border-color: #1890ff;
   }
+}
+
+.custom {
+  :deep(.ant-form-item) {
+    margin-bottom: 15px;
+  }
+}
+
+.mb-15 {
+  margin-bottom: 15px;
+}
+
+.ml-10 {
+  margin-left: 10px;
+}
+
+.mt-15 {
+  margin-top: 15px;
+}
+
+.mt-10 {
+  margin-top: 10px;
 }
 </style>

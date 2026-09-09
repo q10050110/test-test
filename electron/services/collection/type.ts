@@ -170,5 +170,6 @@ export type Query = {
   qtyViewPdpMax?: number
   pdpToCartConversionMin?: number
   pdpToCartConversionMax?: number
-  salesSchema?: string
+  salesSchema?: string,
+  upGoodsTime?: any[]
 }
