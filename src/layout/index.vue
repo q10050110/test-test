@@ -16,10 +16,7 @@ const downloadLog = () => {
 
 // 跳转视频教程
 const openUrl = () => {
-  window.electronAPI.sendMessage(
-    'open-url',
-    'https://www.yuque.com/ozonbang/gg6t4m/lvqlqum40osgie1v?singleDoc#%20%E3%80%8A%E3%80%90%E8%A7%86%E9%A2%91%E3%80%91%E4%B8%8A%E5%93%81%E5%B8%AE%E8%87%AA%E5%8A%A8%E5%8C%96%E5%8A%A9%E6%89%8B%E6%95%99%E7%A8%8B%E3%80%8B',
-  )
+  window.electronAPI.sendMessage('open-url', 'https://mp.weixin.qq.com/s/pmP_yl49F6I-wbyJKGdOxw')
 }
 </script>
 
