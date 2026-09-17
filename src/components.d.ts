@@ -44,6 +44,7 @@ declare module 'vue' {
     CLogTab: typeof import('./components/c-log-tab.vue')['default']
     CModal: typeof import('./components/c-modal.vue')['default']
     CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
+    CVipModal: typeof import('./components/c-vip-modal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -83,6 +84,7 @@ declare global {
   const CLogTab: typeof import('./components/c-log-tab.vue')['default']
   const CModal: typeof import('./components/c-modal.vue')['default']
   const CNetworkModal: typeof import('./components/c-network-modal.vue')['default']
+  const CVipModal: typeof import('./components/c-vip-modal.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

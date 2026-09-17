@@ -108,6 +108,7 @@ onMounted(async () => {
     <c-modal ref="cModalRef" :progress="progress" v-if="!appStore.loading" />
     <c-close-modal v-if="!appStore.loading" />
     <c-network-modal v-if="!appStore.loading" />
+    <c-vip-modal v-if="store.hasShowVipModal" />
   </a-config-provider>
 </template>
 

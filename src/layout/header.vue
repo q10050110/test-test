@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAppStore } from '@/stores'
+import { useAppStore, useUserStore } from '@/stores'
 
 import {
   MinusOutlined,
@@ -8,6 +8,7 @@ import {
   SwitcherOutlined,
 } from '@ant-design/icons-vue'
 const store = useAppStore()
+const userStore = useUserStore()
 const isMax = ref(false)
 const open = ref(false)
 const desc = ref('请确认是否要退出，如有选品数据未导出请先导出，退出后将无法找回。')
@@ -63,6 +64,10 @@ window.electronAPI.on('unmaximize', () => {
     </div>
     <div class="drag"></div>
     <div class="right">
+      <div class="customer-vip" @click="userStore.setShowVipModal(true)">
+        <img src="@/assets/window/vip.png" style="margin-right: 5px" />
+        开通/续费VIP
+      </div>
       <div class="customer-service">
         <img src="@/assets/window/lianxikefu.png" alt="" />
         联系客服
@@ -143,6 +148,19 @@ window.electronAPI.on('unmaximize', () => {
       width: 20px;
       object-fit: contain;
       vertical-align: middle;
+    }
+
+    .customer-vip {
+      display: flex;
+      align-items: center;
+      height: 30px;
+      font-size: 16px;
+      color: #ffffff;
+      background: linear-gradient(90deg, #1f5fff 0%, #06bafe 100%);
+      border-radius: 16px;
+      padding: 0 10px;
+      margin-right: 20px;
+      cursor: pointer;
     }
 
     .customer-service {

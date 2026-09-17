@@ -52,5 +52,8 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { token, user, initUser, getUser, getToken, setToken, removeToken, logout }
+  const hasShowVipModal = ref(false)
+  const setShowVipModal = (val: boolean) => hasShowVipModal.value = val
+
+  return { token, user, hasShowVipModal, initUser, getUser, getToken, setToken, removeToken, logout, setShowVipModal }
 })
