@@ -827,11 +827,11 @@ defineExpose({
             <div class="form-section">
               <div class="mb-15">
                 <a-radio-group v-model:value="changeVersion">
-                  <a-radio :value="1">新版本</a-radio>
-                  <a-radio :value="2">旧版本</a-radio>
+                  <a-radio :value="2">新版本</a-radio>
+                  <a-radio :value="1">旧版本</a-radio>
                 </a-radio-group>
               </div>
-              <div v-if="formData.upMode === 2">
+              <div v-if="formData.upMode === 1">
                 <a-row :gutter="[16, 16]" class="mb-15">
                   <a-col :span="12">
                     <a-form-item name="myProfitPercent">

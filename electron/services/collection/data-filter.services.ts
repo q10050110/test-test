@@ -4,7 +4,7 @@ import dayjs from 'dayjs'
 import { SysTemUtils } from '../../utils/system.js'
 export class DataProcessService {
   private data: Map<string, any> = new Map()
-  constructor() {}
+  constructor() { }
   /**
    * 获取基础数据
    */
@@ -36,7 +36,7 @@ export class DataProcessService {
             item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
             item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
             item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
-            item.discount = item?.discount?.toFixed(2)
+            item.discount = typeof item.discount === 'number' ? item?.discount?.toFixed(2) : item.discount
             if (item.accessibility) item.accessibility = item.accessibility * 100
             if (item.brand) item.brand = item.brand?.includes('без бренда') ? '' : item.brand
             item.clickRate = (((item.qtyViewPdp || 0) / (item.views || 1)) * 100)?.toFixed(2)
