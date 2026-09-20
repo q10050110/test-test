@@ -168,7 +168,7 @@ const openUrl = () => {
     }
 
     .main {
-      padding: 0 20px;
+      padding-right: 10px;
       flex: 1;
       border-radius: 5px;
       overflow-y: auto;
