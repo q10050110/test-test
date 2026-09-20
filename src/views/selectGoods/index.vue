@@ -2,6 +2,7 @@
 import type { ConfigList, LogisticsSimpleList, ShopList, Task, TaskList } from '@/types/selectGoods'
 import type { Response } from '@/types'
 import type { TableColumnsType, TableProps } from 'ant-design-vue'
+import { useVipCheck } from '@/hooks/index'
 import { h } from 'vue'
 import {
   CaretRightOutlined,
@@ -17,6 +18,7 @@ import feedback from '@/utils/feedback'
 import cLogTab from '@/components/c-log-tab.vue'
 import dayjs from 'dayjs'
 import { useTableHeight } from '@/hooks'
+const { check } = useVipCheck()
 // 表单参数
 const initParams = ref({
   pageNo: 1,
@@ -383,8 +385,8 @@ onUnmounted(() => {
           }}</a-select-option>
         </a-select>
         <a-button type="primary" @click="getTaskList(false, true, true)">查询</a-button>
-        <a-button type="primary" @click="openTaskDialogHandle()">新建任务</a-button>
-        <a-button type="primary" @click="batchStartHandle">批量开始</a-button>
+        <a-button type="primary" @click="check(openTaskDialogHandle)">新建任务</a-button>
+        <a-button type="primary" @click="check(batchStartHandle)">批量开始</a-button>
         <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
       </div>
       <a-row style="margin-top: 20px" class="table">
@@ -454,7 +456,7 @@ onUnmounted(() => {
                   type="link"
                   :icon="h(CaretRightOutlined)"
                   v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
-                  @click="startTask(record as Task, true)"
+                  @click="check(() => startTask(record as Task, true))"
                   >开始</a-button
                 >
                 <a-button
@@ -471,12 +473,15 @@ onUnmounted(() => {
                   <a-button
                     type="link"
                     :icon="h(EditOutlined)"
-                    @click="openTaskDialogHandle(record as Task)"
+                    @click="check(() => openTaskDialogHandle(record as Task))"
                     :disabled="record.taskStatus === 'running'"
                     >编辑</a-button
                   >
                 </a-tooltip>
-                <a-button type="link" :icon="h(CopyOutlined)" @click="copyHandle(record as Task)"
+                <a-button
+                  type="link"
+                  :icon="h(CopyOutlined)"
+                  @click="check(() => copyHandle(record as Task))"
                   >复制</a-button
                 >
                 <!-- <a-tooltip placement="topRight">

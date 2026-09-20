@@ -108,8 +108,26 @@ onMounted(async () => {
     <c-modal ref="cModalRef" :progress="progress" v-if="!appStore.loading" />
     <c-close-modal v-if="!appStore.loading" />
     <c-network-modal v-if="!appStore.loading" />
-    <c-vip-modal v-if="store.hasShowVipModal" />
+    <Transition name="fade">
+      <c-vip-modal v-show="store.hasShowVipModal" />
+    </Transition>
   </a-config-provider>
 </template>
 
-<style scoped lang="scss"></style>
+<style scoped lang="scss">
+/* 淡入淡出动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.fade-enter-to,
+.fade-leave-from {
+  opacity: 1;
+}
+</style>

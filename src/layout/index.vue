@@ -45,23 +45,36 @@ const openUrl = () => {
               </div>
             </div>
           </div>
-          <div class="user">
-            <img src="@/assets/layout/avatar.png" alt="" />
-            <div class="info">
-              <a-dropdown placement="bottom">
-                <div class="username">
-                  {{ store.user?.name }}
-                  <span class="icon"></span>
+          <a-popover>
+            <template #title></template>
+            <template #content>
+              <div class="vip-popover-content">
+                <div class="vip-card">
+                  <div class="vip-title">
+                    <img
+                      src="@/assets/window/vip-user.png"
+                      alt=""
+                      style="width: 18px; height: 18px; margin-right: 10px"
+                    />
+                    非会员
+                  </div>
+                  <div class="vip-tips">请开通会员</div>
+                  <a-button type="primary" class="vip-btn">去开通</a-button>
                 </div>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item @click="logoutHandle">退出登录</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-              <div class="mobile">{{ store.user?.phone }}</div>
+                <a-button type="link" @click="logoutHandle" class="logout-btn">退出登录</a-button>
+              </div>
+            </template>
+            <div class="user">
+              <img src="@/assets/layout/avatar.png" alt="" />
+              <div class="info">
+                <div class="username ellipsis-1" :title="store.user?.name">
+                  {{ store.user?.name }}
+                </div>
+                <!--  <div @click="logoutHandle">退出登录</div> -->
+                <div class="mobile">{{ store.user?.phone }}</div>
+              </div>
             </div>
-          </div>
+          </a-popover>
         </div>
       </div>
       <div class="main">
@@ -137,6 +150,7 @@ const openUrl = () => {
           height: 80px;
           padding: 0 5px;
           background-color: #fff;
+          cursor: pointer;
           img {
             width: 30px;
             margin-right: 10px;
@@ -145,22 +159,7 @@ const openUrl = () => {
 
           .info {
             .username {
-              display: flex;
-              align-items: center;
-
-              .icon {
-                &::before {
-                  content: '';
-                  display: inline-block;
-                  width: 0;
-                  height: 0;
-                  border-left: 4px solid transparent;
-                  border-right: 4px solid transparent;
-                  border-top: 6px solid #999; // 箭头颜色
-                  margin-left: 4px;
-                  transition: transform 0.2s ease;
-                }
-              }
+              width: 110px;
             }
           }
         }
@@ -174,6 +173,58 @@ const openUrl = () => {
       overflow-y: auto;
       height: 100%;
     }
+  }
+}
+
+.vip-popover-content {
+  padding: 4px 0;
+  width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .vip-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-bottom: 1px solid #d9d9d9;
+    margin-bottom: 20px;
+    .vip-title {
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+      font-size: 14px;
+      color: #602d02;
+      height: 20px;
+      line-height: 20px;
+      margin-bottom: 10px;
+    }
+
+    .vip-tips {
+      font-weight: 400;
+      font-size: 14px;
+      color: #666666;
+      height: 20px;
+      line-height: 20px;
+      margin-bottom: 25px;
+    }
+
+    .vip-btn {
+      font-weight: 500;
+      font-size: 14px;
+      color: #5f2c01;
+      width: 77px;
+      background: linear-gradient(90deg, #eed4a4 0%, #e7c281 100%);
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+  }
+
+  .logout-btn {
+    font-weight: 500;
+    font-size: 14px;
+    color: #1f5fff;
   }
 }
 </style>

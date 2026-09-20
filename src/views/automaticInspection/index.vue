@@ -14,7 +14,8 @@ import { h } from 'vue'
 import feedback from '@/utils/feedback'
 import dayjs from 'dayjs'
 import cLogTab from '@/components/c-log-tab.vue'
-import { useTableHeight } from '@/hooks/index'
+import { useTableHeight, useVipCheck } from '@/hooks/index'
+const { check } = useVipCheck()
 const columns: TableColumnsType<Inspection> = [
   {
     title: '店铺名称',
@@ -220,7 +221,9 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
     <div class="table-container">
       <!-- 新增任务按钮 -->
       <div class="action-bar">
-        <a-button type="primary" @click="showInspectionDialog(undefined)">新增巡查任务</a-button>
+        <a-button type="primary" @click="check(() => showInspectionDialog(undefined))"
+          >新增巡查任务</a-button
+        >
       </div>
       <a-table
         :dataSource="tableData"
@@ -274,7 +277,7 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
                 type="link"
                 :icon="h(CaretRightOutlined)"
                 v-if="record.status !== 'running'"
-                @click="startHandle(record as Inspection)"
+                @click="check(() => startHandle(record as Inspection))"
               >
                 执行
               </a-button>
@@ -296,7 +299,7 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
               <a-button
                 type="link"
                 :icon="h(EditOutlined)"
-                @click="showInspectionDialog(record as Inspection)"
+                @click="check(() => showInspectionDialog(record as Inspection))"
                 :disabled="record.status === 'running'"
               >
                 编辑

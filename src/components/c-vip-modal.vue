@@ -80,93 +80,95 @@ const goAgreement = () => {
 }
 </script>
 <template>
-  <div class="vip-modal">
-    <!-- 模态框头部 -->
-    <div class="modal-header">
-      <div class="user-info">
-        <img src="@/assets/layout/avatar.png" alt="用户头像" class="avatar" />
-        <div class="info-text">
-          <div class="nickname">{{ userNickname }}</div>
-          <div class="version">
-            <img
-              src="@/assets/view/vip.png"
-              alt=""
-              style="width: 16px; height: 16px; margin-right: 5px"
-            />
-            免费版 | 到期时间: {{ expirationDate }}
-          </div>
-        </div>
-      </div>
-      <span class="close-btn" @click="userStore.setShowVipModal(false)">×</span>
-    </div>
-
-    <div class="vip-main">
-      <div class="left">
-        <!-- 会员卡选项 -->
-        <div class="card-options">
-          <div
-            v-for="(card, index) in cards"
-            :key="index"
-            class="card-item"
-            @click="selectedCard = index"
-            :class="[index === selectedCard ? 'vip-active' : '']"
-          >
-            <div class="discount-tag">{{ index === 0 ? '新人福利' : '75折特惠' }}</div>
-            <div class="card-title">{{ card.title }}</div>
-            <div class="current-price">¥{{ card.price }}</div>
-            <div class="original-price" v-if="index !== 0">原价 ¥{{ card.originalPrice }}</div>
-            <div class="original-price" style="text-decoration: none" v-else>免费开通</div>
-          </div>
-        </div>
-
-        <!-- 会员权益对比表 -->
-        <div class="benefits-comparison">
-          <div
-            class="benefits-comparison-item"
-            v-for="(item, i) in tableList"
-            :key="i"
-            :class="[selectedCard === item.vipType ? 'vip-active2' : '']"
-          >
-            <div class="header">
-              {{ item.title }}
-              <a-tooltip v-if="item.title === '体验卡'">
-                <template #title>每个账号只可开通一次体验卡会员</template>
-                <QuestionCircleOutlined />
-              </a-tooltip>
-            </div>
-            <div class="body">
-              <div class="body-item">{{ item.row1 }}</div>
-              <div class="body-item">{{ item.row2 }}</div>
-              <div class="body-item">{{ item.row3 }}</div>
+  <div>
+    <div class="vip-modal">
+      <!-- 模态框头部 -->
+      <div class="modal-header">
+        <div class="user-info">
+          <img src="@/assets/layout/avatar.png" alt="用户头像" class="avatar" />
+          <div class="info-text">
+            <div class="nickname">{{ userNickname }}</div>
+            <div class="version">
+              <img
+                src="@/assets/view/vip.png"
+                alt=""
+                style="width: 16px; height: 16px; margin-right: 5px"
+              />
+              免费版 | 到期时间: {{ expirationDate }}
             </div>
           </div>
         </div>
+        <span class="close-btn" @click="userStore.setShowVipModal(false)">×</span>
       </div>
-      <!-- 支付区域 -->
-      <div class="payment-section">
-        <div class="total-price">¥<span class="price">368</span></div>
-        <div class="qr-code-container">
-          <img alt="支付二维码" class="qr-code" />
-          <div class="refresh-btn">
-            <img
-              src="@/assets/view/vip-refresh.png"
-              alt=""
-              style="width: 16px; height: 16px"
-            />刷新二维码
+
+      <div class="vip-main">
+        <div class="left">
+          <!-- 会员卡选项 -->
+          <div class="card-options">
+            <div
+              v-for="(card, index) in cards"
+              :key="index"
+              class="card-item"
+              @click="selectedCard = index"
+              :class="[index === selectedCard ? 'vip-active' : '']"
+            >
+              <div class="discount-tag">{{ index === 0 ? '新人福利' : '75折特惠' }}</div>
+              <div class="card-title">{{ card.title }}</div>
+              <div class="current-price">¥{{ card.price }}</div>
+              <div class="original-price" v-if="index !== 0">原价 ¥{{ card.originalPrice }}</div>
+              <div class="original-price" style="text-decoration: none" v-else>免费开通</div>
+            </div>
           </div>
-          <div class="payment-instructions">
-            使用
-            <span style="color: #333; font-size: 14px; font-weight: 500">微信/支付宝</span>
-            扫码支付<br />
-            支付即视为你同意
-            <a href="javascript:;" class="agreement-link" @click="goAgreement">会员协议</a>
-            条例
+
+          <!-- 会员权益对比表 -->
+          <div class="benefits-comparison">
+            <div
+              class="benefits-comparison-item"
+              v-for="(item, i) in tableList"
+              :key="i"
+              :class="[selectedCard === item.vipType ? 'vip-active2' : '']"
+            >
+              <div class="header">
+                {{ item.title }}
+                <a-tooltip v-if="item.title === '体验卡'">
+                  <template #title>每个账号只可开通一次体验卡会员</template>
+                  <QuestionCircleOutlined />
+                </a-tooltip>
+              </div>
+              <div class="body">
+                <div class="body-item">{{ item.row1 }}</div>
+                <div class="body-item">{{ item.row2 }}</div>
+                <div class="body-item">{{ item.row3 }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 支付区域 -->
+        <div class="payment-section">
+          <div class="total-price">¥<span class="price">368</span></div>
+          <div class="qr-code-container">
+            <img alt="支付二维码" class="qr-code" />
+            <div class="refresh-btn">
+              <img
+                src="@/assets/view/vip-refresh.png"
+                alt=""
+                style="width: 16px; height: 16px"
+              />刷新二维码
+            </div>
+            <div class="payment-instructions">
+              使用
+              <span style="color: #333; font-size: 14px; font-weight: 500">微信/支付宝</span>
+              扫码支付<br />
+              支付即视为你同意
+              <a href="javascript:;" class="agreement-link" @click="goAgreement">会员协议</a>
+              条例
+            </div>
           </div>
         </div>
       </div>
     </div>
+    <div class="mask"></div>
   </div>
-  <div class="mask"></div>
 </template>
 
 <style lang="scss" scoped>

@@ -1,3 +1,5 @@
+import { useUserStore } from '@/stores'
+import feedback from '@/utils/feedback'
 import type { ColumnType } from 'ant-design-vue/es/table'
 /**
  * 动态计算表格高度的 Hook
@@ -45,4 +47,19 @@ export function useTableHeight(containerSelector: string = '.table-container', o
     height,
     calculateHeight
   }
+}
+/** 
+ * 会员检查
+  */
+export const useVipCheck = () => {
+  const userStore = useUserStore()
+  const check = (callback: () => void | Promise<void>) => {
+    if (!userStore.user?.vip_type) {
+      feedback.warning('此功能仅限会员使用，请开通会员')
+      return
+    }
+    callback()
+  }
+
+  return { check }
 }
