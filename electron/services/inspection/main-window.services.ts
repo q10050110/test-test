@@ -132,14 +132,15 @@ export class MainWindowService {
    * 进入页面前的检查
     */
   async checkPage() {
-    if (!this.browserWindow || this.browserWindow.isDestroyed()) {
-      return
-    }
-    const wc = this.browserWindow.webContents
-    if (!this.isCheck) {
-      this.isCheck = true
-      // 1. 点击
-      const result = await wc.executeJavaScript(`
+    try {
+      if (!this.browserWindow || this.browserWindow.isDestroyed()) {
+        return
+      }
+      const wc = this.browserWindow.webContents
+      if (!this.isCheck) {
+        this.isCheck = true
+        // 1. 点击
+        const result = await wc.executeJavaScript(`
         (() => {
           try {
             const p = document.querySelector('body > div.con p.h')
@@ -158,9 +159,9 @@ export class MainWindowService {
           }
         })()
       `)
-      log.info('点击结果:', result)
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      const result2 = await wc.executeJavaScript(`
+        log.info('点击结果:', result)
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        const result2 = await wc.executeJavaScript(`
         (() => {
           try {
             const slider = document.querySelector('#slider');
@@ -173,14 +174,17 @@ export class MainWindowService {
           }
         })()
       `)
-      if (result2?.ok) {
-        try {
-          await this.injectOpenCV()
-          await this.sliderVerification()
-        } catch (error) {
-          log.error('注入opencv失败')
+        if (result2?.ok) {
+          try {
+            await this.injectOpenCV()
+            await this.sliderVerification()
+          } catch (error) {
+            log.error('注入opencv失败')
+          }
         }
       }
+    } catch (error) {
+      log.error('页面检查失败:', error)
     }
   }
 

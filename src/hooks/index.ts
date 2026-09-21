@@ -53,10 +53,13 @@ export function useTableHeight(containerSelector: string = '.table-container', o
   */
 export const useVipCheck = () => {
   const userStore = useUserStore()
-  const check = (callback: () => void | Promise<void>) => {
-    if (!userStore.user?.vip_type) {
-      feedback.warning('此功能仅限会员使用，请开通会员')
-      return
+  const check = async (callback: () => void | Promise<void>) => {
+    if (!userStore.user?.auto_vip_type) {
+      const res = await feedback.confirm('此功能仅限会员使用，请开通会员', {
+        okText: '去开通',
+      })
+      if (res) userStore.setShowVipModal(true)
+      return;
     }
     callback()
   }

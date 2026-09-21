@@ -4,6 +4,7 @@ import { operationStore } from '../store/index.js'
 import { SysTemUtils } from '../utils/system.js'
 import { InterfaceResult } from '../types/index.js'
 import { TaskManager } from './collection/task-manager.services.js'
+import { VipInfo, UserVipInfo, VipPayInfo, VipResult, VipPayResult } from '../types/user'
 export const accountHandle = async (
   type: 'register' | 'resetPassword',
   mainWindow: BrowserWindow,
@@ -49,9 +50,15 @@ export const getUserInfo = async (data: { token: string }) => {
     method: 'post',
     data,
   })
-  if (res.code === 0) operationStore.set('user', res.data)
+  const vipInfo = await request<InterfaceResult<UserVipInfo>, InterfaceResult<UserVipInfo>>({
+    url: '/api/auto/autoTask/getAutoVipInfo',
+    method: 'post',
+    data
+  })
+  console.log(vipInfo, '~~~')
+  if (res.code === 0) operationStore.set('user', { ...res.data, ...vipInfo.data })
 
-  return res
+  return { code: 0, message: '获取用户信息成功', data: { ...res.data, ...vipInfo.data } }
 }
 
 export const logout = async () => {
@@ -65,6 +72,70 @@ export const logout = async () => {
     return await request<InterfaceResult<any>, InterfaceResult<any>>({
       url: '/api/user/userBase/logoutAuto',
       method: 'post',
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const getVipInfo = async () => {
+  try {
+    return await request<InterfaceResult<VipInfo[]>, InterfaceResult<VipInfo[]>>({
+      url: '/api/auto/autoTask/getVipPrices',
+      method: 'post',
+      data: {}
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const getVipPayInfo = async (auto_vip_type: 1 | 2 | 3 | 4) => {
+  try {
+    return await request<InterfaceResult<VipPayInfo>, InterfaceResult<VipPayInfo>>({
+      url: '/api/other/pay/autoVipPayInfo',
+      method: 'post',
+      data: { auto_vip_type }
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const payVip = async (auto_vip_type: 1 | 2 | 3 | 4) => {
+  try {
+    return await request<InterfaceResult<VipResult>, InterfaceResult<VipResult>>({
+      url: '/api/other/pay/autoVipPayCode',
+      method: 'post',
+      data: { auto_vip_type }
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const getVipPayResult = async (mchOrderNo: string) => {
+  try {
+    return await request<InterfaceResult<VipPayResult>, InterfaceResult<VipPayResult>>({
+      url: '/api/other/pay/getPayResult',
+      method: 'post',
+      data: { mchOrderNo }
     })
   } catch (error) {
     return {

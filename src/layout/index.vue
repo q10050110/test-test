@@ -59,7 +59,9 @@ const openUrl = () => {
                     非会员
                   </div>
                   <div class="vip-tips">请开通会员</div>
-                  <a-button type="primary" class="vip-btn">去开通</a-button>
+                  <a-button type="primary" class="vip-btn" @click="store.setShowVipModal(true)"
+                    >去开通</a-button
+                  >
                 </div>
                 <a-button type="link" @click="logoutHandle" class="logout-btn">退出登录</a-button>
               </div>

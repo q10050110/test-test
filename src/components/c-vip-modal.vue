@@ -1,167 +1,321 @@
 <script lang="ts" setup>
 import { useUserStore } from '@/stores'
-import { QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { QuestionCircleOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import type { Response } from '@/types'
+import type { VipInfo, VipPayInfo, VipResult, VipPayResult } from '@/types/user'
+import { Modal } from 'ant-design-vue'
+import dayjs from 'dayjs'
+import feedback from '@/utils/feedback'
+import VueQrcode from 'vue-qrcode'
 const userStore = useUserStore()
-const userNickname = ref('用户昵称')
-const expirationDate = ref('2027-05-08 08:30')
-
-// 会员卡配置
-const cards = reactive([
-  {
-    title: '体验卡',
-    price: 0,
-  },
-  {
-    title: '月卡',
-    price: 368,
-    originalPrice: 499,
-  },
-  {
-    title: '季卡',
-    price: 998,
-    originalPrice: 1330,
-    monthlyPrice: '332',
-  },
-  {
-    title: '年卡',
-    price: 3280,
-    originalPrice: 4373,
-    monthlyPrice: '273',
-  },
-])
-
+const loading = ref(false)
 // 当前选中的卡片索引
-const selectedCard = ref(0)
-
-const tableList = [
-  {
-    title: '会员权益对比',
-    row1: '每日选品额度',
-    row2: '每日巡查店铺数',
-    row3: '同时登录设备数',
-  },
-  {
-    title: '体验卡',
-    row1: '不限',
-    row2: '不限',
-    row3: '1',
-    vipType: 0,
-  },
-  {
-    title: '月卡',
-    row1: '2000',
-    row2: '3',
-    row3: '1',
-    vipType: 1,
-  },
-  {
-    title: '季卡',
-    row1: '5000',
-    row2: '5',
-    row3: '1',
-    vipType: 2,
-  },
-  {
-    title: '年卡',
-    row1: '不限',
-    row2: '不限',
-    row3: '1',
-    vipType: 3,
-  },
-]
-// 关闭模态框
-const closeModal = () => {
-  // 这里可以触发关闭事件或执行其他逻辑
-  console.log('关闭模态框')
-}
+const selectedCard = ref(1)
+const tableList = ref<VipInfo[]>([])
 
 const goAgreement = () => {
   window.electronAPI.sendMessage('open-url', 'https://ozon.shopbang.cn/#/vipAgreement')
+}
+
+// 选择会员
+const selectHandle = (type: number) => {
+  hasPay.value = false
+  payInfo.value = undefined
+  clearInterval(timer.value)
+  timer.value = undefined
+  clearInterval(resultTimer.value)
+  resultTimer.value = undefined
+  selectedCard.value = type
+}
+
+// 获取配置
+const getVipOption = async () => {
+  const { data, code } = await window.electronAPI.invoke<Response<VipInfo[]>>('get-vip-info', {})
+  if (!code)
+    tableList.value = [
+      {
+        vip_name: '会员权益对比',
+        day_pick_count: '每日选品额度',
+        device_limit: '同时登录设备数',
+        auto_vip_type: 99,
+        days: 0,
+        price: 0,
+        original_price: 0,
+      },
+      ...data,
+    ]
+  loading.value = false
+}
+
+// 获取支付信息
+const hasPay = ref(false)
+const payInfo = ref<VipResult>()
+const getPayLoading = ref(false)
+const currentSelectVipInfo = computed(() =>
+  tableList.value.find((item) => item.auto_vip_type === selectedCard.value),
+)
+
+const paySuccess = () => {
+  userStore.setShowVipModal(false)
+  userStore.getUser()
+  feedback.success('开通会员成功！')
+}
+
+const resultTimer = ref<number | undefined>(undefined)
+const queryPayResult = async () => {
+  if (resultTimer.value) return
+  resultTimer.value = setInterval(async () => {
+    const { code, data } = await window.electronAPI.invoke<Response<VipPayResult>>(
+      'get-vip-pay-result',
+      {
+        mchOrderNo: payInfo.value?.mchOrderNo,
+      },
+    )
+    if (!code && data?.state === 3) {
+      clearInterval(resultTimer.value)
+      resultTimer.value = undefined
+      paySuccess()
+    }
+  }, 1000)
+}
+const payHandle = async () => {
+  const { data, code, message } = await window.electronAPI.invoke<Response<VipResult>>('pay-vip', {
+    auto_vip_type: selectedCard.value,
+  })
+  if (!code) {
+    if (selectedCard.value === 1) return paySuccess()
+    hasPay.value = true
+    payInfo.value = data
+    queryPayResult()
+  } else {
+    feedback.error(message)
+  }
+}
+const getPayInfo = async () => {
+  if (userStore.user?.auto_vip_type && selectedCard.value === 1)
+    return feedback.warning('您已经是会员，不能开通体验卡会员')
+  getPayLoading.value = true
+  const { data: VipInfo } = await window.electronAPI.invoke<Response<VipPayInfo>>(
+    'get-vip-pay-info',
+    {
+      auto_vip_type: selectedCard.value,
+    },
+  )
+  console.log(VipInfo, 'yoyoyo~~~')
+  const contentVNode = h('div', {}, [
+    h(
+      'div',
+      { style: 'margin-bottom: 8px;' },
+      `即将开通自动化会员-${currentSelectVipInfo.value?.vip_name}${currentSelectVipInfo.value?.auto_vip_type === 0 ? '（每个账号只允许开通一次' : ''}`,
+    ),
+    VipInfo.exchangeDay > 0 ? h('div', {}, `原月卡剩余时长兑换天数：${VipInfo.exchangeDay}天`) : '',
+
+    h(
+      'div',
+      { style: 'margin-bottom: 8px;' },
+      `此次充值会员时长：${currentSelectVipInfo.value?.days}天`,
+    ),
+    h('div', {}, `到期时间：${dayjs().add(1, 'day').format('YYYY-MM-DD HH:mm:ss')}`),
+  ])
+  getPayLoading.value = false
+  Modal.confirm({
+    title: '开通/续费确认',
+    content: contentVNode,
+    onOk: async () => {
+      await payHandle()
+    },
+  })
+}
+
+// 刷新二维码
+const timer = ref<number | undefined>(undefined)
+const countDown = ref(0)
+const refreshQrcode = async () => {
+  if (timer.value) return
+  countDown.value = 60
+  timer.value = setInterval(() => {
+    countDown.value--
+    if (countDown.value <= 0) {
+      clearInterval(timer.value)
+      timer.value = undefined
+      countDown.value = 0
+    }
+  }, 1000)
+  await payHandle()
+}
+
+watch(
+  () => userStore.hasShowVipModal,
+  (val) => {
+    if (val) {
+      userStore.getUser()
+      loading.value = true
+      hasPay.value = false
+      payInfo.value = undefined
+      getVipOption()
+    } else {
+      clearInterval(timer.value)
+      timer.value = undefined
+      clearInterval(resultTimer.value)
+      resultTimer.value = undefined
+    }
+  },
+)
+
+// 会员格式化
+const vipMap = [
+  {
+    name: '体验会员',
+    value: 1,
+  },
+  {
+    name: '月卡会员',
+    value: 2,
+  },
+  {
+    name: '季卡会员',
+    value: 3,
+  },
+  {
+    name: '年卡会员',
+    value: 4,
+  },
+]
+const formatVip = (type: number | undefined) => {
+  return vipMap.find((item) => item.value === type)?.name || '免费会员'
+}
+
+const formatData = (date: number | string) => {
+  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
 }
 </script>
 <template>
   <div>
     <div class="vip-modal">
-      <!-- 模态框头部 -->
-      <div class="modal-header">
-        <div class="user-info">
-          <img src="@/assets/layout/avatar.png" alt="用户头像" class="avatar" />
-          <div class="info-text">
-            <div class="nickname">{{ userNickname }}</div>
-            <div class="version">
-              <img
-                src="@/assets/view/vip.png"
-                alt=""
-                style="width: 16px; height: 16px; margin-right: 5px"
-              />
-              免费版 | 到期时间: {{ expirationDate }}
-            </div>
-          </div>
-        </div>
-        <span class="close-btn" @click="userStore.setShowVipModal(false)">×</span>
+      <div v-if="loading" class="vip-loading">
+        <LoadingOutlined />
+        会员加载中...
       </div>
-
-      <div class="vip-main">
-        <div class="left">
-          <!-- 会员卡选项 -->
-          <div class="card-options">
-            <div
-              v-for="(card, index) in cards"
-              :key="index"
-              class="card-item"
-              @click="selectedCard = index"
-              :class="[index === selectedCard ? 'vip-active' : '']"
-            >
-              <div class="discount-tag">{{ index === 0 ? '新人福利' : '75折特惠' }}</div>
-              <div class="card-title">{{ card.title }}</div>
-              <div class="current-price">¥{{ card.price }}</div>
-              <div class="original-price" v-if="index !== 0">原价 ¥{{ card.originalPrice }}</div>
-              <div class="original-price" style="text-decoration: none" v-else>免费开通</div>
-            </div>
-          </div>
-
-          <!-- 会员权益对比表 -->
-          <div class="benefits-comparison">
-            <div
-              class="benefits-comparison-item"
-              v-for="(item, i) in tableList"
-              :key="i"
-              :class="[selectedCard === item.vipType ? 'vip-active2' : '']"
-            >
-              <div class="header">
-                {{ item.title }}
-                <a-tooltip v-if="item.title === '体验卡'">
-                  <template #title>每个账号只可开通一次体验卡会员</template>
-                  <QuestionCircleOutlined />
-                </a-tooltip>
-              </div>
-              <div class="body">
-                <div class="body-item">{{ item.row1 }}</div>
-                <div class="body-item">{{ item.row2 }}</div>
-                <div class="body-item">{{ item.row3 }}</div>
+      <div v-else>
+        <!-- 模态框头部 -->
+        <div class="modal-header">
+          <div class="user-info">
+            <img src="@/assets/layout/avatar.png" alt="用户头像" class="avatar" />
+            <div class="info-text">
+              <div class="nickname">{{ userStore.user?.name }}</div>
+              <div class="version">
+                <img
+                  src="@/assets/view/vip.png"
+                  alt=""
+                  style="width: 16px; height: 16px; margin-right: 5px"
+                />
+                {{ formatVip(userStore.user?.auto_vip_type) }} | 到期时间:
+                {{ userStore.user?.expire_time ? formatData(userStore.user?.expire_time) : '无' }}
               </div>
             </div>
           </div>
+          <span class="close-btn" @click="userStore.setShowVipModal(false)">×</span>
         </div>
-        <!-- 支付区域 -->
-        <div class="payment-section">
-          <div class="total-price">¥<span class="price">368</span></div>
-          <div class="qr-code-container">
-            <img alt="支付二维码" class="qr-code" />
-            <div class="refresh-btn">
-              <img
-                src="@/assets/view/vip-refresh.png"
-                alt=""
-                style="width: 16px; height: 16px"
-              />刷新二维码
+
+        <div class="vip-main">
+          <div class="left">
+            <!-- 会员卡选项 -->
+            <div class="card-options">
+              <template v-for="(card, index) in tableList" :key="index">
+                <div
+                  class="card-item"
+                  @click="selectHandle(card.auto_vip_type)"
+                  :class="[index === selectedCard ? 'vip-active' : '']"
+                  v-if="index !== 0"
+                >
+                  <div class="discount-tag">
+                    {{ card.auto_vip_type === 0 ? '新人福利' : '75折特惠' }}
+                  </div>
+                  <div class="card-title">{{ card.vip_name }}</div>
+                  <div class="current-price">¥{{ card.price }}</div>
+                  <div class="original-price" v-if="index !== 0">
+                    原价 ¥{{ card.original_price }}
+                  </div>
+                  <div class="original-price" style="text-decoration: none" v-else>免费开通</div>
+                </div>
+              </template>
             </div>
-            <div class="payment-instructions">
-              使用
-              <span style="color: #333; font-size: 14px; font-weight: 500">微信/支付宝</span>
-              扫码支付<br />
-              支付即视为你同意
-              <a href="javascript:;" class="agreement-link" @click="goAgreement">会员协议</a>
-              条例
+
+            <!-- 会员权益对比表 -->
+            <div class="benefits-comparison">
+              <div
+                class="benefits-comparison-item"
+                v-for="(item, i) in tableList"
+                :key="i"
+                :class="[selectedCard === item.auto_vip_type ? 'vip-active2' : '']"
+              >
+                <div class="header">
+                  {{ item.vip_name }}
+                  <a-tooltip v-if="item.auto_vip_type === 1">
+                    <template #title>每个账号只可开通一次体验卡会员</template>
+                    <QuestionCircleOutlined />
+                  </a-tooltip>
+                </div>
+                <div class="body">
+                  <div class="body-item">
+                    {{ item.day_pick_count === -1 ? '不限' : item.day_pick_count }}
+                  </div>
+                  <div class="body-item">
+                    {{ item.auto_vip_type == 99 ? '每日巡查店铺数' : '不限' }}
+                  </div>
+                  <div class="body-item">{{ item.device_limit }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 支付区域 -->
+          <div class="payment-section">
+            <div class="total-price">
+              ¥<span class="price">{{ currentSelectVipInfo?.price }}</span>
+            </div>
+            <div class="qr-code-container" v-if="!hasPay">
+              <a-button
+                type="primary"
+                @click="getPayInfo"
+                style="margin-bottom: 20px"
+                :loading="getPayLoading"
+              >
+                {{ currentSelectVipInfo?.auto_vip_type !== 1 ? '立即支付' : '立即开通' }}</a-button
+              >
+              <div class="payment-instructions">
+                支付即视为你同意
+                <a href="javascript:;" class="agreement-link" @click="goAgreement">会员协议</a>
+                条例
+              </div>
+            </div>
+            <div class="qr-code-container" v-else>
+              <VueQrcode
+                v-if="payInfo?.payInfo"
+                :value="payInfo?.payInfo"
+                alt="支付二维码"
+                class="qr-code"
+                :color="{ dark: '#000000', light: '#ffffff' }"
+                type="image/png"
+              />
+              <div class="refresh-btn" @click="refreshQrcode">
+                <img
+                  src="@/assets/view/vip-refresh.png"
+                  alt=""
+                  style="width: 16px; height: 16px"
+                  :class="[countDown > 0 ? 'rotate' : '']"
+                />
+                刷新二维码 &nbsp;
+                {{ countDown ? `${countDown}后重新获取` : '' }}
+              </div>
+
+              <div class="payment-instructions">
+                使用
+                <span style="color: #333; font-size: 14px; font-weight: 500">微信/支付宝</span>
+                扫码支付<br />
+                支付即视为你同意
+                <a href="javascript:;" class="agreement-link" @click="goAgreement">会员协议</a>
+                条例
+              </div>
             </div>
           </div>
         </div>
@@ -173,6 +327,7 @@ const goAgreement = () => {
 
 <style lang="scss" scoped>
 .vip-modal {
+  -webkit-app-region: no-drag;
   width: 100%;
   padding: 20px;
   max-width: 1100px;
@@ -423,5 +578,20 @@ const goAgreement = () => {
 .vip-active2 {
   background: url('@/assets/view/vip-active2.png');
   background-size: cover;
+}
+
+.vip-loading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;
+}
+
+.rotate {
+  transform: rotate(360deg);
+  transition: all 1s ease;
 }
 </style>

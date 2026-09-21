@@ -18,6 +18,7 @@ export const useUserStore = defineStore('user', () => {
     if (code === 0) {
       setUser(data)
     }
+    console.log(data, '~~~')
     return data
   }
 

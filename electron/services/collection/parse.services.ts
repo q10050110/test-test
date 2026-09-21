@@ -200,26 +200,31 @@ export class ParseService {
   }
 
   async '1688Parse'(html: any) {
-    const $ = cheerio.load(html)
-    let str,
-      price1,
-      price2,
-      link1688,
-      cover2 = ''
-    const goodsList = $('.offerListLayoutWrapper--qlAH8LJK').children('div')
-    goodsList.each((index, element) => {
-      const isAd = $(element).find('.mainImgIcon--GzUD_qpZ').length > 0
-      if (isAd) return
-      str = $(element).attr('data-renderkey')?.split('_')
-      price1 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').text()
-      price2 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').next().text()
-      link1688 = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
-      cover2 = $(element).find('.mainImg--KwnHnbbk').attr('src') || ''
-      return false
-    })
-    const price = `${price1}${price2}`
-    const sourcePrice = isNaN(Number(price)) ? 0 : price
-    return { link1688, sourcePrice, cover2 }
+    try {
+      const $ = cheerio.load(html)
+      let str,
+        price1,
+        price2,
+        link1688,
+        cover2 = ''
+      const goodsList = $('.offerListLayoutWrapper--qlAH8LJK').children('div')
+      goodsList.each((index, element) => {
+        const isAd = $(element).find('.mainImgIcon--GzUD_qpZ').length > 0
+        if (isAd) return
+        str = $(element).attr('data-renderkey')?.split('_')
+        price1 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').text()
+        price2 = $(element).children('.offer-price-row').find('.textMain--OAg90RFT').next().text()
+        link1688 = `https://detail.1688.com/offer/${str?.[str?.length - 1]}.html`
+        cover2 = $(element).find('.mainImg--KwnHnbbk').attr('src') || ''
+        return false
+      })
+      const price = `${price1}${price2}`
+      const sourcePrice = isNaN(Number(price)) ? 0 : price
+      return { link1688, sourcePrice, cover2 }
+    } catch (error) {
+      log.error('解析数据失败~~~')
+      return { link1688: '', sourcePrice: '', cover2: '' }
+    }
   }
 
   async aoXiaParse(html: any) {

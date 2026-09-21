@@ -509,7 +509,6 @@ export class Collection {
    * 处理单个任务
    */
   taskHandle = async (task: any) => {
-    log.info(`${this.task.taskName}-开始处理商品:${task.id}`)
     let timer: NodeJS.Timeout | undefined
     let maxTimer = 120
     let countDown = 0

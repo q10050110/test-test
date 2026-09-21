@@ -34,7 +34,6 @@ export default {
     'dist-electron/**/*', // Electron 主进程编译后的文件
     'electron/preload.js', // preload 脚本
     'dist/**/*', // 打包前端构建文件
-    'node_modules/**/*',
     '!**/*.map', // 排除 source map
   ],
 

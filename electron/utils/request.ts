@@ -24,7 +24,7 @@ request.interceptors.request.use(
       config.data.pluginVersion = "3.2.0"
       config.data.from_type = 'auto'
     }
-    /*     if (config.url?.includes('getReMaiData')) console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`) */
+    console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
     return config
   },
   (error) => {
