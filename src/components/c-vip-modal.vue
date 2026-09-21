@@ -101,7 +101,6 @@ const getPayInfo = async () => {
       auto_vip_type: selectedCard.value,
     },
   )
-  console.log(VipInfo, 'yoyoyo~~~')
   const contentVNode = h('div', {}, [
     h(
       'div',

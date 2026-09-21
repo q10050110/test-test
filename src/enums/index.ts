@@ -14,3 +14,20 @@ export const getShopCurCode = (code: keyof typeof codeMap) => {
 
   return getCurrencyName(code)
 }
+
+
+const vipMap = {
+  0: '非会员',
+  1: '体验会员',
+  2: '月卡会员',
+  3: '季卡会员',
+  4: '年费会员',
+} as const
+
+export const getVipName = (code: keyof typeof vipMap) => {
+  function getVipName(code: keyof typeof vipMap) {
+    return vipMap[code]
+  }
+
+  return getVipName(code)
+}

@@ -55,7 +55,6 @@ export const getUserInfo = async (data: { token: string }) => {
     method: 'post',
     data
   })
-  console.log(vipInfo, '~~~')
   if (res.code === 0) operationStore.set('user', { ...res.data, ...vipInfo.data })
 
   return { code: 0, message: '获取用户信息成功', data: { ...res.data, ...vipInfo.data } }

@@ -2,7 +2,8 @@
 import { useAppStore, useUserStore } from '@/stores'
 import LayoutHeader from './header.vue'
 import LayoutMenu from './menu.vue'
-
+import { getVipName } from '@/enums/index'
+import dayjs from 'dayjs'
 const store = useUserStore()
 const appStore = useAppStore()
 const logoutHandle = async () => {
@@ -56,12 +57,21 @@ const openUrl = () => {
                       alt=""
                       style="width: 18px; height: 18px; margin-right: 10px"
                     />
-                    非会员
+                    {{
+                      store.user?.auto_vip_type === 0
+                        ? '非会员'
+                        : getVipName(store.user?.auto_vip_type as 0 | 1 | 2 | 3 | 4)
+                    }}
                   </div>
-                  <div class="vip-tips">请开通会员</div>
-                  <a-button type="primary" class="vip-btn" @click="store.setShowVipModal(true)"
-                    >去开通</a-button
-                  >
+                  <div class="vip-tips">
+                    <div>{{ store.user?.auto_vip_type === 0 ? '请开通会员' : '到期时间：' }}</div>
+                    <div v-if="store.user?.auto_vip_type !== 0">
+                      {{ dayjs(store.user?.expire_time).format('YYYY-MM-DD HH:mm:ss') }}
+                    </div>
+                  </div>
+                  <a-button type="primary" class="vip-btn" @click="store.setShowVipModal(true)">{{
+                    store.user?.auto_vip_type === 0 ? '去开通' : '去续费'
+                  }}</a-button>
                 </div>
                 <a-button type="link" @click="logoutHandle" class="logout-btn">退出登录</a-button>
               </div>
@@ -204,6 +214,7 @@ const openUrl = () => {
     }
 
     .vip-tips {
+      text-align: center;
       font-weight: 400;
       font-size: 14px;
       color: #666666;
