@@ -74,3 +74,53 @@ export const logout = async () => {
     }
   }
 }
+
+export const getTodayDataCount = async () => {
+  try {
+    return await request<InterfaceResult<any>, InterfaceResult<any>>({
+      url: '/api/auto/autoTask/getTodayDataCount',
+      method: 'post',
+      data: {}
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const getRecommendCategory = async () => {
+  try {
+    return await request<InterfaceResult<any>, InterfaceResult<any>>({
+      url: '/api/auto/autoTask/getRecommendCategory',
+      method: 'post',
+      data: {}
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}
+
+export const getPieData = async () => {
+  try {
+    return await request<InterfaceResult<any>, InterfaceResult<any>>({
+      url: '/api/goods/hotSales/ozon/getEarchData',
+      method: 'post',
+      data: {
+        dayList: "period_week"
+      }
+    })
+  } catch (error) {
+    return {
+      code: 400,
+      message: error,
+      data: null,
+    }
+  }
+}

@@ -1,23 +1,52 @@
 <script setup lang="ts">
-// 数据：今日选品 & 巡查数量
-const todaySelectedCount = ref(598)
-const todayInspectedCount = ref(10560)
+import type { Response } from '@/types/index'
+import type { HomeData, RecommendedCategories } from '@/types/user'
+import { QuestionCircleOutlined, LoginOutlined } from '@ant-design/icons-vue'
+// 获取选品数据
+const dataInfo = ref<HomeData>()
+const getDataInfo = async () => {
+  const { code, data } = await window.electronAPI.invoke<Response<HomeData>>(
+    'get-today-data-count',
+    {},
+  )
+  if (!code) dataInfo.value = data
+}
+getDataInfo()
 
-// 推荐选品类目（按设计稿分组）
-const recommendedCategories = [
-  { name: '家用电器', index: 36, color: '#A7C6E7' },
-  { name: '儿童用品', index: 36, color: '#AADFBF' },
-  { name: '服装', index: 4.87, color: '#A7C6E7' },
-  { name: '食用酒水', index: 20, color: '#fadb14' },
-  { name: '电子产品', index: 20, color: '#fadb14' },
-  { name: '鞋类', index: 2.59, color: '#fadb14' },
-  { name: '建筑和装修', index: 12.25, color: '#D7BEE2' },
-  { name: '美容和卫生', index: 20, color: '#D7BEE2' },
-  { name: '汽车用品', index: 2.47, color: '#D7BEE2' },
-  { name: '小百货和配饰', index: 7.92, color: '#F7C8C8' },
-  { name: '宠物用品', index: 20, color: '#F7C8C8' },
-  { name: '运动与休闲', index: 2.8, color: '#CCD1D1' },
+// 获取跟卖推荐
+const recommendedCategories = ref<RecommendedCategories[]>([])
+const getRecommendedCategoriesList = async () => {
+  const { code, data } = await window.electronAPI.invoke<any>('get-recommend-category', {})
+  if (!code) recommendedCategories.value = data
+}
+getRecommendedCategoriesList()
+
+const colors = [
+  '#FF6B6B', // 活力珊瑚红
+  '#4ECDC4', // 清新蒂芙尼蓝
+  '#FFE66D', // 明亮柠檬黄
+  '#FF9F43', // 温暖橙色
+  '#A29BFE', // 柔和薰衣草紫
+  '#FD79A8', // 甜美粉红
+  '#00CEC9', // 亮青色
+  '#FAB1A0', // 杏色
+  '#55EFC4', // 薄荷绿
+  '#74B9FF', // 天空蓝
+  '#FF7675', // 西瓜红
+  '#A8E6CF', // 淡薄荷
+  '#FF0055', // 霓虹粉
+  '#00FF99', // 荧光绿
+  '#00CCFF', // 电光蓝
+  '#FFCC00', // 亮黄
+  '#CC33FF', // 紫罗兰
+  '#FF3333', // 鲜红
 ]
+
+// 跳转选品
+const router = useRouter()
+const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
+  router.push(`/selectGoods?parentCategoryId=${parentCategoryId}&categoryId=${categoryId}`)
+}
 </script>
 
 <template>
@@ -26,26 +55,32 @@ const recommendedCategories = [
     <div class="top-stats">
       <div class="stat-card">
         <div class="title">今日选品数量</div>
-        <div class="value">{{ todaySelectedCount }}</div>
+        <div class="value">{{ dataInfo?.pickCount || 0 }}</div>
       </div>
       <div class="stat-card">
         <div class="title">今日巡查商品数量</div>
-        <div class="value">{{ todayInspectedCount }}</div>
+        <div class="value">{{ dataInfo?.followSellCount || 0 }}</div>
       </div>
     </div>
 
     <!-- 推荐选品类目 -->
     <div class="recommended-categories">
-      <h3 class="block">推荐选品类目</h3>
+      <a-tooltip>
+        <template #title> 根据OZON中国跨境卖家销售数据推荐选品类目（二级类目） </template>
+        <span class="block">推荐选品类目 <QuestionCircleOutlined /></span>
+      </a-tooltip>
       <div class="category-grid">
         <div v-for="(item, index) in recommendedCategories" :key="index" class="category-item">
           <div class="recommended-left">
-            <span class="dot" :style="{ backgroundColor: item.color }"></span>
-            <span>{{ item.name }}</span>
+            <span class="dot" :style="{ backgroundColor: colors[index] }"></span>
+            <span class="ellipsis-1" style="width: 100px" :title="item.category_name">{{
+              item.category_name
+            }}</span>
           </div>
-          <div class="recommended-right">
+          <div class="recommended-right" @click="goSelectGoods(item.parentId, item.categoryId)">
             <span class="border"></span>
-            <span style="flex: 1">推荐指数：{{ item.index }}%</span>
+            <span style="width: 150px"> 推荐指数：{{ item.rate || 0 }}% </span>
+            <LoginOutlined />
           </div>
         </div>
       </div>
@@ -96,14 +131,6 @@ const recommendedCategories = [
   box-shadow: 0px 2px 10px 0px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
   margin-bottom: 30px;
-  h3 {
-    height: 22px;
-    line-height: 22px;
-    font-weight: 600;
-    font-size: 16px;
-    color: #333333;
-    margin-bottom: 40px;
-  }
 
   .category-grid {
     display: grid;
@@ -134,6 +161,7 @@ const recommendedCategories = [
         display: flex;
         align-items: center;
         flex: 2;
+        cursor: pointer;
         .border {
           display: inline-block;
           width: 1px;
@@ -155,5 +183,12 @@ const recommendedCategories = [
     border: 2px solid #1f5fff;
     margin-right: 5px;
   }
+  display: inline-block;
+  height: 22px;
+  line-height: 22px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #333333;
+  margin-bottom: 20px;
 }
 </style>

@@ -296,7 +296,7 @@ const upGoods = async (task: Task) => {
 }
 // 新建任务
 const dialogRef = ref<InstanceType<typeof TaskDialog>>()
-const openTaskDialogHandle = async (data?: Task) => {
+const openTaskDialogHandle = async (data?: Task, parentCategoryId?: number, category?: number) => {
   await nextTick()
   if (data?._id && dialogRef.value) {
     if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
@@ -310,6 +310,9 @@ const openTaskDialogHandle = async (data?: Task) => {
           : 1,
     }
     if (data?.aiSelectType == 1) dialogRef.value.saveOldFormdata()
+  }
+  if (category && parentCategoryId && dialogRef.value) {
+    dialogRef.value.formData.categoryIds = [parentCategoryId, category]
   }
   await getConfigList()
   await getShopList()
@@ -349,6 +352,9 @@ onMounted(async () => {
   taskQueueCount.value = await window.electronAPI.invoke('get-current-task-count', {})
   window.electronAPI.on('task-progress', getProgress)
   window.electronAPI.on('refresh-task-list', refreshTaskList)
+  const parentCategoryId = Number(route.query.parentCategoryId)
+  const categoryId = Number(route.query.categoryId)
+  if (categoryId) openTaskDialogHandle(undefined, parentCategoryId as number, categoryId as number)
 })
 
 onUnmounted(() => {

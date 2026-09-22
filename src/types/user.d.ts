@@ -15,3 +15,15 @@ export type User = {
   ai_quota: number
   sub_account: []
 }
+
+export type HomeData = {
+  pickCount: number
+  followSellCount: number
+}
+
+export type RecommendedCategories = {
+  categoryId: string
+  category_name: string
+  rate: number,
+  parentId: string
+}

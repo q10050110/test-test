@@ -62,11 +62,11 @@ export interface FollowTrendItem {
 
 export type InspectionDetailParams = {
   /** 任务ID */
-  taskId: string
+  taskId?: string
   /** 商品ID或相关标识 */
-  id: string
+  id?: string
   /** 是否被跟卖 */
-  isFollowed: boolean
+  isFollowed?: boolean
   /** 当前页码 */
   pageNo: number
   /** 每页条数 */

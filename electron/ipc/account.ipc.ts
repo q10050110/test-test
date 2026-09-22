@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { accountHandle, getUserInfo, login, logout } from '../services/account.services.js'
+import { accountHandle, getUserInfo, login, logout, getTodayDataCount, getRecommendCategory, getPieData } from '../services/account.services.js'
 import { operationStore } from '../store/index.js'
 export const accountIpc = (win: BrowserWindow) => {
   ipcMain.on('account', (event, args: 'register' | 'resetPassword') => {
@@ -31,5 +31,17 @@ export const accountIpc = (win: BrowserWindow) => {
 
   ipcMain.handle('logout', async (event, data: any) => {
     return await logout()
+  })
+
+  ipcMain.handle('get-today-data-count', async (event, data: any) => {
+    return await getTodayDataCount()
+  })
+
+  ipcMain.handle('get-recommend-category', async (event, data: any) => {
+    return await getRecommendCategory()
+  })
+
+  ipcMain.handle('get-pie-data', async (event, data: any) => {
+    return await getPieData()
   })
 }
