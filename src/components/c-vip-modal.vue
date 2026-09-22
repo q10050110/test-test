@@ -228,7 +228,7 @@ const formatData = (date: number | string) => {
                   v-if="index !== 0"
                 >
                   <div class="discount-tag">
-                    {{ card.auto_vip_type === 0 ? '新人福利' : '75折特惠' }}
+                    {{ card.auto_vip_type === 1 ? '新人福利' : '75折特惠' }}
                   </div>
                   <div class="card-title">{{ card.vip_name }}</div>
                   <div class="current-price">¥{{ card.price }}</div>
