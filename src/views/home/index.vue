@@ -97,7 +97,11 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
                 </div>
                 <div>
                   <span class="home-label">销售动态：</span
-                  ><span class="home-value" style="color: #18bd66"
+                  ><span
+                    class="home-value"
+                    :style="{
+                      color: item.metric_gmv_growth < 0 ? '#fa1c1e' : '#4ecd4e',
+                    }"
                     >{{ item.metric_gmv_growth }}%</span
                   >
                 </div>
@@ -112,6 +116,12 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
                 <div>
                   <span class="home-label">平均价格：</span
                   ><span class="home-value">{{ item.metric_aiv }}(₽)</span>
+                </div>
+                <div>
+                  <span class="home-label">平均价格动态：</span
+                  ><span class="home-value" style="color: #fa1c1e"
+                    >{{ item.metric_aiv_growth || 0 }}%</span
+                  >
                 </div>
                 <div>
                   <span class="home-label">品牌数量：</span

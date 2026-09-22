@@ -34,4 +34,5 @@ export type RecommendedCategories = {
   metric_aiv: number
   metric_brands: number
   metric_leader_share: number
+  metric_aiv_growth: number
 }
