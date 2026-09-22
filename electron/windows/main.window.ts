@@ -31,10 +31,10 @@ export const createWindow = () => {
   log.info(`Preload 脚本路径: ${preloadPath}`)
 
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 800,
-    minWidth: 1400,
-    minHeight: 800,
+    width: 1500,
+    height: 850,
+    minWidth: 1500,
+    minHeight: 850,
     autoHideMenuBar: true,
     title: '上品帮-自动化助手',
     frame: false,

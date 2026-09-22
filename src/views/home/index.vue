@@ -2,6 +2,7 @@
 import type { Response } from '@/types/index'
 import type { HomeData, RecommendedCategories } from '@/types/user'
 import { QuestionCircleOutlined, LoginOutlined } from '@ant-design/icons-vue'
+import { formatNumberByUnit } from '@/utils/index'
 // 获取选品数据
 const dataInfo = ref<HomeData>()
 const getDataInfo = async () => {
@@ -71,16 +72,70 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
       </a-tooltip>
       <div class="category-grid">
         <div v-for="(item, index) in recommendedCategories" :key="index" class="category-item">
-          <div class="recommended-left">
-            <span class="dot" :style="{ backgroundColor: colors[index] }"></span>
-            <span class="ellipsis-1" style="width: 100px" :title="item.category_name">{{
-              item.category_name
-            }}</span>
+          <div class="category-header">
+            <div class="recommended-left">
+              <span class="dot" :style="{ backgroundColor: colors[index] }"></span>
+              <span class="ellipsis-1" style="width: 100px" :title="item.category_name">{{
+                item.category_name
+              }}</span>
+            </div>
+            <span style="width: 150px; text-align: right"> 推荐指数：{{ item.rate || 0 }}% </span>
           </div>
-          <div class="recommended-right" @click="goSelectGoods(item.parentId, item.categoryId)">
-            <span class="border"></span>
-            <span style="width: 150px"> 推荐指数：{{ item.rate || 0 }}% </span>
-            <LoginOutlined />
+          <div class="recommended-body">
+            <a-tooltip color="#fff">
+              <template #title>
+                <h3 style="color: #333; font-size: 14px">类目月销售数据</h3>
+                <div>
+                  <span class="home-label">销售量：</span
+                  ><span class="home-value">{{ item.metric_items || 0 }}</span>
+                </div>
+                <div>
+                  <span class="home-label">销售额：</span
+                  ><span class="home-value">
+                    {{ formatNumberByUnit(item.metric_gmv, 'billion') || 0 }}(₽)
+                  </span>
+                </div>
+                <div>
+                  <span class="home-label">销售动态：</span
+                  ><span class="home-value" style="color: #18bd66"
+                    >{{ item.metric_gmv_growth }}%</span
+                  >
+                </div>
+                <div>
+                  <span class="home-label">成交率：</span
+                  ><span class="home-value">{{ item.metric_buyout }}%</span>
+                </div>
+                <div>
+                  <span class="home-label">退货率：</span
+                  ><span class="home-value" style="color: #fa1c1e">{{ item.metric_refund }}%</span>
+                </div>
+                <div>
+                  <span class="home-label">平均价格：</span
+                  ><span class="home-value">{{ item.metric_aiv }}(₽)</span>
+                </div>
+                <div>
+                  <span class="home-label">品牌数量：</span
+                  ><span class="home-value">{{ item.metric_brands }}</span>
+                </div>
+                <div>
+                  <span class="home-label">大卖家占比：</span
+                  ><span class="home-value">{{ item.metric_leader_share }}%</span>
+                </div>
+              </template>
+              <div>
+                <span class="recommended-body-title">月销量：</span>
+                <span class="recommended-data">{{ item.metric_items || 0 }}</span>
+              </div>
+              <div style="margin: 5px 0">
+                <span class="recommended-body-title"> 月销售额： </span>
+                <span class="recommended-data">{{
+                  formatNumberByUnit(item.metric_gmv, 'billion') || 0
+                }}</span>
+              </div>
+            </a-tooltip>
+          </div>
+          <div @click="goSelectGoods(item.parentId, item.categoryId)" class="recommended-link">
+            创建选品任务<LoginOutlined style="margin-left: 5px" />
           </div>
         </div>
       </div>
@@ -127,48 +182,70 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
 }
 
 .recommended-categories {
-  padding: 20px;
+  padding: 20px 20px 10px;
   box-shadow: 0px 2px 10px 0px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
   margin-bottom: 30px;
 
   .category-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
 
     .category-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border-radius: 6px;
+      cursor: pointer;
+      width: 24%;
+      padding: 20px 10px 10px;
+      border-radius: 5px;
       font-size: 14px;
-      color: #333;
-      .recommended-left {
+      background: #f4f6f9;
+
+      .category-header {
         display: flex;
         align-items: center;
-        flex: 1.5;
-        .dot {
-          display: inline-block;
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          margin-right: 20px;
+        justify-content: space-between;
+        height: 22px;
+        line-height: 22px;
+        margin-bottom: 10px;
+        .recommended-left {
+          display: flex;
+          align-items: center;
+          font-weight: 500;
+          font-size: 16px;
+          color: #333333;
+
+          .dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+          }
         }
       }
-      .recommended-right {
+      .recommended-body {
         display: flex;
-        align-items: center;
-        flex: 2;
-        cursor: pointer;
-        .border {
+        flex-direction: column;
+        padding-left: 10px;
+        .recommended-body-title {
           display: inline-block;
-          width: 1px;
-          height: 20px;
-          border: 1px solid #d9d9d9;
-          margin-right: 30px;
+          width: 80px;
+          font-weight: 400;
+          font-size: 14px;
+          color: #999999;
+          line-height: 20px;
         }
+        .recommended-data {
+          font-weight: 500;
+          font-size: 14px;
+          color: #1f5fff;
+        }
+      }
+      .recommended-link {
+        text-align: right;
+        font-weight: 400;
+        font-size: 12px;
+        color: #1f5fff;
       }
     }
   }
@@ -190,5 +267,15 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
   font-size: 16px;
   color: #333333;
   margin-bottom: 20px;
+}
+
+.home-label {
+  font-size: 12px;
+  color: #999999;
+}
+
+.home-value {
+  font-size: 12px;
+  color: #333333;
 }
 </style>

@@ -24,6 +24,14 @@ export type HomeData = {
 export type RecommendedCategories = {
   categoryId: string
   category_name: string
-  rate: number,
+  rate: number
   parentId: string
+  metric_items: number
+  metric_gmv: number
+  metric_gmv_growth: number
+  metric_buyout: number
+  metric_refund: number
+  metric_aiv: number
+  metric_brands: number
+  metric_leader_share: number
 }
