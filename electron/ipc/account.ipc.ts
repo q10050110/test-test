@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { accountHandle, getUserInfo, login, logout, getVipInfo, getVipPayInfo, payVip, getVipPayResult } from '../services/account.services.js'
+import { accountHandle, getUserInfo, login, logout, getVipInfo, getVipPayInfo, payVip, getVipPayResult, getTodayDataCount, getRecommendCategory, getPieData } from '../services/account.services.js'
 import { operationStore } from '../store/index.js'
 export const accountIpc = (win: BrowserWindow) => {
   /** 
@@ -74,5 +74,17 @@ export const accountIpc = (win: BrowserWindow) => {
     */
   ipcMain.handle('get-vip-pay-result', async (event, data: { mchOrderNo: string }) => {
     return await getVipPayResult(data.mchOrderNo)
+  })
+
+  ipcMain.handle('get-today-data-count', async (event, data: any) => {
+    return await getTodayDataCount()
+  })
+
+  ipcMain.handle('get-recommend-category', async (event, data: any) => {
+    return await getRecommendCategory()
+  })
+
+  ipcMain.handle('get-pie-data', async (event, data: any) => {
+    return await getPieData()
   })
 }

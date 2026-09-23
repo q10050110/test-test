@@ -51,3 +51,23 @@ export type VipPayResult = {
   state: number
   subject: string
 }
+export type HomeData = {
+  pickCount: number
+  followSellCount: number
+}
+
+export type RecommendedCategories = {
+  categoryId: string
+  category_name: string
+  rate: number
+  parentId: string
+  metric_items: number
+  metric_gmv: number
+  metric_gmv_growth: number
+  metric_buyout: number
+  metric_refund: number
+  metric_aiv: number
+  metric_brands: number
+  metric_leader_share: number
+  metric_aiv_growth: number
+}

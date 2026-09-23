@@ -36,6 +36,7 @@ const convertMenuItems = (menus: MenuItem[]): ItemType[] => {
 
 // 转换后的菜单数据
 const menuItems = computed(() => convertMenuItems(menuStore.menuList))
+console.log(menuItems.value, '~~~')
 // 菜单点击处理
 const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
   router.push(key as string)
