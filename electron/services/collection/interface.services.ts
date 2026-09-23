@@ -235,8 +235,8 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
 const saveData = async (data: { taskId: string; datas: any[] }) => {
   try {
     const res = await request<
-      { code: number; data: null; message: string },
-      { code: number; data: null; message: string }
+      { code: number; data: { newCount: number }; message: string },
+      { code: number; data: { newCount: number }; message: string }
     >({
       url: '/api/goods/autoTask/saveAutoPickRecords',
       method: 'post',
