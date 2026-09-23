@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import type { ConfigList, LogisticsSimpleList, ShopList, Task, TaskList } from '@/types/selectGoods'
+import type {
+  ConfigList,
+  LogisticsSimpleList,
+  ShopList,
+  Task,
+  TaskList,
+  CategoryList,
+  Category,
+} from '@/types/selectGoods'
 import type { Response } from '@/types'
 import type { TableColumnsType, TableProps } from 'ant-design-vue'
 import { useVipCheck } from '@/hooks/index'
@@ -236,13 +244,12 @@ const getProgress = async (data?: any) => {
 }
 
 // 获取分类列表
-const categoryList = ref([])
+const categoryList = ref<CategoryList>([])
 const getCategoryList = async () => {
   const { data, code } = await window.electronAPI.invoke<any>('get-category-list', {})
   if (code !== 400) return
   categoryList.value = data
 }
-getCategoryList()
 // 获取物流信息
 const logisticsSimpleList = ref<LogisticsSimpleList>([])
 const getLogisticsSimpleList = async () => {
@@ -316,7 +323,16 @@ const openTaskDialogHandle = async (data?: Task, parentCategoryId?: number, cate
     if (data?.aiSelectType == 1) dialogRef.value.saveOldFormdata()
   }
   if (category && parentCategoryId && dialogRef.value) {
-    dialogRef.value.formData.categoryIds = [parentCategoryId, category]
+    const targetCategory =
+      categoryList.value
+        .find((item) => item.category_id == parentCategoryId)
+        ?.children?.find((item: Category) => item.category_id == category)
+        ?.children?.map((item: Category) => [parentCategoryId, category, item.category_id]) || []
+    dialogRef.value.formData.categoryIds = [
+      [parentCategoryId],
+      [parentCategoryId, category],
+      ...targetCategory,
+    ]
   }
   await getConfigList()
   await getShopList()
@@ -353,6 +369,7 @@ const getRunningTask = async () => {
 }
 onMounted(async () => {
   getRunningTask()
+  await getCategoryList()
   taskQueueCount.value = await window.electronAPI.invoke('get-current-task-count', {})
   window.electronAPI.on('task-progress', getProgress)
   window.electronAPI.on('refresh-task-list', refreshTaskList)

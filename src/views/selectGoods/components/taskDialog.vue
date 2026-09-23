@@ -10,7 +10,7 @@ import type {
   ShopList,
   Task,
   ConditionForm,
-  categoryList,
+  CategoryList,
 } from '@/types/selectGoods'
 import feedback from '@/utils/feedback'
 import { getShopCurCode } from '@/enums/index'
@@ -18,7 +18,7 @@ const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
   configList: ConfigList
-  categoryList: categoryList
+  categoryList: CategoryList
 }>()
 
 const emits = defineEmits(['refresh', 'refreshConfig'])
