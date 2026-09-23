@@ -87,12 +87,12 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
                 <h3 style="color: #333; font-size: 14px">类目月销售数据</h3>
                 <div>
                   <span class="home-label">销售量：</span
-                  ><span class="home-value">{{ item.metric_items || 0 }}</span>
+                  ><span class="home-value">{{ formatNumberByUnit(item.metric_items) || 0 }}</span>
                 </div>
                 <div>
                   <span class="home-label">销售额：</span
                   ><span class="home-value">
-                    {{ formatNumberByUnit(item.metric_gmv, 'billion') || 0 }}(₽)
+                    {{ formatNumberByUnit(item.metric_gmv) || 0 }}(₽)
                   </span>
                 </div>
                 <div>
@@ -134,13 +134,13 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
               </template>
               <div>
                 <span class="recommended-body-title">月销量：</span>
-                <span class="recommended-data">{{ item.metric_items || 0 }}</span>
+                <span class="recommended-data">{{
+                  formatNumberByUnit(item.metric_items) || 0
+                }}</span>
               </div>
               <div style="margin: 5px 0">
                 <span class="recommended-body-title"> 月销售额： </span>
-                <span class="recommended-data">{{
-                  formatNumberByUnit(item.metric_gmv, 'billion') || 0
-                }}</span>
+                <span class="recommended-data">{{ formatNumberByUnit(item.metric_gmv) || 0 }}</span>
               </div>
             </a-tooltip>
           </div>
@@ -170,12 +170,15 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
 
   .stat-card {
     padding: 28px 50px 0px 50px;
-    width: 585px;
+    width: 49%;
     height: 148px;
     background: url('@/assets/view/home-bg.png') no-repeat center center;
     background-size: cover;
     font-weight: bold;
-
+    &:last-child {
+      background: url('@/assets/view/home-bg2.png') no-repeat center center;
+      background-size: cover;
+    }
     .title {
       font-size: 20px;
       color: #1f5fff;

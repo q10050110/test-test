@@ -254,13 +254,15 @@ const saveData = async (data: { taskId: string; datas: any[] }) => {
 
 export const autoSaveData = async (data: { taskId: string; datas: any[] }) => {
   const { datas } = data
+  let newCount = 0
   while (datas.length > 0) {
     const chunk = datas.splice(0, 1000)
-    const { code, message } = await saveData({ taskId: data.taskId, datas: chunk })
+    const { code, message, data: apiData } = await saveData({ taskId: data.taskId, datas: chunk })
     if (code) {
       log.error('保存数据失败', message)
-      return code
+      return 0
     }
+    newCount = apiData?.newCount || 0
   }
-  return 0
+  return newCount
 }

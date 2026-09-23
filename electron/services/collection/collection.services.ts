@@ -593,7 +593,7 @@ export class Collection {
         const detailData = this.writeQueue.shift()
         this.goodsData.set(detailData[0]?.id, detailData[0])
         const code = await autoSaveData({ taskId: this.task._id, datas: detailData })
-        if (!code) this.targetData++
+        if (code) this.targetData++
         this.outputLog('单个商品处理完成')
       } else {
         break

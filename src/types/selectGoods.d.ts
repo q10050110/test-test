@@ -78,7 +78,7 @@ export type Task = {
   nullableRedemptionRateMax?: number //成交率
   nullableRedemptionRateMin?: number //成交率
   isUseCategorySelect?: 0 | 1 // 选品模式
-  categoryIds?: number[] // 分类
+  categoryIds?: number[] | number[][] // 分类
   weightRangeMin?: number // 重量范围
   weightRangeMax?: number // 重量范围
   packageLengthMin?: number // 包装长度
@@ -207,7 +207,7 @@ export type CategoryForm = Pick<
   | 'returnCancelRateMax'
 >
 
-export type category = {
+export type Category = {
   description_category_id: number
   category_name: string
   type_name?: string
@@ -218,4 +218,4 @@ export type category = {
   children?: category[]
 }
 
-export type categoryList = category[]
+export type CategoryList = Category[]
