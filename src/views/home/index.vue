@@ -3,6 +3,8 @@ import type { Response } from '@/types/index'
 import type { HomeData, RecommendedCategories } from '@/types/user'
 import { QuestionCircleOutlined, LoginOutlined } from '@ant-design/icons-vue'
 import { formatNumberByUnit } from '@/utils/index'
+import { useUserStore } from '@/stores'
+const userStore = useUserStore()
 // 获取选品数据
 const dataInfo = ref<HomeData>()
 const getDataInfo = async () => {
@@ -66,6 +68,12 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
 
     <!-- 推荐选品类目 -->
     <div class="recommended-categories">
+      <img
+        src="@/assets/view/vip-mask.png"
+        alt=""
+        class="vip-mask"
+        v-if="userStore.user?.auto_vip_type === 0"
+      />
       <a-tooltip>
         <template #title> 根据OZON中国跨境卖家销售数据推荐选品类目（二级类目） </template>
         <span class="block">推荐选品类目 <QuestionCircleOutlined /></span>
@@ -196,7 +204,14 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
   box-shadow: 0px 2px 10px 0px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
   margin-bottom: 30px;
-
+  position: relative;
+  .vip-mask {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 9999;
+  }
   .category-grid {
     display: flex;
     flex-wrap: wrap;
