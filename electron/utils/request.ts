@@ -4,6 +4,7 @@ import { globalBroadcast } from '../ipc/broadcast.js'
 import log from '../log/index.js'
 import { TaskManager } from '../services/collection/task-manager.services.js'
 import { SysTemUtils } from './system.js'
+import { app } from 'electron'
 let isTokenFailure = false
 
 const request = axios.create({
@@ -21,7 +22,8 @@ request.interceptors.request.use(
       return Promise.reject(new Error('token失效'))
     if (token && config.data) config.data.token = token
     if (config.data) {
-      config.data.pluginVersion = "3.2.0"
+      config.data.pluginVersion = "3.2.7"
+      config.data.autoVersion = app?.getVersion()
       config.data.from_type = 'auto'
     }
     // console.log(`URL：${config.url},请求参数:${JSON.stringify(config.data)}`)
