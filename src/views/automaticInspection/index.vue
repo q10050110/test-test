@@ -156,7 +156,7 @@ const startHandle = async (record: Inspection) => {
     'inspection-get-running-task',
     {},
   )
-  if (list.length >= 4) return feedback.error('任务数量已达上限')
+  if (list.length >= taskQueueCount.value) return feedback.error('任务数量已达上限')
   record.lastRunningTime = formatDate(Date.now())
   const data = toRaw(record)
   const { code, message } = await window.electronAPI.invoke<Response<string>>(
@@ -214,16 +214,43 @@ onUnmounted(() => {
 })
 
 const { height, width } = useTableHeight('.table-container', 240, columns)
+
+// 任务队列数量
+const taskQueueCount = ref(4)
+const taskNumberList = Array.from({ length: 19 }, (_, i) => i + 2)
+// 改变采集任务并发数量
+const changeTaskQueueCount = () => {
+  window.electronAPI.invoke('set-max-concurrent-inspection-task-count', taskQueueCount.value)
+}
 </script>
 <template>
   <div class="inspection-task-page">
     <!-- 表格区域 -->
     <div class="table-container">
       <!-- 新增任务按钮 -->
-      <div class="action-bar">
+      <div class="action-bar flex justify-between items-center">
         <a-button type="primary" @click="check(() => showInspectionDialog(undefined))"
           >新增巡查任务</a-button
         >
+        <div class="flex items-center">
+          <a-tooltip>
+            <template #title
+              >为保障软件稳定流畅运行，系统已根据您的设备配置
+              智能推荐可同时进行任务数，您可结合电脑运行状态
+              与资源占用，手动自定义调整同时运行的任务数量。</template
+            >
+            <img src="@/assets/view/process.png" class="ml-[5px] w-[20px] h-[20px]" />
+          </a-tooltip>
+          <a-select
+            v-model:value="taskQueueCount"
+            style="width: 80px; margin-left: 10px"
+            @change="changeTaskQueueCount"
+          >
+            <a-select-option :value="item" v-for="item in taskNumberList" :key="item">{{
+              item
+            }}</a-select-option>
+          </a-select>
+        </div>
       </div>
       <a-table
         :dataSource="tableData"
@@ -347,7 +374,6 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
   .table-container {
     flex: 3;
     overflow: hidden;
-    overflow-y: auto;
     border-radius: 10px;
     background-color: #fff;
     padding: 20px 10px;

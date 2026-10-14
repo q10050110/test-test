@@ -142,7 +142,7 @@ class ElectronApp {
       log.info('应用准备就绪，开始创建窗口')
       // 记录重启次数
       const restartCount = this.getRestartCount()
-      memoryMonitor.start(6000)
+      memoryMonitor.start(600000)
       if (restartCount > 0) {
         log.info(`当前为第 ${restartCount} 次重启`)
       }

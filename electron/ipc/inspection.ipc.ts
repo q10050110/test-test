@@ -128,4 +128,9 @@ export const inspectionIpc = (window: BrowserWindow) => {
       }
     },
   )
+
+  // 设置并发数
+  ipcMain.handle('set-max-concurrent-inspection-task-count', (event, count: number) => {
+    taskManager.setConcurrency(count)
+  })
 }

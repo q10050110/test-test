@@ -52,7 +52,6 @@ export class CronServices {
     }, { timezone: 'Asia/Shanghai' })
     this.tasks.set(name, task)
     autoStart ? task.start() : task.stop()
-    console.log(this.tasks.size, '注册定时任务成功')
   }
 
   /**

@@ -12,10 +12,19 @@ export class TaskManager {
   private runningTasks = new Map<string, any>()
   private mainWindow: BrowserWindow | null = null
   private cronServices: CronServices
+  private concurrency = 4
   constructor() {
-    this.queue = new PQueue({ concurrency: 4 })
+    this.queue = new PQueue({ concurrency: this.concurrency })
     this.cronServices = CronServices.getInstance()
   }
+
+  // 设置并发数
+  public setConcurrency = (concurrency: number) => {
+    this.concurrency = concurrency
+    this.queue.concurrency = concurrency
+    console.log('设置并发数:', concurrency)
+  }
+
   public static getInstance(): TaskManager {
     if (!TaskManager.instance) {
       TaskManager.instance = new TaskManager()
@@ -150,7 +159,7 @@ export class TaskManager {
   // 执行任务
   async executeTask(task: Inspection) {
     const { data } = await this.getRunningTaskList()
-    if (data.length >= 4 || data.find(item => item._id === task._id)) return
+    if (data.length >= this.concurrency || data.find(item => item._id === task._id)) return
     this.queue.add(async () => {
       const inspection = new InspectionServices(task, this.mainWindow!)
       const taskInfo = inspection.getTaskInfo()

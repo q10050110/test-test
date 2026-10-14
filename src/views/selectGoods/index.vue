@@ -416,15 +416,13 @@ onUnmounted(() => {
           <a-button type="primary" danger @click="deleteTask">批量删除</a-button>
         </div>
         <div class="form__right">
-          <InfoCircleFilled style="color: #faad14; margin-right: 5px" />
-          同时进行任务数
           <a-tooltip>
             <template #title
               >为保障软件稳定流畅运行，系统已根据您的设备配置
               智能推荐可同时进行任务数，您可结合电脑运行状态
               与资源占用，手动自定义调整同时运行的任务数量。</template
             >
-            <QuestionCircleOutlined style="margin-left: 5px" />
+            <img src="@/assets/view/process.png" class="ml-[5px] w-[20px] h-[20px]" />
           </a-tooltip>
           <a-select
             v-model:value="taskQueueCount"
