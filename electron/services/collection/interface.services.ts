@@ -245,7 +245,7 @@ const saveData = async (data: { taskId: string; datas: any[] }) => {
     return res
   } catch (error: any) {
     return {
-      code: 500,
+      code: error === '当日选品额度不足' ? 402 : 500,
       message: error,
       data: null,
     }
@@ -260,9 +260,9 @@ export const autoSaveData = async (data: { taskId: string; datas: any[] }) => {
     const { code, message, data: apiData } = await saveData({ taskId: data.taskId, datas: chunk })
     if (code) {
       log.error('保存数据失败', message)
-      return 0
+      return { code, count: 0 }
     }
     newCount = apiData?.newCount || 0
   }
-  return newCount
+  return { code: 0, count: newCount }
 }

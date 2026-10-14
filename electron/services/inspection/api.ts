@@ -111,3 +111,11 @@ export const getShopListAPI = (data: PageParams) =>
     method: 'post',
     data,
   })
+
+// 获取今日剩余额度
+export const getTodayBalanceAPI = () =>
+  request<InterfaceResult<{ remain_day_pick_count: number }>, InterfaceResult<{ remain_day_pick_count: number }>>({
+    url: '/api/auto/autoTask/getAutoVipRemainDayPickCount',
+    method: 'post',
+    data: {}
+  })

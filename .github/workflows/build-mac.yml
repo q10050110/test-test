@@ -44,10 +44,18 @@ jobs:
       - name: Build Electron main process
         run: yarn build:electron
 
-      - name: Package macOS DMG
-        run: yarn electron-builder --mac dmg zip
+      - name: Package macOS
+        run: yarn electron-builder --mac dmg zip --publish always
         env:
           APP_ENV: ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+
+      - name: Check macOS artifacts
+        run: |
+          echo "===== Build output ====="
+          find release -maxdepth 2 -type f -print
+
+          echo "===== Update metadata ====="
+          find release -name "*.yml" -print
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -56,5 +64,7 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/*.yml
+            release/*.blockmap
           if-no-files-found: error
           retention-days: 7

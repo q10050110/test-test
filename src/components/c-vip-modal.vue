@@ -114,7 +114,13 @@ const getPayInfo = async () => {
       { style: 'margin-bottom: 8px;' },
       `此次充值会员时长：${currentSelectVipInfo.value?.days}天`,
     ),
-    h('div', {}, `到期时间：${dayjs().add(1, 'day').format('YYYY-MM-DD HH:mm:ss')}`),
+    h(
+      'div',
+      {},
+      `到期时间：${dayjs()
+        .add(selectedCard.value === 1 ? 1 : VipInfo.final_days, 'day')
+        .format('YYYY-MM-DD HH:mm:ss')}`,
+    ),
   ])
   getPayLoading.value = false
   Modal.confirm({
@@ -185,7 +191,8 @@ const formatVip = (type: number | undefined) => {
 }
 
 const formatData = (date: number | string) => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+  const res = date === -1 ? '无' : dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+  return res
 }
 </script>
 <template>
@@ -512,11 +519,11 @@ const formatData = (date: number | string) => {
   line-height: 58px;
   font-weight: bold;
   color: #fa1c1e;
-  font-size: 16px;
+  font-size: x;
   margin-bottom: 32px;
   .price {
     font-weight: 600;
-    font-size: 25px;
+    font-size: 40px;
   }
 }
 
