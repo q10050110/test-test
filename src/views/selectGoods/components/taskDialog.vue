@@ -4,6 +4,7 @@ import type { FormInstance } from 'ant-design-vue'
 import type { ShowSearchType } from 'ant-design-vue/es/cascader'
 import type { Rule } from 'ant-design-vue/es/form'
 import { Cascader } from 'ant-design-vue'
+import type { Response } from '@/types'
 import type {
   ConfigList,
   LogisticsSimpleList,
@@ -14,6 +15,7 @@ import type {
 } from '@/types/selectGoods'
 import feedback from '@/utils/feedback'
 import { getShopCurCode } from '@/enums/index'
+import { useUserStore } from '@/stores'
 const props = defineProps<{
   logisticsSimpleList: LogisticsSimpleList
   shopList: ShopList
@@ -490,8 +492,15 @@ const saveHandle = async (type: 'save' | 'execute') => {
 
   submitting.value = true
   try {
+    if (type === 'execute') {
+      const userStore = useUserStore()
+      if (!userStore.user?.auto_vip_type) return feedback.error('请先开通会员~')
+      const { data: countData } = await window.electronAPI.invoke<
+        Response<{ remain_day_pick_count: number }>
+      >('get-today-balance', {})
+      if (!countData?.remain_day_pick_count) return feedback.error('选品额度已达上限，任务无法执行')
+    }
     const data = JSON.parse(JSON.stringify(formData.value))
-
     const { code, message } =
       type === 'execute'
         ? await window.electronAPI.invoke<any>('collection-create-and-start', { data, type })
