@@ -72,7 +72,7 @@ const taskStatusList = ref([
 ])
 // 任务队列数量
 const taskQueueCount = ref(4)
-const taskNumberList = Array.from({ length: 19 }, (_, i) => i + 2)
+const taskNumberList = [4, 6, 8, 12]
 // 表格数据&配置
 const tableData = ref<Task[]>()
 const total = ref(0)
@@ -422,7 +422,7 @@ onUnmounted(() => {
               智能推荐可同时进行任务数，您可结合电脑运行状态
               与资源占用，手动自定义调整同时运行的任务数量。</template
             >
-            <img src="@/assets/view/process.png" class="ml-[5px] w-[20px] h-[20px]" />
+            <img src="@/assets/view/process.png" class="right-logo" />
           </a-tooltip>
           <a-select
             v-model:value="taskQueueCount"
@@ -636,6 +636,11 @@ onUnmounted(() => {
     &__right {
       display: flex;
       align-items: center;
+      .right-logo {
+        width: 20px;
+        height: 20px;
+        margin-left: 5px;
+      }
     }
     &__left {
       gap: 20px;

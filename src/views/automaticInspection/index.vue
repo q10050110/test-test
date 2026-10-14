@@ -217,7 +217,7 @@ const { height, width } = useTableHeight('.table-container', 240, columns)
 
 // 任务队列数量
 const taskQueueCount = ref(4)
-const taskNumberList = Array.from({ length: 19 }, (_, i) => i + 2)
+const taskNumberList = [4, 6, 8, 12]
 // 改变采集任务并发数量
 const changeTaskQueueCount = () => {
   window.electronAPI.invoke('set-max-concurrent-inspection-task-count', taskQueueCount.value)
@@ -228,18 +228,18 @@ const changeTaskQueueCount = () => {
     <!-- 表格区域 -->
     <div class="table-container">
       <!-- 新增任务按钮 -->
-      <div class="action-bar flex justify-between items-center">
+      <div class="action-bar">
         <a-button type="primary" @click="check(() => showInspectionDialog(undefined))"
           >新增巡查任务</a-button
         >
-        <div class="flex items-center">
+        <div class="action-right">
           <a-tooltip>
             <template #title
               >为保障软件稳定流畅运行，系统已根据您的设备配置
               智能推荐可同时进行任务数，您可结合电脑运行状态
               与资源占用，手动自定义调整同时运行的任务数量。</template
             >
-            <img src="@/assets/view/process.png" class="ml-[5px] w-[20px] h-[20px]" />
+            <img src="@/assets/view/process.png" class="right-logo" />
           </a-tooltip>
           <a-select
             v-model:value="taskQueueCount"
@@ -384,10 +384,22 @@ const changeTaskQueueCount = () => {
       flex: 1;
     }
     .action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       height: 30px;
       margin-bottom: 20px;
       .ant-btn {
         border-radius: 4px;
+      }
+
+      .action-right {
+        display: flex;
+        align-items: center;
+        .right-logo {
+          width: 20px;
+          height: 20px;
+        }
       }
     }
     .pagination {

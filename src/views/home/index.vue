@@ -53,167 +53,107 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
 </script>
 
 <template>
-  <div class="box-border h-full rounded-[10px] bg-white p-5 overflow-hidden">
+  <div class="home-page">
     <!-- 顶部统计卡片 -->
-    <div class="mb-5 flex justify-between gap-5">
-      <div
-        class="h-[148px] w-[49%] bg-[url('@/assets/view/home-bg.png')] bg-cover bg-center bg-no-repeat px-[50px] pt-7 font-bold"
-      >
-        <div class="text-xl text-[#1f5fff]">今日选品数量</div>
-        <div class="h-[58px] text-[40px] leading-[58px] font-semibold text-[#333]">
-          {{ dataInfo?.pickCount || 0 }}
-        </div>
+    <div class="top-stats">
+      <div class="stat-card">
+        <div class="title">今日选品数量</div>
+        <div class="value">{{ dataInfo?.pickCount || 0 }}</div>
       </div>
-
-      <div
-        class="h-[148px] w-[49%] bg-[url('@/assets/view/home-bg2.png')] bg-cover bg-center bg-no-repeat px-[50px] pt-7 font-bold"
-      >
-        <div class="text-xl text-[#1f5fff]">今日巡查商品数量</div>
-        <div class="h-[58px] text-[40px] leading-[58px] font-semibold text-[#333]">
-          {{ dataInfo?.followSellCount || 0 }}
-        </div>
+      <div class="stat-card">
+        <div class="title">今日巡查商品数量</div>
+        <div class="value">{{ dataInfo?.followSellCount || 0 }}</div>
       </div>
     </div>
 
     <!-- 推荐选品类目 -->
-    <div
-      class="relative mb-[30px] rounded-[10px] px-5 pt-5 pb-[10px] shadow-[0_2px_10px_rgba(0,0,0,0.1)]"
-    >
-      <!-- VIP 遮罩 -->
+    <div class="recommended-categories">
       <img
-        v-if="userStore.user?.auto_vip_type === 0"
         src="@/assets/view/vip-mask.png"
         alt=""
-        class="absolute left-[0] top-[0] z-[9] h-full w-full"
+        class="vip-mask"
+        v-if="userStore.user?.auto_vip_type === 0"
       />
-
-      <!-- 标题 -->
       <a-tooltip>
         <template #title> 根据OZON中国跨境卖家销售数据推荐选品类目（二级类目） </template>
-
-        <span
-          class="mb-5 inline-block h-[22px] text-base leading-[22px] font-semibold text-[#333] before:mr-[5px] before:inline-block before:h-3 before:w-px before:border-2 before:border-[#1f5fff] before:content-['']"
-        >
-          推荐选品类目
-          <QuestionCircleOutlined />
-        </span>
+        <span class="block">推荐选品类目 <QuestionCircleOutlined /></span>
       </a-tooltip>
-
-      <!-- 类目列表 -->
-      <div class="flex flex-wrap gap-3">
-        <div
-          v-for="(item, index) in recommendedCategories"
-          :key="index"
-          class="box-border w-[calc((100%-36px)/4)] cursor-pointer rounded-[5px] bg-[#f4f6f9] px-[10px] pt-5 pb-[10px] text-sm"
-        >
-          <!-- 类目头部 -->
-          <div class="mb-[10px] flex h-[22px] items-center justify-between leading-[22px]">
-            <div class="flex min-w-0 items-center text-base font-medium text-[#333]">
-              <span
-                class="mr-[10px] inline-block h-[14px] w-[14px] shrink-0 rounded-full"
-                :style="{ backgroundColor: colors[index % colors.length] }"
-              ></span>
-
-              <span class="block w-[100px] truncate" :title="item.category_name">
-                {{ item.category_name }}
-              </span>
+      <div class="category-grid">
+        <div v-for="(item, index) in recommendedCategories" :key="index" class="category-item">
+          <div class="category-header">
+            <div class="recommended-left">
+              <span class="dot" :style="{ backgroundColor: colors[index] }"></span>
+              <span class="ellipsis-1" style="width: 100px" :title="item.category_name">{{
+                item.category_name
+              }}</span>
             </div>
-
-            <span class="w-[150px] shrink-0 text-right"> 推荐指数：{{ item.rate || 0 }}% </span>
+            <span style="width: 150px; text-align: right"> 推荐指数：{{ item.rate || 0 }}% </span>
           </div>
-
-          <!-- 类目销售数据 -->
-          <div class="flex flex-col pl-[10px]">
+          <div class="recommended-body">
             <a-tooltip color="#fff">
               <template #title>
-                <h3 class="text-sm text-[#333]">类目月销售数据</h3>
-
+                <h3 style="color: #333; font-size: 14px">类目月销售数据</h3>
                 <div>
-                  <span class="text-xs text-[#999]">销售量：</span>
-                  <span class="text-xs text-[#333]">
-                    {{ formatNumberByUnit(item.metric_items) || 0 }}
-                  </span>
+                  <span class="home-label">销售量：</span
+                  ><span class="home-value">{{ formatNumberByUnit(item.metric_items) || 0 }}</span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">销售额：</span>
-                  <span class="text-xs text-[#333]">
+                  <span class="home-label">销售额：</span
+                  ><span class="home-value">
                     {{ formatNumberByUnit(item.metric_gmv) || 0 }}(₽)
                   </span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">销售动态：</span>
-                  <span
-                    class="text-xs"
+                  <span class="home-label">销售动态：</span
+                  ><span
+                    class="home-value"
                     :style="{
                       color: item.metric_gmv_growth < 0 ? '#fa1c1e' : '#4ecd4e',
                     }"
+                    >{{ item.metric_gmv_growth }}%</span
                   >
-                    {{ item.metric_gmv_growth }}%
-                  </span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">成交率：</span>
-                  <span class="text-xs text-[#333]"> {{ item.metric_buyout }}% </span>
+                  <span class="home-label">成交率：</span
+                  ><span class="home-value">{{ item.metric_buyout }}%</span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">退货率：</span>
-                  <span class="text-xs text-[#fa1c1e]"> {{ item.metric_refund }}% </span>
+                  <span class="home-label">退货率：</span
+                  ><span class="home-value" style="color: #fa1c1e">{{ item.metric_refund }}%</span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">平均价格：</span>
-                  <span class="text-xs text-[#333]"> {{ item.metric_aiv }}(₽) </span>
+                  <span class="home-label">平均价格：</span
+                  ><span class="home-value">{{ item.metric_aiv }}(₽)</span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">平均价格动态：</span>
-                  <span class="text-xs text-[#fa1c1e]"> {{ item.metric_aiv_growth || 0 }}% </span>
+                  <span class="home-label">平均价格动态：</span
+                  ><span class="home-value" style="color: #fa1c1e"
+                    >{{ item.metric_aiv_growth || 0 }}%</span
+                  >
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">品牌数量：</span>
-                  <span class="text-xs text-[#333]">
-                    {{ item.metric_brands }}
-                  </span>
+                  <span class="home-label">品牌数量：</span
+                  ><span class="home-value">{{ item.metric_brands }}</span>
                 </div>
-
                 <div>
-                  <span class="text-xs text-[#999]">大卖家占比：</span>
-                  <span class="text-xs text-[#333]"> {{ item.metric_leader_share }}% </span>
+                  <span class="home-label">大卖家占比：</span
+                  ><span class="home-value">{{ item.metric_leader_share }}%</span>
                 </div>
               </template>
-
               <div>
-                <span class="inline-block w-20 text-sm leading-5 font-normal text-[#999]">
-                  月销量：
-                </span>
-                <span class="text-sm font-medium text-[#1f5fff]">
-                  {{ formatNumberByUnit(item.metric_items) || 0 }}
-                </span>
+                <span class="recommended-body-title">月销量：</span>
+                <span class="recommended-data">{{
+                  formatNumberByUnit(item.metric_items) || 0
+                }}</span>
               </div>
-
-              <div class="my-[5px]">
-                <span class="inline-block w-20 text-sm leading-5 font-normal text-[#999]">
-                  月销售额：
-                </span>
-                <span class="text-sm font-medium text-[#1f5fff]">
-                  {{ formatNumberByUnit(item.metric_gmv) || 0 }}
-                </span>
+              <div style="margin: 5px 0">
+                <span class="recommended-body-title"> 月销售额： </span>
+                <span class="recommended-data">{{ formatNumberByUnit(item.metric_gmv) || 0 }}</span>
               </div>
             </a-tooltip>
           </div>
-
-          <!-- 创建任务 -->
-          <div
-            class="text-right text-xs font-normal text-[#1f5fff]"
-            @click="goSelectGoods(item.parentId, item.categoryId)"
-          >
-            创建选品任务
-            <LoginOutlined class="ml-[5px]" />
+          <div @click="goSelectGoods(item.parentId, item.categoryId)" class="recommended-link">
+            创建选品任务<LoginOutlined style="margin-left: 5px" />
           </div>
         </div>
       </div>
@@ -221,4 +161,149 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
   </div>
 </template>
 
-<style scoped lang="scss"></style>
+<style scoped lang="scss">
+.home-page {
+  padding: 20px;
+  height: 100%;
+  background-color: #fff;
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.top-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+
+  .stat-card {
+    padding: 28px 50px 0px 50px;
+    width: 49%;
+    height: 148px;
+    background: url('@/assets/view/home-bg.png') no-repeat center center;
+    background-size: cover;
+    font-weight: bold;
+    &:last-child {
+      background: url('@/assets/view/home-bg2.png') no-repeat center center;
+      background-size: cover;
+    }
+    .title {
+      font-size: 20px;
+      color: #1f5fff;
+    }
+
+    .value {
+      height: 58px;
+      line-height: 58px;
+      font-size: 40px;
+      color: #333333;
+      font-weight: 600;
+    }
+  }
+}
+
+.recommended-categories {
+  padding: 20px 20px 10px;
+  box-shadow: 0px 2px 10px 0px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  margin-bottom: 30px;
+  position: relative;
+  .vip-mask {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 9;
+  }
+  .category-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    .category-item {
+      cursor: pointer;
+      width: 24%;
+      padding: 20px 10px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      background: #f4f6f9;
+
+      .category-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 22px;
+        line-height: 22px;
+        margin-bottom: 10px;
+        .recommended-left {
+          display: flex;
+          align-items: center;
+          font-weight: 500;
+          font-size: 16px;
+          color: #333333;
+
+          .dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+          }
+        }
+      }
+      .recommended-body {
+        display: flex;
+        flex-direction: column;
+        padding-left: 10px;
+        .recommended-body-title {
+          display: inline-block;
+          width: 80px;
+          font-weight: 400;
+          font-size: 14px;
+          color: #999999;
+          line-height: 20px;
+        }
+        .recommended-data {
+          font-weight: 500;
+          font-size: 14px;
+          color: #1f5fff;
+        }
+      }
+      .recommended-link {
+        text-align: right;
+        font-weight: 400;
+        font-size: 12px;
+        color: #1f5fff;
+      }
+    }
+  }
+}
+
+.block {
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    border: 2px solid #1f5fff;
+    margin-right: 5px;
+  }
+  display: inline-block;
+  height: 22px;
+  line-height: 22px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #333333;
+  margin-bottom: 20px;
+}
+
+.home-label {
+  font-size: 12px;
+  color: #999999;
+}
+
+.home-value {
+  font-size: 12px;
+  color: #333333;
+}
+</style>
