@@ -1,0 +1,60 @@
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_env:
+        description: '打包环境'
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+        default: production
+
+permissions:
+  contents: read
+
+jobs:
+  build-mac:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.1'
+          cache: yarn
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build frontend
+        run: yarn build-only --mode ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+
+      - name: Build Electron main process
+        run: yarn build:electron
+
+      - name: Package macOS DMG
+        run: yarn electron-builder --mac dmg zip
+        env:
+          APP_ENV: ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-${{ inputs.app_env }}
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+          retention-days: 7
