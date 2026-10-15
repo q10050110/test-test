@@ -20,6 +20,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
 
+    env:
+      APP_ENV: ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +41,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Check environment
+        run: |
+          echo "APP_ENV=$APP_ENV"
+          node -e "console.log('APP_ENV:', process.env.APP_ENV)"
+
       - name: Build frontend
         run: yarn build-only --mode ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
 
@@ -45,17 +53,16 @@ jobs:
         run: yarn build:electron
 
       - name: Package macOS
-        run: yarn electron-builder --mac dmg zip --publish always
-        env:
-          APP_ENV: ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+        run: yarn electron-builder --mac dmg zip
 
       - name: Check macOS artifacts
         run: |
           echo "===== Build output ====="
-          find release -maxdepth 2 -type f -print
-
+          find release -maxdepth 3 -type f -print
           echo "===== Update metadata ====="
-          find release -name "*.yml" -print
+          find release -name "app-update.yml" -o -name "latest-mac.yml"
+          echo "===== Packaged update config ====="
+          find release -name "app-update.yml" -exec cat {} \;
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
