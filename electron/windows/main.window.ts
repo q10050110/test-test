@@ -117,17 +117,15 @@ export const createWindow = () => {
   }
 
   // 加载页面
-  if (SysTemUtils.getEnv() === 'development') {
-    const devUrl = app.isPackaged
-      ? path.join(__dirname, '../../dist/index.html')
-      : 'http://localhost:3000/login'
-    log.info(`开发环境: 加载 URL - ${devUrl}`)
+  if (!app.isPackaged) {
+    const devUrl = 'http://localhost:3000/login'
+    log.info(`本地开发环境：加载 URL - ${devUrl}`)
     mainWindow.loadURL(devUrl).catch((err) => {
       log.error('加载开发服务器失败:', err)
     })
   } else {
     const indexPath = path.join(__dirname, '../../dist/index.html')
-    log.info(`生产环境: 加载文件 - ${indexPath}`)
+    log.info(`打包环境：加载文件 - ${indexPath}`)
     mainWindow.loadFile(indexPath).catch((err) => {
       log.error('加载 index.html 失败:', err)
     })
