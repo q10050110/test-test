@@ -294,16 +294,17 @@ export class MainWindowService {
     }
   }
 
+  /** 将拼图对齐后释放滑块；success 表示完成拖动，服务端验证结果仍由页面处理。 */
   async sliderVerification() {
     if (!this.browserWindow || this.browserWindow.isDestroyed()) return
     const wc = this.browserWindow.webContents
     try {
-      await wc.executeJavaScript(`
+      const result = await wc.executeJavaScript(`
         (async () => {
           try {
             const cv = window.cv;
-            const bgImg = document.querySelector('#image');
-            const puzzleImg = document.querySelector('#puzzle');
+            let bgImg = document.querySelector('#image');
+            let puzzleImg = document.querySelector('#puzzle');
             const slider = document.querySelector('#slider');
             
             // 1. 基础检查
@@ -316,19 +317,54 @@ export class MainWindowService {
               return { success: false, reason: 'elements_not_found' };
             }
 
+            // dom-ready 不代表验证码图片已经解码；重试过程中图片节点也可能被替换。
+            const deadline = performance.now() + 5000;
+            while (true) {
+              bgImg = document.querySelector('#image');
+              puzzleImg = document.querySelector('#puzzle');
+              if (bgImg?.complete && bgImg.naturalWidth > 0 &&
+                  puzzleImg?.complete && puzzleImg.naturalWidth > 0 &&
+                  bgImg.getBoundingClientRect().width > 0 &&
+                  puzzleImg.getBoundingClientRect().width > 0 &&
+                  slider.getBoundingClientRect().width > 0) break;
+              if (performance.now() >= deadline) {
+                return { success: false, reason: 'images_not_ready' };
+              }
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+
+            const bgRect = bgImg.getBoundingClientRect();
+            const puzzleRect = puzzleImg.getBoundingClientRect();
+            // OpenCV 使用背景图原始像素；PointerEvent 使用视口 CSS 像素。
+            // rect 包含 #captcha 的 transform: scale(--scale)，不能用 style.left 混算。
+            const bgScaleX = bgRect.width / bgImg.naturalWidth;
+            const bgScaleY = bgRect.height / bgImg.naturalHeight;
+            const templateWidth = Math.round(puzzleRect.width / bgScaleX);
+            const templateHeight = Math.round(puzzleRect.height / bgScaleY);
+            if (![bgScaleX, bgScaleY, templateWidth, templateHeight].every(value => Number.isFinite(value) && value > 0) ||
+                templateWidth > bgImg.naturalWidth || templateHeight > bgImg.naturalHeight) {
+              return { success: false, reason: 'invalid_image_geometry' };
+            }
+            const bgSource = bgImg.currentSrc;
+            const puzzleSource = puzzleImg.currentSrc;
+            const isCurrentCaptcha = () => bgImg === document.querySelector('#image') &&
+              puzzleImg === document.querySelector('#puzzle') && slider.isConnected &&
+              bgImg.currentSrc === bgSource && puzzleImg.currentSrc === puzzleSource;
+
             // 2. 辅助函数：Image -> Canvas
-            function imageToCanvas(img) {
+            function imageToCanvas(img, width = img.naturalWidth, height = img.naturalHeight) {
               const canvas = document.createElement('canvas');
-              canvas.width = img.naturalWidth;
-              canvas.height = img.naturalHeight;
+              canvas.width = width;
+              canvas.height = height;
               const ctx = canvas.getContext('2d', { willReadFrequently: true });
-              ctx.drawImage(img, 0, 0);
+              ctx.drawImage(img, 0, 0, width, height);
               return canvas;
             }
 
             // 3. 辅助函数：获取 Alpha 通道边界
             function getAlphaBounds(img) {
-              const canvas = imageToCanvas(img);
+              // 拼图与背景即使分辨率不同，也先归一到相同的背景像素坐标系。
+              const canvas = imageToCanvas(img, templateWidth, templateHeight);
               const ctx = canvas.getContext('2d', { willReadFrequently: true });
               const { width, height } = canvas;
               const imageData = ctx.getImageData(0, 0, width, height);
@@ -363,6 +399,7 @@ export class MainWindowService {
             function findTargetX(alphaInfo) {
               let bgMat = null, puzzleMat = null, bgGray = null, puzzleGray = null;
               let puzzleCrop = null, bgEdge = null, puzzleEdge = null, resultMat = null;
+              let searchEdge = null, puzzleFullEdge = null;
 
               try {
                 const bgCanvas = imageToCanvas(bgImg);
@@ -377,38 +414,51 @@ export class MainWindowService {
                 cv.cvtColor(bgMat, bgGray, cv.COLOR_RGBA2GRAY);
                 cv.cvtColor(puzzleMat, puzzleGray, cv.COLOR_RGBA2GRAY);
 
-                // ROI 裁剪
+                // 先提取完整拼图的边缘再裁剪，保留 alpha 边界处的轮廓。
                 const roi = new cv.Rect(alphaInfo.left, alphaInfo.top, alphaInfo.width, alphaInfo.height);
-                puzzleCrop = puzzleGray.roi(roi);
 
                 // 边缘检测
                 bgEdge = new cv.Mat();
-                puzzleEdge = new cv.Mat();
+                puzzleFullEdge = new cv.Mat();
                 cv.Canny(bgGray, bgEdge, 40, 120);
-                cv.Canny(puzzleCrop, puzzleEdge, 40, 120);
+                cv.Canny(puzzleGray, puzzleFullEdge, 40, 120);
+                puzzleCrop = puzzleFullEdge.roi(roi);
+                puzzleEdge = puzzleCrop.clone();
+                if (cv.countNonZero(puzzleEdge) === 0) {
+                  return { success: false, reason: 'empty_puzzle_edges' };
+                }
+
+                // 拼图只沿水平方向移动，在当前高度附近搜索，避免命中其他行的纹理。
+                const expectedY = (puzzleRect.top - bgRect.top) / bgScaleY + alphaInfo.top;
+                const searchTop = Math.max(0, Math.floor(expectedY) - 2);
+                const searchBottom = Math.min(bgEdge.rows, Math.ceil(expectedY) + alphaInfo.height + 2);
+                if (searchBottom - searchTop < alphaInfo.height || searchTop >= bgEdge.rows) {
+                  return { success: false, reason: 'invalid_search_region' };
+                }
+                searchEdge = bgEdge.roi(new cv.Rect(0, searchTop, bgEdge.cols, searchBottom - searchTop));
 
                 // 模板匹配
                 resultMat = new cv.Mat();
-                cv.matchTemplate(bgEdge, puzzleEdge, resultMat, cv.TM_CCOEFF_NORMED);
+                cv.matchTemplate(searchEdge, puzzleEdge, resultMat, cv.TM_CCOEFF_NORMED);
 
                 const mm = cv.minMaxLoc(resultMat);
                 const contentX = mm.maxLoc.x;
-                const puzzleLeft = contentX - alphaInfo.left;
 
                 return {
                   success: true,
                   contentX,
-                  puzzleLeft,
                   score: mm.maxVal
                 };
 
               } finally {
                 // 关键：清理所有 OpenCV 对象，防止内存泄漏
+                if (searchEdge) searchEdge.delete();
+                if (puzzleCrop) puzzleCrop.delete();
+                if (puzzleFullEdge) puzzleFullEdge.delete();
                 if (bgMat) bgMat.delete();
                 if (puzzleMat) puzzleMat.delete();
                 if (bgGray) bgGray.delete();
                 if (puzzleGray) puzzleGray.delete();
-                if (puzzleCrop) puzzleCrop.delete();
                 if (bgEdge) bgEdge.delete();
                 if (puzzleEdge) puzzleEdge.delete();
                 if (resultMat) resultMat.delete();
@@ -425,18 +475,17 @@ export class MainWindowService {
             const matchResult = findTargetX(alphaInfo);
 
             if (!matchResult.success) {
-              return { success: false, reason: 'matching_failed' };
+              return matchResult;
             }
 
-            const puzzleInitialLeft = parseFloat(getComputedStyle(puzzleImg).left);
-            const puzzleMove = matchResult.puzzleLeft - puzzleInitialLeft;
-            
-            // 比例系数
-            const ratio = 0.6862940987394774;
-            const sliderMove = puzzleMove / ratio;
+            // 匹配得到的是可见内容左边界，减去当前可见内容位置才是待移动距离。
+            const targetContentX = bgRect.left + matchResult.contentX * bgScaleX;
+            const contentOffsetX = alphaInfo.left * bgScaleX;
+            const initialContentX = puzzleRect.left + contentOffsetX;
+            const puzzleMove = targetContentX - initialContentX;
 
             // 可信度检查
-            if (!Number.isFinite(sliderMove) || matchResult.score < 0) {
+            if (!Number.isFinite(puzzleMove) || !Number.isFinite(matchResult.score) || matchResult.score <= 0) {
               console.error('OpenCV 匹配结果可信度不足', matchResult);
               return { success: false, reason: 'low_score', score: matchResult.score };
             }
@@ -445,6 +494,17 @@ export class MainWindowService {
             const sliderRect = slider.getBoundingClientRect();
             const sliderStartX = sliderRect.left + sliderRect.width / 2;
             const sliderStartY = sliderRect.top + sliderRect.height / 2;
+            const trackElement = document.querySelector('#slider-container');
+            if (!trackElement) return { success: false, reason: 'track_not_found' };
+            const trackRect = trackElement.getBoundingClientRect();
+            const minMove = trackRect.left - sliderRect.left;
+            const maxMove = trackRect.right - sliderRect.right;
+            if (maxMove - minMove <= 0) return { success: false, reason: 'invalid_slider_geometry' };
+
+            const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+            let pointerDown = false;
+            let currentMove = 0;
+            let previousPointerX = sliderStartX;
 
             function dispatchPointer(type, x, y, buttons) {
               const event = new PointerEvent(type, {
@@ -458,65 +518,97 @@ export class MainWindowService {
                 clientY: y,
                 screenX: x,
                 screenY: y,
+                movementX: type === 'pointermove' ? x - previousPointerX : 0,
+                movementY: 0,
                 buttons,
                 button: 0,
                 pressure: buttons ? 0.5 : 0
               });
               slider.dispatchEvent(event);
+              previousPointerX = x;
             }
 
-            function createTrack(distance) {
+            function createTrack(start, end) {
               const track = [];
               const duration = 700;
               const steps = 45;
               for (let i = 1; i <= steps; i++) {
                 const t = i / steps;
                 const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-                track.push({ x: distance * ease, delay: duration / steps });
+                track.push({ x: start + (end - start) * ease, delay: duration / steps });
               }
               return track;
             }
 
-            // 开始拖动序列
-            dispatchPointer('pointerover', sliderStartX, sliderStartY, 0);
-            dispatchPointer('pointerenter', sliderStartX, sliderStartY, 0);
-            dispatchPointer('pointermove', sliderStartX, sliderStartY, 0);
-            dispatchPointer('pointerdown', sliderStartX, sliderStartY, 1);
+            // 用同一次拖动中的短距离移动测量实际比例，适配缩放和不同轨道宽度。
+            try {
+              dispatchPointer('pointerover', sliderStartX, sliderStartY, 0);
+              dispatchPointer('pointerenter', sliderStartX, sliderStartY, 0);
+              dispatchPointer('pointermove', sliderStartX, sliderStartY, 0);
+              dispatchPointer('pointerdown', sliderStartX, sliderStartY, 1);
+              pointerDown = true;
 
-            const track = createTrack(sliderMove);
-            let previousX = 0;
+              currentMove = puzzleMove >= 0 ? Math.min(8, maxMove) : Math.max(-8, minMove);
+              if (Math.abs(currentMove) < 1) return { success: false, reason: 'no_slider_travel' };
+              dispatchPointer('pointermove', sliderStartX + currentMove, sliderStartY, 1);
+              await nextFrame();
+              await nextFrame();
+              if (!isCurrentCaptcha()) {
+                return { success: false, reason: 'captcha_changed' };
+              }
+              const movedPuzzle = puzzleImg.getBoundingClientRect().left - puzzleRect.left;
+              const ratio = movedPuzzle / currentMove;
+              if (!Number.isFinite(ratio) || ratio <= 0) {
+                return { success: false, reason: 'slider_not_responding' };
+              }
+              const sliderMove = puzzleMove / ratio;
+              if (!Number.isFinite(sliderMove) || sliderMove < minMove - 1 || sliderMove > maxMove + 1) {
+                return { success: false, reason: 'target_out_of_range', sliderMove, minMove, maxMove };
+              }
+              const endMove = Math.max(minMove, Math.min(maxMove, sliderMove));
+              const track = createTrack(currentMove, endMove);
 
-            for (const point of track) {
-              const currentX = sliderStartX + point.x;
-              const event = new PointerEvent('pointermove', {
-                bubbles: true,
-                cancelable: true,
-                composed: true,
-                pointerId: 1,
-                pointerType: 'mouse',
-                isPrimary: true,
-                clientX: currentX,
-                clientY: sliderStartY,
-                screenX: currentX,
-                screenY: sliderStartY,
-                movementX: currentX - (sliderStartX + previousX),
-                movementY: 0,
-                buttons: 1,
-                button: 0,
-                pressure: 0.5
-              });
-              document.dispatchEvent(event);
-              previousX = point.x;
-              await new Promise(resolve => setTimeout(resolve, point.delay));
+              for (const point of track) {
+                if (!isCurrentCaptcha()) return { success: false, reason: 'captcha_changed' };
+                dispatchPointer('pointermove', sliderStartX + point.x, sliderStartY, 1);
+                currentMove = point.x;
+                await new Promise(resolve => setTimeout(resolve, point.delay));
+              }
+
+              const finalX = sliderStartX + endMove;
+              dispatchPointer('pointermove', finalX, sliderStartY, 1);
+              await new Promise(resolve => setTimeout(resolve, 80));
+              if (!isCurrentCaptcha()) {
+                return { success: false, reason: 'captcha_changed' };
+              }
+              const alignmentError = targetContentX - (puzzleImg.getBoundingClientRect().left + contentOffsetX);
+              // 校准时的取整或布局更新可能产生误差，释放前按实际位置微调一次。
+              if (Math.abs(alignmentError) > 0.5) {
+                const correctedMove = endMove + alignmentError / ratio;
+                if (correctedMove < minMove - 1 || correctedMove > maxMove + 1) {
+                  return { success: false, reason: 'target_out_of_range' };
+                }
+                currentMove = Math.max(minMove, Math.min(maxMove, correctedMove));
+                dispatchPointer('pointermove', sliderStartX + currentMove, sliderStartY, 1);
+                await nextFrame();
+                await nextFrame();
+              }
+              const finalError = targetContentX - (puzzleImg.getBoundingClientRect().left + contentOffsetX);
+              if (Math.abs(finalError) > Math.max(1, bgScaleX)) {
+                return { success: false, reason: 'alignment_failed', alignmentError: finalError };
+              }
+              return {
+                success: true, message: 'slide_completed', score: matchResult.score,
+                puzzleMove, sliderMove: currentMove, ratio, alignmentError: finalError
+              };
+            } finally {
+              // 无论校准或匹配是否成功，都释放指针，避免页面停留在拖动状态。
+              const finalX = sliderStartX + currentMove;
+              if (pointerDown) {
+                dispatchPointer('pointerup', finalX, sliderStartY, 0);
+                dispatchPointer('pointerout', finalX, sliderStartY, 0);
+              }
             }
-
-            const finalX = sliderStartX + sliderMove;
-            dispatchPointer('pointermove', finalX, sliderStartY, 1);
-            await new Promise(resolve => setTimeout(resolve, 80));
-            dispatchPointer('pointerup', finalX, sliderStartY, 0);
-            dispatchPointer('pointerout', finalX, sliderStartY, 0);
-
-            return { success: true, message: 'slide_completed' };
 
           } catch (e) {
             console.error('Slider automation error:', e);
@@ -524,8 +616,15 @@ export class MainWindowService {
           }
         })()
       `);
+      if (!result?.success) {
+        log.warn('滑块拖动失败:', result)
+      } else {
+        log.info('滑块拖动完成:', result)
+      }
+      return result
     } catch (error) {
       log.error(error, '滑块验证错误')
+      return { success: false, reason: 'execution_failed' }
     }
   }
 
