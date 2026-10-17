@@ -19,7 +19,7 @@ export class TaskManager {
   private mainWindow: BrowserWindow | null = null
   private filePathList: Map<
     string,
-    { filePath: string; progress: any; autoResult?: string; upGoodsList: any[] }
+    { filePath: string; progress: any; autoResult?: string; upGoodsList: any[], hasUpLimit: boolean }
   > = new Map()
   private constructor() {
     this.maxConcurrentTasks = 4
@@ -264,6 +264,7 @@ export class TaskManager {
               : { current: 0, total: 0, totalCount: 0 }
           task.tableFilePath = copyTask?.filePath
           task.autoResult = copyTask?.autoResult
+          task.hasUpLimit = copyTask?.hasUpLimit
           /*           const collection = new Collection(task, this.mainWindow!)
                     this.tasks.set(task._id, collection) */
         } else {
@@ -278,6 +279,7 @@ export class TaskManager {
           } else {
             task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
             task.autoResult = copyTask?.autoResult
+            task.hasUpLimit = copyTask?.hasUpLimit
             if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath))
               task.tableFilePath = copyTask.filePath
           }

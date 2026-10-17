@@ -133,4 +133,14 @@ export const inspectionIpc = (window: BrowserWindow) => {
   ipcMain.handle('set-max-concurrent-inspection-task-count', (event, count: number) => {
     taskManager.setConcurrency(count)
   })
+
+  // 获取今日剩余额度
+  ipcMain.handle('get-today-balance', async () => {
+    try {
+      const { data, code, message } = await taskManager.getTodayBalance()
+      return { data, code, message }
+    } catch (error) {
+      return error
+    }
+  })
 }

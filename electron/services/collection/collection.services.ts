@@ -36,6 +36,7 @@ export class Collection {
   private writeQueue: any[] = []
   private expendShopCount = 0
   private total = 0
+  private hasUpLimit = false;
   private query: Query = {
     pageNo: 1,
     pageSize: 30,
@@ -73,6 +74,7 @@ export class Collection {
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
         upGoodsList: Array.from(this.goodsData.values()),
+        hasUpLimit: this.hasUpLimit
       })
     }
     const safeReject = (e: any, reject: Function) => {
@@ -83,6 +85,7 @@ export class Collection {
         progress: { ...this.task.progress, current: 0 },
         autoResult: this.task.autoResult || undefined,
         upGoodsList: Array.from(this.goodsData.values()),
+        hasUpLimit: this.hasUpLimit
       })
     }
 
@@ -499,7 +502,7 @@ export class Collection {
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('task-progress', {
-        collectionTask: this.task,
+        collectionTask: { ...this.task, hasUpLimit: this.hasUpLimit },
         log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },
       })
     }
@@ -591,8 +594,13 @@ export class Collection {
       ) {
         const detailData = this.writeQueue.shift()
         this.goodsData.set(detailData[0]?.id, detailData[0])
-        const code = await autoSaveData({ taskId: this.task._id, datas: detailData })
-        if (code) this.targetData++
+        const { code, count } = await autoSaveData({ taskId: this.task._id, datas: detailData })
+        if (!code && count) this.targetData++
+        if (code === 402) {
+          this.reason = 'failed'
+          this.hasUpLimit = true
+          break
+        }
         this.outputLog('单个商品处理完成')
       } else {
         break

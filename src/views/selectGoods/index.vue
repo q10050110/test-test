@@ -144,6 +144,11 @@ const pageChange = (page: number, pageSize: number) => {
 let startTimer: number | undefined = undefined
 const taskId = ref()
 const startTask = async (task: Task, isThrottle = false) => {
+  const { data: countData } = await window.electronAPI.invoke<
+    Response<{ remain_day_pick_count: number }>
+  >('get-today-balance', {})
+  console.log(countData)
+  if (!countData?.remain_day_pick_count) return feedback.error('选品额度已达上限，任务无法执行')
   if (isThrottle) {
     if (startTimer && taskId.value == task._id) return feedback.error('请勿频繁点击！')
     taskId.value = task._id
@@ -164,6 +169,10 @@ const startTask = async (task: Task, isThrottle = false) => {
 const isStart = ref(false)
 const route = useRoute()
 const batchStartHandle = async () => {
+  const { data: countData } = await window.electronAPI.invoke<
+    Response<{ remain_day_pick_count: number }>
+  >('get-today-balance', {})
+  if (!countData?.remain_day_pick_count) return feedback.error('选品额度已达上限，任务无法执行')
   if (isStart.value) return feedback.error('批量执行任务中，请勿频繁点击')
   if (!selectData.value?.length || !tableData.value?.length) {
     feedback.error('请选择要开始的任务！')
@@ -482,6 +491,12 @@ onUnmounted(() => {
                     '未执行'
                   }}
                 </a-tag>
+                <div
+                  v-if="record.taskStatus === 'failed' && record.hasUpLimit"
+                  style="color: #ff4d4f"
+                >
+                  选品额度已达到上限，任务自动结束
+                </div>
               </template>
               <template v-if="column.key === 'progress'">
                 <div>
@@ -519,7 +534,7 @@ onUnmounted(() => {
                   <a-button
                     type="link"
                     :icon="h(EditOutlined)"
-                    @click="check(() => openTaskDialogHandle(record as Task))"
+                    @click="openTaskDialogHandle(record as Task)"
                     :disabled="record.taskStatus === 'running'"
                     >编辑</a-button
                   >

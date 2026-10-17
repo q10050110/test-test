@@ -1,5 +1,5 @@
 
-import { createTaskAPI, getTaskListAPI, updateTaskAPI, deleteTaskAPI, getInspectionDetailAPI, getGoodsDetailAPI, getShopListAPI, getTimerTaskListAPI } from "./api.js"
+import { createTaskAPI, getTaskListAPI, updateTaskAPI, deleteTaskAPI, getInspectionDetailAPI, getGoodsDetailAPI, getShopListAPI, getTimerTaskListAPI, getTodayBalanceAPI } from "./api.js"
 import { InspectionList, TaskParams, UpdateTaskParams, Inspection, InspectionDetailParams, InspectionDetailList, GoodsDetailParams, GoodsDetail, ShopList } from './type'
 import { InterfaceResult, PageParams } from '../../types/index'
 import PQueue from 'p-queue'
@@ -243,6 +243,22 @@ export class TaskManager {
     return new Promise(async (resolve, reject) => {
       try {
         const { data, code, message } = await getShopListAPI(params)
+        resolve({
+          code,
+          data,
+          message
+        })
+      } catch (error) {
+        reject({ code: 500, data: null, message: error })
+      }
+    })
+  }
+
+  // 获取今日剩余额度
+  getTodayBalance(): Promise<InterfaceResult<{ remain_day_pick_count: number }>> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const { data, code, message } = await getTodayBalanceAPI()
         resolve({
           code,
           data,

@@ -333,6 +333,23 @@ export class MainWindowService {
               await new Promise(resolve => setTimeout(resolve, 50));
             }
 
+            // 图片加载后，响应式缩放和容器布局可能仍在更新，连续稳定后再取坐标。
+            let lastLayout = null;
+            let stableFrames = 0;
+            const layoutDeadline = performance.now() + 1500;
+            while (stableFrames < 3) {
+              if (performance.now() >= layoutDeadline) {
+                return { success: false, reason: 'layout_not_stable' };
+              }
+              const layout = [bgImg, puzzleImg, slider].flatMap(element => {
+                const rect = element.getBoundingClientRect();
+                return [rect.left, rect.top, rect.width, rect.height];
+              });
+              stableFrames = lastLayout && layout.every((value, i) => Math.abs(value - lastLayout[i]) < 0.1)
+                ? stableFrames + 1 : 0;
+              lastLayout = layout;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
             const bgRect = bgImg.getBoundingClientRect();
             const puzzleRect = puzzleImg.getBoundingClientRect();
             // OpenCV 使用背景图原始像素；PointerEvent 使用视口 CSS 像素。
@@ -479,10 +496,15 @@ export class MainWindowService {
             }
 
             // 匹配得到的是可见内容左边界，减去当前可见内容位置才是待移动距离。
-            const targetContentX = bgRect.left + matchResult.contentX * bgScaleX;
-            const contentOffsetX = alphaInfo.left * bgScaleX;
-            const initialContentX = puzzleRect.left + contentOffsetX;
-            const puzzleMove = targetContentX - initialContentX;
+            // 每次反馈都读取当前位置，背景整体位移或等比缩放后仍使用同一坐标系。
+            const readPosition = () => {
+              const background = bgImg.getBoundingClientRect();
+              const puzzle = puzzleImg.getBoundingClientRect();
+              const targetX = background.left + matchResult.contentX * background.width / bgImg.naturalWidth;
+              const contentX = puzzle.left + alphaInfo.left * puzzle.width / templateWidth;
+              return { targetX, contentX, error: targetX - contentX };
+            };
+            const puzzleMove = readPosition().error;
 
             // 可信度检查
             if (!Number.isFinite(puzzleMove) || !Number.isFinite(matchResult.score) || matchResult.score <= 0) {
@@ -501,7 +523,21 @@ export class MainWindowService {
             const maxMove = trackRect.right - sliderRect.right;
             if (maxMove - minMove <= 0) return { success: false, reason: 'invalid_slider_geometry' };
 
-            const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+            // 等待样式更新稳定，不能只等两个动画帧就将中间位置用作反馈。
+            async function settlePosition() {
+              const start = performance.now();
+              let previous = readPosition();
+              let stable = 0;
+              while (performance.now() - start < 350) {
+                await new Promise(resolve => setTimeout(resolve, 25));
+                const position = readPosition();
+                stable = Math.abs(position.contentX - previous.contentX) < 0.1 &&
+                  Math.abs(position.targetX - previous.targetX) < 0.1 ? stable + 1 : 0;
+                if (stable >= 3 && performance.now() - start >= 100) return position;
+                previous = position;
+              }
+              return readPosition();
+            }
             let pointerDown = false;
             let currentMove = 0;
             let previousPointerX = sliderStartX;
@@ -551,20 +587,21 @@ export class MainWindowService {
               currentMove = puzzleMove >= 0 ? Math.min(8, maxMove) : Math.max(-8, minMove);
               if (Math.abs(currentMove) < 1) return { success: false, reason: 'no_slider_travel' };
               dispatchPointer('pointermove', sliderStartX + currentMove, sliderStartY, 1);
-              await nextFrame();
-              await nextFrame();
+              const calibratedPosition = await settlePosition();
               if (!isCurrentCaptcha()) {
                 return { success: false, reason: 'captcha_changed' };
               }
-              const movedPuzzle = puzzleImg.getBoundingClientRect().left - puzzleRect.left;
-              const ratio = movedPuzzle / currentMove;
+              const movedPuzzle = puzzleMove - calibratedPosition.error;
+              let ratio = movedPuzzle / currentMove;
+              const initialRatio = ratio;
               if (!Number.isFinite(ratio) || ratio <= 0) {
                 return { success: false, reason: 'slider_not_responding' };
               }
               const sliderMove = puzzleMove / ratio;
-              if (!Number.isFinite(sliderMove) || sliderMove < minMove - 1 || sliderMove > maxMove + 1) {
-                return { success: false, reason: 'target_out_of_range', sliderMove, minMove, maxMove };
+              if (!Number.isFinite(sliderMove)) {
+                return { success: false, reason: 'invalid_slider_move', sliderMove, ratio };
               }
+              // 首次测量可能含取整或瞬时位置偏差，先限制到轨道内，再根据反馈修正。
               const endMove = Math.max(minMove, Math.min(maxMove, sliderMove));
               const track = createTrack(currentMove, endMove);
 
@@ -577,29 +614,48 @@ export class MainWindowService {
 
               const finalX = sliderStartX + endMove;
               dispatchPointer('pointermove', finalX, sliderStartY, 1);
-              await new Promise(resolve => setTimeout(resolve, 80));
+              let position = await settlePosition();
               if (!isCurrentCaptcha()) {
                 return { success: false, reason: 'captcha_changed' };
               }
-              const alignmentError = targetContentX - (puzzleImg.getBoundingClientRect().left + contentOffsetX);
-              // 校准时的取整或布局更新可能产生误差，释放前按实际位置微调一次。
-              if (Math.abs(alignmentError) > 0.5) {
-                const correctedMove = endMove + alignmentError / ratio;
-                if (correctedMove < minMove - 1 || correctedMove > maxMove + 1) {
-                  return { success: false, reason: 'target_out_of_range' };
-                }
-                currentMove = Math.max(minMove, Math.min(maxMove, correctedMove));
+              const corrections = [];
+              let stalled = 0;
+              // 闭环微调：每次都用实际响应更新比例，避免反复沿用首个 8px 样本。
+              for (let attempt = 0; attempt < 8 && Math.abs(position.error) > 0.5; attempt++) {
+                if (!isCurrentCaptcha()) return { success: false, reason: 'captcha_changed' };
+                const before = position;
+                const previousMove = currentMove;
+                const correction = Math.max(-64, Math.min(64, position.error / ratio));
+                currentMove = Math.max(minMove, Math.min(maxMove, currentMove + correction));
+                if (Math.abs(currentMove - previousMove) < 0.1) break;
                 dispatchPointer('pointermove', sliderStartX + currentMove, sliderStartY, 1);
-                await nextFrame();
-                await nextFrame();
+                position = await settlePosition();
+                if (!isCurrentCaptcha()) return { success: false, reason: 'captcha_changed' };
+                const pointerDelta = currentMove - previousMove;
+                const puzzleDelta = before.error - position.error;
+                const observedRatio = puzzleDelta / pointerDelta;
+                if (Math.abs(pointerDelta) >= 1 && Number.isFinite(observedRatio) && observedRatio > 0.01) {
+                  ratio = observedRatio;
+                }
+                corrections.push({ pointerDelta, puzzleDelta, ratio, alignmentError: position.error });
+                stalled = Math.abs(puzzleDelta) < 0.1 ? stalled + 1 : 0;
+                if (stalled >= 2) break;
               }
-              const finalError = targetContentX - (puzzleImg.getBoundingClientRect().left + contentOffsetX);
+              const finalError = position.error;
               if (Math.abs(finalError) > Math.max(1, bgScaleX)) {
-                return { success: false, reason: 'alignment_failed', alignmentError: finalError };
+                const atLimit = (finalError > 0 && currentMove >= maxMove - 0.1) ||
+                  (finalError < 0 && currentMove <= minMove + 0.1);
+                return {
+                  success: false, reason: atLimit ? 'target_out_of_range' : 'alignment_failed',
+                  alignmentError: finalError, score: matchResult.score, puzzleMove,
+                  sliderMove: currentMove, initialRatio, ratio, minMove, maxMove,
+                  targetX: position.targetX, contentX: position.contentX, corrections
+                };
               }
               return {
                 success: true, message: 'slide_completed', score: matchResult.score,
-                puzzleMove, sliderMove: currentMove, ratio, alignmentError: finalError
+                puzzleMove, sliderMove: currentMove, initialRatio, ratio, alignmentError: finalError,
+                corrections
               };
             } finally {
               // 无论校准或匹配是否成功，都释放指针，避免页面停留在拖动状态。
