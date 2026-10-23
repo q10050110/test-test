@@ -405,7 +405,7 @@ onUnmounted(() => {
         <div class="form__left">
           <a-input
             placeholder="请输入任务名称"
-            style="width: 180px"
+            class="task-name-search"
             v-model:value="params.taskName"
             @pressEnter="getTaskList(false, true)"
             allowClear
@@ -649,6 +649,8 @@ onUnmounted(() => {
     flex-shrink: 0;
     margin-top: 20px;
     display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
     &__left,
@@ -662,7 +664,21 @@ onUnmounted(() => {
       }
     }
     &__left {
+      flex-wrap: wrap;
       gap: 20px;
+
+      > * {
+        flex-shrink: 0;
+      }
+    }
+    &__right {
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    .task-name-search {
+      width: 220px;
+      flex: 0 0 220px;
     }
   }
   .table {

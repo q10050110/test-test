@@ -9,7 +9,7 @@ import feedback from '@/utils/feedback'
 import VueQrcode from 'vue-qrcode'
 const userStore = useUserStore()
 const loading = ref(false)
-// 当前选中的卡片索引
+// 当前选中的会员类型（不是配置数组下标）
 const selectedCard = ref(1)
 const tableList = ref<VipInfo[]>([])
 
@@ -44,7 +44,6 @@ const getVipOption = async () => {
       },
       ...data,
     ]
-  loading.value = false
 }
 
 // 获取支付信息
@@ -151,13 +150,28 @@ const refreshQrcode = async () => {
 
 watch(
   () => userStore.hasShowVipModal,
-  (val) => {
+  async (val, _oldVal, onCleanup) => {
     if (val) {
-      userStore.getUser()
+      let active = true
+      onCleanup(() => {
+        active = false
+      })
       loading.value = true
-      hasPay.value = false
-      payInfo.value = undefined
-      getVipOption()
+      selectHandle(userStore.user?.auto_vip_type || 1)
+      try {
+        // 等待最新会员信息与套餐配置，避免沿用上一次打开时的选择。
+        await Promise.all([userStore.getUser(), getVipOption()])
+        if (active) {
+          const currentType = userStore.user?.auto_vip_type || 1
+          selectHandle(
+            tableList.value.some((item) => item.auto_vip_type === currentType) ? currentType : 1,
+          )
+        }
+      } catch {
+        if (active) feedback.error('会员信息加载失败，请稍后重试')
+      } finally {
+        if (active) loading.value = false
+      }
     } else {
       clearInterval(timer.value)
       timer.value = undefined
@@ -231,7 +245,7 @@ const formatData = (date: number | string) => {
                 <div
                   class="card-item"
                   @click="selectHandle(card.auto_vip_type)"
-                  :class="[index === selectedCard ? 'vip-active' : '']"
+                  :class="[card.auto_vip_type === selectedCard ? 'vip-active' : '']"
                   v-if="index !== 0"
                 >
                   <div class="discount-tag">
@@ -482,6 +496,8 @@ const formatData = (date: number | string) => {
   text-align: center;
   &-item {
     flex: 1;
+    min-width: 0;
+    border-radius: 5px;
     .header {
       height: 85px;
       line-height: 85px;
@@ -578,12 +594,24 @@ const formatData = (date: number | string) => {
 
 .vip-active {
   background: url('@/assets/view/vip-active.png');
-  background-size: cover;
+  background-size: 100% 100%;
+  box-shadow: inset 0 0 0 2px #1f5fff;
+
+  .card-title,
+  .current-price {
+    color: #1f5fff;
+  }
 }
 
 .vip-active2 {
   background: url('@/assets/view/vip-active2.png');
-  background-size: cover;
+  background-size: 100% 100%;
+  box-shadow: inset 0 0 0 2px #1f5fff;
+
+  .header,
+  .body .body-item {
+    color: #1f5fff;
+  }
 }
 
 .vip-loading {
