@@ -1,760 +1,599 @@
-import { Task, TaskStatus, Reason } from './type.js'
-import { MainWindowService } from './main-window.services.js'
-import { WindowService } from './1688-window.services.js'
-import { ExcelService } from './excel.services.js'
-import { TaskQueueService } from './task-queue.services.js'
-import { DataProcessService } from './data-filter.services.js'
-import { ParseService } from './parse.services.js'
-import { BrowserWindow } from 'electron'
-import request from '../../utils/request.js'
-import log from '../../log/index.js'
+import type { BrowserWindow } from 'electron'
+import type { AxiosRequestConfig } from 'axios'
 import dayjs from 'dayjs'
-import { randomUUID } from 'crypto'
-import { autoUpGoods, autoSaveData } from './interface.services.js'
-import { memoryMonitor } from '../memory-monitor.services.js'
-import type { Query, Response } from './type.js'
-import { sleep } from '../../utils/index.js'
+import type { MainWindowService } from './main-window.services.js'
+import type { WindowService } from './1688-window.services.js'
+import type { ExcelService } from './excel.services.js'
+import type { DataProcessService } from './data-filter.services.js'
+import type { ParseService } from './parse.services.js'
+import type { Task, TaskStatus, Query, CollectionResult, CollectionPhase } from './type.js'
+import { createCollectionActor } from './collection-machine.js'
+import { TaskQueueService } from './task-queue.services.js'
+import { TaskCancelledError, TaskScope } from './task-scope.js'
+
+interface CollectionServices {
+  main: Pick<
+    MainWindowService,
+    | 'createCollectionWindow'
+    | 'getHTML'
+    | 'getDomain'
+    | 'getDataByApi'
+    | 'getSellingData'
+    | 'scrollPage'
+    | 'changeUrl'
+    | 'destroy'
+  >
+  source: Pick<WindowService, 'createWindow' | 'destroy'>
+  parse: Pick<
+    ParseService,
+    | 'ozonListParser'
+    | 'ozonDetailListParser'
+    | 'ozonDetailParse'
+    | 'getDataCount'
+    | 'destroy'
+    | 'guessLikeList'
+  >
+  data: Pick<
+    DataProcessService,
+    'getBaseData' | 'aiFilterData' | 'filterData' | 'getDetailData' | 'destroy'
+  >
+  excel: Pick<ExcelService, 'DeleteFilled' | 'getFilePath' | 'destroy'>
+}
+
+export interface CollectionDependencies {
+  createServices(onClosed: () => void, tableName: string): CollectionServices
+  request(config: AxiosRequestConfig): Promise<any>
+  save(
+    data: { taskId: string; datas: any[] },
+    signal?: AbortSignal,
+  ): Promise<{ code: number; count: number; message?: unknown }>
+  upload(task: Task, goods: Map<string, any>, signal?: AbortSignal): Promise<string>
+  log: { info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void }
+  metrics(data: any): void
+  timing?: {
+    operation?: number
+    item?: number
+    run?: number
+    scroll?: number
+    detail?: number
+    status?: number
+  }
+}
+
+export class CollectionRunError extends Error {
+  constructor(
+    message: string,
+    readonly result: CollectionResult,
+  ) {
+    super(message)
+    this.name = 'CollectionRunError'
+  }
+}
+
+/** 一个实例只拥有一次运行；run() 在所有清理完成后才 resolve/reject。 */
 export class Collection {
-  private uuid: string | undefined = undefined
-  private task: Task // 任务信息
-  private mainWindow: BrowserWindow | null = null // 主窗口
-  private mainWindowService: MainWindowService // ozon窗口
-  private windowService: WindowService // 1688窗口
-  private taskQueueService: TaskQueueService // 1688任务队列
-  private excelService: ExcelService
-  private dataProcessService: DataProcessService
-  private parseService: ParseService
-  private targetData = 0 // 完成的任务
-  private reason: Reason = undefined
-  private isCleared = false
-  private goodsData: Map<string, any> = new Map()
-  private process = 0 // 正在处理的任务
-  private goodsNum = 0 // 获取商品的数量
-  private writeError = false // 写入错误
-  private isWrite = false // 是否写入
-  /*   private localTask: { isAsync: boolean, taskData: any[] } // 本地数据 */
-  private writeQueue: any[] = []
+  private readonly actor = createCollectionActor()
+  private readonly scope = new TaskScope()
+  private services?: CollectionServices
+  private items?: TaskQueueService
+  private writes?: TaskQueueService
+  private execution?: Promise<CollectionResult>
+  private cleanupPromise?: Promise<void>
+  private statusSync = Promise.resolve()
+  private disposed = false
+  private saved = new Map<string, any>()
+  private targetData = 0
   private expendShopCount = 0
-  private total = 0
-  private hasUpLimit = false;
-  private query: Query = {
-    pageNo: 1,
-    pageSize: 30,
-    total: 0,
-    maxPage: 99,
-    categories: [],
-    isAutoBang: true,
-    lastSortValues: [],
-  }
-  constructor(task: Task, mainWindow: BrowserWindow) {
-    this.task = task
-    this.mainWindow = mainWindow
-    this.mainWindowService = new MainWindowService(this.closeHandle)
-    this.taskQueueService = new TaskQueueService(this.taskHandle)
-    this.excelService = new ExcelService(`${task.taskName}_${this.task._id}`)
-    this.dataProcessService = new DataProcessService()
-    this.parseService = new ParseService(this.mainWindowService)
-    this.windowService = new WindowService(this.parseService)
-    this.query.categories = [...new Set(task.categoryIds?.flat(2) || [])]
+  private hasUpLimit = false
+  private discovered = 0
+  private failure?: unknown
+  private query: Query
+
+  constructor(
+    private task: Task,
+    private mainWindow: BrowserWindow | null,
+    private readonly deps: CollectionDependencies,
+  ) {
+    this.query = {
+      pageNo: 1,
+      pageSize: 30,
+      total: 0,
+      maxPage: 99,
+      categories: [...new Set(task.categoryIds?.flat(2) || [])],
+      isAutoBang: true,
+      lastSortValues: [],
+    }
     this.initQueryParams(task)
-    /*     const taskList = operationStore.get('taskList') || []
-        this.localTask = { isAsync: false, taskData: [] }
-        taskList.push(task._id)
-        operationStore.set(task._id, this.localTask)
-        operationStore.set('taskList', [...new Set(taskList)]) */
-  }
-  run() {
-    let timer: NodeJS.Timeout | undefined
-    let settled: boolean = false
-    const safeResolve = (v: any, resolve: Function) => {
-      if (settled) return
-      settled = true
-      resolve({
-        filePath: this.task.tableFilePath || '',
-        progress: { ...this.task.progress, current: 0 },
-        autoResult: this.task.autoResult || undefined,
-        upGoodsList: Array.from(this.goodsData.values()),
-        hasUpLimit: this.hasUpLimit
-      })
-    }
-    const safeReject = (e: any, reject: Function) => {
-      if (settled) return
-      settled = true
-      reject({
-        filePath: this.task.tableFilePath || '',
-        progress: { ...this.task.progress, current: 0 },
-        autoResult: this.task.autoResult || undefined,
-        upGoodsList: Array.from(this.goodsData.values()),
-        hasUpLimit: this.hasUpLimit
-      })
-    }
-
-    return new Promise(async (resolve, reject) => {
-      try {
-        timer = setInterval(async () => {
-          if (this.reason === 'cancel' || this.reason === 'failed') {
-            clearInterval(timer)
-            safeReject('任务已终止', reject)
-          }
-        }, 1000)
-        memoryMonitor.trackBusinessMetrics({
-          taskId: this.task._id,
-          taskName: this.task.taskName,
-          phase: 'start',
-        })
-        await this.resetTask()
-        this.uuid = randomUUID()
-        this.updateStatus('running')
-        this.outputLog('窗口创建成功，任务开始执行')
-        await this.mainWindowService.createCollectionWindow(
-          this.task.targetUrl || 'https://www.ozon.ru',
-        )
-        if (this.task.isUseCategorySelect === 0) {
-          this.outputLog(`分类选品模式`)
-          await this.categoryMode(this.task.targetCount || Infinity)
-        } else {
-          this.outputLog('页面解析成功，开始获取商品列表')
-          await this.getHtmlData(this.task.targetCount || Infinity)
-        }
-        await this.waitForAllTasks()
-        await this.expendShop()
-        memoryMonitor.trackBusinessMetrics({
-          taskId: this.task._id,
-          phase: 'collected',
-          goodsDataSize: this.goodsData.size,
-          parseServiceDataSize: this.parseService.getDataCount(),
-        })
-        if (this.reason !== 'success') {
-          safeReject('任务已被终止', reject)
-          return
-        }
-        if (this.task.isUseAutoUpGoods)
-          this.task.autoResult = await autoUpGoods(this.task, this.goodsData)
-        // await this.reWriteTable()
-        this.updateStatus('completed')
-        this.outputLog('任务完成')
-      } catch (error) {
-        log.error(error, 'run出错')
-        if (!this.reason) {
-          this.updateStatus('failed')
-          this.outputLog(`采集失败：${error}`)
-        }
-      } finally {
-        if (this.task.taskStatus === 'running') {
-          switch (this.reason) {
-            case 'cancel':
-              this.updateStatus('cancelled')
-              this.outputLog('任务已取消')
-              break
-            case 'failed':
-              this.updateStatus('failed')
-              this.outputLog('任务失败')
-              break
-            default:
-              this.updateStatus('completed')
-              this.outputLog('任务成功')
-              break
-          }
-        }
-        log.info(
-          `ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，开始清理工作`,
-        )
-        clearInterval(timer)
-        this.mainWindowService.destroy()
-        // this.clearStatus(true)
-        // 清理后手动触发 GC
-        memoryMonitor.forceGC()
-        safeResolve(this.task, resolve)
-        log.info(
-          `ID：${this.task._id} 名称：${this.task.taskName}任务结束，最终状态：${this.task.taskStatus}，完成清理工作`,
-        )
-        memoryMonitor.trackBusinessMetrics({
-          taskId: this.task._id,
-          phase: 'cleanup',
-          goodsDataSize: this.goodsData.size,
-        })
-      }
-    })
   }
 
-  /**
-   * 分类选品模式
-   */
-  async categoryMode(targetCount: number) {
-    const dataList = await this.getCategoryGoodsList()
-    const targetList = await this.parseService.ozonDetailListParser(dataList)
-    this.outputLog('获取商品成功')
-    await this.categoryProcess(targetList)
+  getPhase(): CollectionPhase {
+    const snapshot = this.actor.getSnapshot()
+    if (typeof snapshot.value === 'object') return snapshot.value.running
+    if (snapshot.value === 'cleaning' && snapshot.context.outcome === 'cancelled') return 'stopping'
+    return snapshot.value
+  }
+  getTaskInfo() {
+    return { ...this.task, phase: this.getPhase() }
+  }
+  async getTableFilePath() {
+    return this.task.tableFilePath || ''
+  }
+  private get targetReached() {
+    return this.targetData >= (this.task.targetCount || Infinity)
+  }
+  private get runtime() {
+    if (!this.services) throw new Error('采集服务尚未初始化')
+    return this.services
+  }
+
+  run(): Promise<CollectionResult> {
+    if (this.execution) return this.execution
+    if (this.disposed) return Promise.reject(new Error('任务已释放，请创建新的采集任务'))
+    this.actor.send({ type: 'START' })
+    this.setStatus('running')
+    this.execution = this.execute()
+    return this.execution
+  }
+
+  private async execute(): Promise<CollectionResult> {
+    let result: CollectionResult
     try {
-      while (this.targetData < targetCount) {
-        if (this.reason && this.reason !== 'success') throw new Error('任务终止')
-        if (this.reason === 'success') break
-        if (this.taskQueueService.getTaskCount() > 20) {
-          this.outputLog(`任务队列数据源充足，等待处理中。分类总数量${this.total}`)
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-          continue
-        }
-        const dataList = await this.getCategoryGoodsList()
-        const targetList = await this.parseService.ozonDetailListParser(dataList)
-        this.outputLog(`获取商品成功。分类总数量${this.total}`)
-        await this.categoryProcess(targetList)
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-      if (!this.reason) this.reason = 'success'
-    } catch (error) {
-      return error
-    }
-  }
-
-  /**
-   * 分类模式处理
-   */
-  async categoryProcess(list: any[]) {
-    const filterData = await this.dataProcessService.filterData(list, this.task, 'base')
-    if (!filterData.length) return
-    const baseData: any[] = []
-    const apiList = []
-    for (const goods of filterData) {
-      if (
-        this.targetData >= (this.task.targetCount || Infinity) ||
-        (this.reason && this.reason !== 'success')
+      this.services = this.deps.createServices(
+        this.closeHandle,
+        `${this.task.taskName}_${this.task._id}`,
       )
-        return
-      apiList.push(this.getHtmlDetailData(goods))
-      await sleep(1000, 4000)
-    }
-    const res = await Promise.all(apiList)
-    res.forEach((item) => {
-      if (item.price) {
-        const url = `https://www.ozon.ru/product/${item.id}`
-        baseData.push({ href: url, ...item })
-      }
-    })
-    const targetData = await this.dataProcessService.filterData(baseData, this.task, 'detail')
-    this.process += targetData.length
-    if (
-      targetData.length &&
-      this.reason !== 'cancel' &&
-      this.reason !== 'failed' &&
-      this.targetData < (this.task.targetCount || Infinity)
-    ) {
-      this.taskQueueService.addTask(targetData)
-      this.taskQueueService.startProcessing()
-      this.outputLog('处理符合筛选条件的商品中')
-    }
-  }
-
-  /**
-   * 获取商品列表
-   */
-  async getCategoryGoodsList() {
-    this.outputLog(`获取分类商品`)
-    const { code, data } = await request<Response<any>, Response<any>>({
-      url: '/api/goods/hotSales/v2/ozon/getReMaiData',
-      method: 'post',
-      data: this.query,
-    })
-    if (!code) {
-      if (!data.total || this.query.pageNo >= this.query.maxPage) this.reason = 'success'
-      this.query.pageNo += 1
-      this.query.maxPage = data.total / this.query.pageSize
-      this.query.lastSortValues = data.lastSortValues
-      this.total = data.total
-      data.list.forEach((item: any) => {
-        if (item.brand === 'без бренда') item.brand = ''
-        item.nullableCreateDate = dayjs(item.nullableCreateDate).format('YYYY-MM-DD')
-        item.releaseDate = dayjs().diff(dayjs(item.nullableCreateDate), 'day')
-        item.clickRate = (((item.qtyViewPdp || 0) / (item.views || 1)) * 100)?.toFixed(2)
+      this.items = new TaskQueueService(this.taskHandle, 3, {
+        parent: this.scope.signal,
+        timeoutMs: this.deps.timing?.item ?? 120_000,
+        onError: (error) => this.deps.log.warn('单个商品处理失败:', error),
       })
-      return data.list || []
-    } else {
-      this.reason = 'failed'
-      log.error(`获取分类商品失败！`)
-      return []
-    }
-  }
-
-  /**
-   * 获取详情页数据
-   */
-  async getHtmlDetailData(obj: any) {
-    const res = await this.mainWindowService.getDataByApi(obj._id)
-    const domain = await this.mainWindowService.getDomain()
-    this.outputLog(`获取商品详情页数据`)
-    return this.parseService.ozonDetailParse(res, domain, obj)
-  }
-  /**
-   * 拓店模式
-   */
-  async expendShop() {
-    if (!this.task.expendType || this.targetData >= (this.task.targetCount || Infinity)) return
-    const expendShopHandle = async (goodsList: any[]) => {
-      for (const item of goodsList) {
-        let targetShopCount = Math.ceil(this.task.expendShopCount / 20)
-        if (
-          this.targetData >= (this.task.targetCount || Infinity) ||
-          this.expendShopCount >= this.task.expendShopCount ||
-          this.reason === 'cancel' ||
-          this.reason === 'failed'
-        )
-          return true
-        const data =
-          item?.sellers?.sellers
-            ?.filter((item: any) => {
-              item.ratingCount = item?.rating?.totalScore
-              item.priceNumber = item?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')
-              return item.ratingCount > 4
-            })
-            .toSorted((a: any, b: any) => b.ratingCount - a.ratingCount)
-            .toSorted((a: any, b: any) => b.priceNumber - a.priceNumber)
-            .slice(0, targetShopCount) || []
-        for (const sellers of data) {
-          this.reason = undefined
-          if (
-            this.targetData >= (this.task.targetCount || Infinity) ||
-            this.expendShopCount >= this.task.expendShopCount ||
-            this.reason === 'cancel' ||
-            this.reason === 'failed'
-          )
-            return true
-          this.expendShopCount++
-          this.outputLog('拓店模式开启中，请稍等！')
-          await this.mainWindowService.changeUrl(sellers.link, true)
-          await this.getHtmlData(this.task.targetCount || Infinity)
-        }
-      }
-    }
-    // 先用当前店铺中出售商品的跟卖店家
-    const goodsList = Array.from(this.goodsData.values())
-    const res = await expendShopHandle(goodsList)
-    if (res) return
-
-    // 如果当前店铺跟卖店家还不满足终止条件那就用猜你喜欢的跟卖店铺
-    const guessLikeList = Array.from(this.parseService.guessLikeList.values())
-    const sellersList = []
-    for (const url of guessLikeList) {
-      const response = await this.mainWindowService.getSellingData(url)
-      const sellers = {
-        sellers: [],
-      }
-      if (response?.success) {
-        sellers.sellers = JSON.parse(
-          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
-        )
-        sellersList.push(sellers)
-      } else {
-        log.error('获取跟卖数据失败')
-      }
-    }
-    await expendShopHandle(sellersList)
-  }
-  /**
-   * 获取页面数据
-   */
-  async getHtmlData(targetCount: number) {
-    try {
-      let scrollAttempts = 0
-      const maxScrollAttempts = 10
-      let bottomOutCount = 0
-      const { html, domain } = await this.mainWindowService.getHTML()
-      const goodsList = await this.parseService.ozonListParser(html, domain)
-
-      if (goodsList.length) this.processData(goodsList)
-      while (this.targetData < targetCount) {
-        if (this.reason && this.reason !== 'success') throw new Error('任务终止')
-
-        if (this.taskQueueService.getTaskCount() > 20) {
-          this.outputLog('任务队列数据源充足，等待处理中')
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-          continue
-        }
-        if (scrollAttempts >= maxScrollAttempts) {
-          if (!this.reason) this.reason = 'success'
-          this.outputLog('尝试获取商品达到最大次数')
-          log.info(`${this.task.taskName}-10次无法获取到商品数据，结束任务`)
-          return
-        }
-
-        if (bottomOutCount >= 3) {
-          if (!this.reason) this.reason = 'success'
-          this.outputLog('已滚动至页面底部')
-          log.info(`${this.task.taskName}-滚动至底部3次，结束任务`)
-          return
-        }
-
-        await sleep(3000, 5000)
-        this.outputLog(
-          `滚动页面加载数据中，(${scrollAttempts}/${maxScrollAttempts})，已收集${this.parseService.getDataCount()}`,
-        )
-        const result = await this.mainWindowService.scrollPage()
-        scrollAttempts++
-        if (!result) {
-          bottomOutCount++
-          await sleep(3000, 5000)
-          continue
-        }
-
-        const { html, domain } = await this.mainWindowService.getHTML()
-        if (!html) continue
-        const goodsList = await this.parseService.ozonListParser(html, domain)
-        if (goodsList.length) {
-          scrollAttempts = 0
-          this.processData(goodsList)
-        }
-      }
-      if (!this.reason) this.reason = 'success'
-      this.outputLog(`收集完成，共收集到 ${this.parseService.getDataCount()} 个链接`)
-    } catch (error) {
-      log.error(error, '采集窗口发生错误')
-      return error
-    }
-  }
-
-  /**
-   * 处理获取到的数据
-   */
-  private async processData(goodsList: any[]) {
-    try {
-      let baseDataList = await this.dataProcessService.getBaseData(goodsList)
-      this.outputLog(`获取商品数据中`)
-      if (this.reason === undefined) this.process += baseDataList.length
-      const filterDataList = !this.task.aiSelectType
-        ? await this.dataProcessService.aiFilterData(baseDataList)
-        : await this.dataProcessService.filterData(baseDataList, this.task)
-      this.outputLog(`筛选商品条件中`)
-      const data = baseDataList.filter(
-        (item) => !filterDataList.map((item) => item.id).includes(item.id),
-      )
-      for (const item of data) {
-        if (this.reason === undefined && this.targetData < (this.task.targetCount || Infinity)) {
-          await new Promise((resolve) => setTimeout(resolve, 50))
-          this.process--
-          this.outputLog(`完成商品${item.nameLabel}的处理`)
-        } else {
-          this.process = 0
-          break
-        }
-      }
-      if (
-        filterDataList.length &&
-        this.reason !== 'cancel' &&
-        this.reason !== 'failed' &&
-        this.targetData < (this.task.targetCount || Infinity)
-      ) {
-        this.taskQueueService.addTask(filterDataList)
-        this.taskQueueService.startProcessing()
-        this.outputLog('处理符合筛选条件的商品中')
-      }
-    } catch (error) {
-      return error
-    }
-  }
-  /**
-   * 更改任务状态
-   */
-  async updateStatus(status: TaskStatus) {
-    let uuid = this.uuid
-    if (this.task.taskStatus === status || uuid !== this.uuid) return
-    try {
-      this.task.taskStatus = status
-      log.info(`${this.task.taskName}任务状态已更新：${status}`)
-      await this.syncStatusToServer(status)
-    } catch (error) {
-      log.error('更新任务状态失败', error)
-    }
-  }
-
-  // 同步状态到服务器
-  private async syncStatusToServer(status: TaskStatus) {
-    try {
-      await request({
-        url: '/api/auto/autoTask/updateStatus',
-        method: 'post',
-        data: {
-          taskId: this.task._id,
-          taskStatus: status,
-        },
+      this.writes = new TaskQueueService(this.saveGoods, 1, {
+        parent: this.scope.signal,
+        timeoutMs: this.deps.timing?.operation ?? 30_000,
+        onError: (error) => this.fail(error),
       })
-      const res = await request({
-        url: '/api/auto/autoTask/getTaskById',
-        method: 'post',
-        data: {
-          taskId: this.task._id,
-        },
-      })
-      this.updateTaskData(res.data)
-      this.outputLog('任务状态同步至云端')
+      this.deps.metrics({ taskId: this.task._id, taskName: this.task.taskName, phase: 'start' })
+      await this.scope.run(() => this.workflow(), this.deps.timing?.run ?? 0, '采集任务')
+      this.scope.check()
+      this.actor.send({ type: 'FINISH' })
     } catch (error) {
-      log.error('同步任务状态到服务器失败', error)
+      this.fail(error)
+      this.deps.log.error('采集任务结束:', error)
+    } finally {
+      result = this.buildResult()
+      await this.cleanup()
+      this.actor.send({ type: 'CLEANED' })
+      const status = this.actor.getSnapshot().context.outcome
+      this.setStatus(status)
+      result.status = status
+      if (this.failure) result.error = this.errorMessage(this.failure)
+      await this.statusSync
+      this.actor.stop()
+      this.deps.metrics({ taskId: this.task._id, phase: 'cleanup', goodsDataSize: this.saved.size })
     }
-  }
-  /**
-   * 日志输出
-   */
-  outputLog(taskLog: string) {
-    let uuid = this.uuid
-    if (this.uuid !== uuid) return
-    this.task.progress = {
-      current: this.process < 0 ? 0 : this.process,
-      total: this.isCleared ? this.goodsNum : this.parseService.getDataCount(),
-      totalCount: this.targetData,
-    }
-
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('task-progress', {
-        collectionTask: { ...this.task, hasUpLimit: this.hasUpLimit },
-        log: { date: `[${dayjs(Date.now()).format('YYYY/MM/DD HH:mm:ss')}]`, taskLog },
-      })
-    }
+    if (result.status !== 'completed')
+      throw new CollectionRunError(result.error || '任务已取消', result)
+    return result
   }
 
-  /**
-   * 处理单个任务
-   */
-  taskHandle = async (task: any) => {
-    let timer: NodeJS.Timeout | undefined
-    let maxTimer = 120
-    let countDown = 0
-    let settled = false
-    let uuid = this.uuid
-    const safeReject = (v: any, reject: Function) => {
-      if (settled) return
-      settled = true
-      clearInterval(timer)
-      reject(v)
-    }
-    return new Promise(async (resolve, reject) => {
-      try {
-        timer = setInterval(() => {
-          countDown++
-          if (this.reason === 'cancel' || this.reason === 'failed' || countDown >= maxTimer) {
-            if (this.uuid === uuid) this.process--
-            safeReject(new Error('任务超时'), reject)
-          }
-        }, 1000)
-        const safeResolve = (v: any) => {
-          if (settled) return
-          settled = true
-          resolve(v)
-          if (this.reason != 'cancel' && this.reason !== 'failed' && this.uuid === uuid) {
-            clearInterval(timer)
-          }
-        }
-
-        if (this.targetData >= (this.task.targetCount || Infinity) && this.uuid === uuid) {
-          safeResolve('任务已完成')
-          return
-        }
-        const { link1688, sourcePrice, cover2 } = await this.windowService.createWindow(
-          this.task.sourceType,
-          task.cover,
-        )
-        if (this.reason === 'cancel' || this.reason === 'failed' || this.uuid !== uuid) {
-          safeResolve(new Error('任务已被终止'))
-          return
-        }
-        task = {
-          ...task,
-          '1688link': link1688,
-          sourcePrice,
-          cover2,
-          myProfitPercent: this.task.myProfitPercent,
-          rubExpressPrice: this.task.rubExpressPrice,
-          internalExpress: this.task.internalExpress,
-        }
-        let detailData = await this.dataProcessService.getDetailData({
-          taskId: this.task._id,
-          reqDatas: [task],
-          upMode: this.task.upMode,
-        })
-        this.process--
-        if (detailData.length) this.writeQueue.push(detailData)
-        // this.writeTable()
-        this.pushData()
-        safeResolve('单个商品处理完成')
-      } catch (error) {
-        log.error(error, '单个商品任务失败')
-        safeReject(new Error('单个商品任务失败'), reject)
-      }
-    })
-  }
-
-  /**
-   * 防止竞态写入
-   */
-  async pushData() {
-    const uuid = this.uuid
-    if (this.isWrite) return
-    this.isWrite = true
-    while (this.writeQueue.length) {
-      if (
-        this.targetData < (this.task.targetCount || Infinity) &&
-        (this.reason === 'success' || this.reason === undefined) &&
-        this.uuid === uuid
-      ) {
-        const detailData = this.writeQueue.shift()
-        this.goodsData.set(detailData[0]?.id, detailData[0])
-        const { code, count } = await autoSaveData({ taskId: this.task._id, datas: detailData })
-        if (!code && count) this.targetData++
-        if (code === 402) {
-          this.reason = 'failed'
-          this.hasUpLimit = true
-          break
-        }
-        this.outputLog('单个商品处理完成')
-      } else {
-        break
-      }
-    }
-    this.isWrite = false
-  }
-
-  /**
-   * 写入表格
-   */
-  async writeTable() {
-    const uuid = this.uuid
-    if (this.isWrite) return
-    this.isWrite = true
-    while (this.writeQueue.length) {
-      if (
-        this.targetData < (this.task.targetCount || Infinity) &&
-        (this.reason === 'success' || this.reason === undefined) &&
-        this.uuid === uuid
-      ) {
-        const data = this.writeQueue.shift()
-        const result = await this.excelService.saveExcel(data)
-        if (data.length) {
-          this.targetData++
-          this.goodsData.set(data[0]?.id, data?.[0])
-        }
-        this.process--
-        if (!result) this.writeError = true
-        if (!this.task.tableFilePath)
-          this.task.tableFilePath = await this.excelService.getFilePath()
-        this.outputLog('单个商品处理完成')
-      } else {
-        break
-      }
-    }
-    this.isWrite = false
-  }
-
-  /**
-   * 窗口被关闭回调
-   */
-  closeHandle = async () => {
-    let uuid = this.uuid
-    if (!this.reason && this.uuid === uuid) {
-      // await this.reWriteTable()
-      this.reason = 'failed'
-      // await this.clearStatus()
-      this.process = 0
-      this.updateStatus('failed')
-      this.outputLog('窗口异常关闭')
-      log.error('窗口异常关闭')
-    }
-  }
-  /**
-   * 等待任务结束
-   */
-  private async waitForAllTasks(): Promise<void> {
-    while (
-      this.taskQueueService.getTaskCount() > 0 ||
-      this.taskQueueService.getActiveCount() ||
-      this.isWrite
-    ) {
-      if (
-        this.reason === 'cancel' ||
-        this.reason === 'failed' ||
-        this.targetData >= (this.task.targetCount || Infinity)
-      )
-        return
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-    }
-  }
-  /**
-   * 重置任务
-   */
-  async resetTask() {
-    this.process = 0
-    await this.excelService.DeleteFilled()
+  private async workflow() {
+    await this.step(() => this.runtime.excel.DeleteFilled(), '初始化表格')
     this.task.tableFilePath = undefined
     this.task.autoResult = undefined
-    this.isCleared = false
-    this.reason = undefined
-    await this.dataProcessService.destroy()
-    await this.taskQueueService.destroy()
-    this.uuid = undefined
-    this.outputLog('任务初始化完成')
+    await this.scope.run(
+      (signal) =>
+        this.runtime.main.createCollectionWindow(
+          this.task.targetUrl || 'https://www.ozon.ru',
+          signal,
+        ),
+      100_000,
+      '创建采集窗口',
+    )
+    this.scope.check()
+    this.actor.send({ type: 'READY' })
+    this.outputLog('采集窗口已就绪')
+    if (this.task.isUseCategorySelect === 0) await this.categoryMode()
+    else await this.getHtmlData()
+    this.scope.check()
+    this.actor.send({ type: 'COLLECTED' })
+    await this.waitForAllTasks()
+    if (this.task.expendType && !this.targetReached) {
+      this.actor.send({ type: 'EXPAND' })
+      await this.expendShop()
+      this.scope.check()
+      this.actor.send({ type: 'EXPANDED' })
+      await this.waitForAllTasks()
+    }
+    this.scope.check()
+    this.deps.metrics({ taskId: this.task._id, phase: 'collected', goodsDataSize: this.saved.size })
+    if (this.task.isUseAutoUpGoods && this.saved.size) {
+      this.actor.send({ type: 'UPLOAD' })
+      this.task.autoResult = await this.scope.run(
+        (signal) => this.deps.upload(this.task, this.saved, signal),
+        600_000,
+        '自动上架',
+      )
+      this.scope.check()
+      if (this.task.autoResult !== 'success') throw new Error(this.task.autoResult)
+    }
   }
-  /**
-   * 获取任务信息
-   */
-  getTaskInfo() {
-    return this.task
+
+  private step<T>(operation: (signal: AbortSignal) => PromiseLike<T> | T, label: string) {
+    return this.scope.run(operation, this.deps.timing?.operation ?? 30_000, label)
   }
-  /**
-   * 获取表格路径
-   */
-  async getTableFilePath() {
-    return this.excelService.getFilePath()
+  private pause(kind: 'scroll' | 'detail') {
+    const ms =
+      this.deps.timing?.[kind] ??
+      (kind === 'scroll' ? 3000 + Math.random() * 2000 : 1000 + Math.random() * 3000)
+    return this.scope.sleep(ms)
   }
-  /**
-   * 更新任务
-   */
-  async updateTaskData(task: Partial<Task>) {
-    // 只更新允许更新的字段，保留原始的 id、createTime 等
-    Object.assign(this.task, {
-      ...task,
-      _id: this.task._id, // 确保 id 不被覆盖
-      taskStatus: this.task.taskStatus, // 保持当前状态
-      progress: this.task.progress,
+  private async backpressure() {
+    while (
+      !this.targetReached &&
+      (this.items?.getTaskCount() ?? 0) + (this.writes?.getTaskCount() ?? 0) > 20
+    ) {
+      await this.scope.sleep(250)
+    }
+    this.scope.check()
+  }
+
+  private async categoryMode() {
+    while (!this.targetReached) {
+      await this.backpressure()
+      const { data } = await this.step(
+        (signal) =>
+          this.deps.request({
+            url: '/api/goods/hotSales/v2/ozon/getReMaiData',
+            method: 'post',
+            data: { ...this.query },
+            signal,
+          }),
+        '获取分类商品',
+      )
+      this.scope.check()
+      const list = data?.list || []
+      this.query.maxPage = Math.ceil((data?.total || 0) / this.query.pageSize)
+      this.query.lastSortValues = data?.lastSortValues || []
+      const unique = await this.runtime.parse.ozonDetailListParser(list)
+      for (const goods of unique) {
+        if (goods.brand === 'без бренда') goods.brand = ''
+        goods.nullableCreateDate = dayjs(goods.nullableCreateDate).format('YYYY-MM-DD')
+        goods.releaseDate = dayjs().diff(dayjs(goods.nullableCreateDate), 'day')
+        goods.clickRate = (((goods.qtyViewPdp || 0) / (goods.views || 1)) * 100).toFixed(2)
+      }
+      const filtered = await this.runtime.data.filterData(unique, this.task, 'base')
+      const detailed = []
+      // 详情请求串行，单个拒绝不会留下未等待的 Promise。
+      for (const goods of filtered) {
+        this.scope.check()
+        if (this.targetReached) break
+        const response = await this.step(
+          (signal) => this.runtime.main.getDataByApi(goods._id, signal),
+          '获取商品详情',
+        )
+        const domain = await this.runtime.main.getDomain()
+        const detail = await this.step(
+          (signal) => this.runtime.parse.ozonDetailParse(response, domain, goods, signal),
+          '解析商品详情',
+        )
+        if (detail?.price)
+          detailed.push({ href: `https://www.ozon.ru/product/${detail.id}`, ...detail })
+        await this.pause('detail')
+      }
+      this.enqueue(await this.runtime.data.filterData(detailed, this.task, 'detail'))
+      if (!list.length || this.query.pageNo >= this.query.maxPage) break
+      this.query.pageNo++
+    }
+  }
+
+  private async getHtmlData() {
+    let emptyScrolls = 0
+    let bottomCount = 0
+    const parsePage = async () => {
+      const { html, domain } = await this.step(
+        (signal) => this.runtime.main.getHTML(signal),
+        '读取页面',
+      )
+      const goods = await this.step(
+        (signal) => this.runtime.parse.ozonListParser(html, domain, signal),
+        '解析商品列表',
+      )
+      this.scope.check()
+      this.discovered = this.runtime.parse.getDataCount()
+      if (goods.length && !this.targetReached) await this.processData(goods)
+      return goods.length
+    }
+    await parsePage()
+    while (!this.targetReached && emptyScrolls < 10 && bottomCount < 3) {
+      await this.backpressure()
+      await this.pause('scroll')
+      if (this.targetReached) break
+      const moved = await this.step(() => this.runtime.main.scrollPage(), '滚动页面')
+      bottomCount = moved ? 0 : bottomCount + 1
+      // 触底后也重新解析，避免漏掉延迟加载的最后一批商品。
+      const count = await parsePage()
+      emptyScrolls = count ? 0 : emptyScrolls + 1
+      this.outputLog(`加载商品中，连续无新增 ${emptyScrolls}/10`)
+    }
+  }
+
+  private async processData(goods: any[]) {
+    const base = await this.step(
+      (signal) => this.runtime.data.getBaseData(goods, signal),
+      '获取基础数据',
+    )
+    this.scope.check()
+    const filtered = !this.task.aiSelectType
+      ? await this.runtime.data.aiFilterData(base)
+      : await this.runtime.data.filterData(base, this.task)
+    this.enqueue(filtered)
+  }
+  private enqueue(goods: any[]) {
+    this.scope.check()
+    if (this.targetReached) return
+    this.discovered = this.runtime.parse.getDataCount()
+    this.items?.addTask(goods)
+    this.outputLog('处理符合条件的商品')
+  }
+
+  private taskHandle = async (goods: any, signal: AbortSignal) => {
+    signal.throwIfAborted()
+    if (this.targetReached) return
+    const { link1688, sourcePrice, cover2 } = await this.runtime.source.createWindow(
+      this.task.sourceType,
+      goods.cover,
+      signal,
+    )
+    signal.throwIfAborted()
+    if (this.targetReached) return
+    const detail = await this.runtime.data.getDetailData(
+      {
+        taskId: this.task._id,
+        upMode: this.task.upMode,
+        reqDatas: [
+          {
+            ...goods,
+            '1688link': link1688,
+            sourcePrice,
+            cover2,
+            myProfitPercent: this.task.myProfitPercent,
+            rubExpressPrice: this.task.rubExpressPrice,
+            internalExpress: this.task.internalExpress,
+          },
+        ],
+      },
+      signal,
+    )
+    signal.throwIfAborted()
+    if (!this.targetReached) this.writes?.addTask(detail)
+  }
+
+  private saveGoods = async (goods: any, signal: AbortSignal) => {
+    signal.throwIfAborted()
+    if (this.targetReached || this.saved.has(goods.id)) return
+    const { code, count, message } = await this.deps.save(
+      { taskId: this.task._id, datas: [goods] },
+      signal,
+    )
+    signal.throwIfAborted()
+    if (code) {
+      this.hasUpLimit = code === 402 || code === 403
+      throw new Error(
+        this.hasUpLimit ? '当日选品额度不足' : `保存商品失败：${String(message ?? code)}`,
+      )
+    }
+    if (count > 0) {
+      this.saved.set(goods.id, goods)
+      this.targetData += count
+      if (this.targetReached) this.items?.destroy()
+    }
+    this.outputLog('商品已保存')
+  }
+
+  private async waitForAllTasks() {
+    if (this.targetReached) this.items?.destroy()
+    await this.scope.run(() => this.items?.whenIdle(), this.deps.timing?.run ?? 0, '等待商品处理')
+    await this.scope.run(() => this.writes?.whenIdle(), this.deps.timing?.run ?? 0, '等待商品保存')
+    this.scope.check()
+  }
+
+  private async expendShop() {
+    const visited = new Set<string>()
+    const visit = async (sellers: any[]) => {
+      const candidates = sellers
+        .filter((s) => Number(s?.rating?.totalScore) > 4)
+        .sort(
+          (a, b) =>
+            Number(b?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')) -
+            Number(a?.price?.cardPrice?.price?.replace(/[^\d.]/g, '')),
+        )
+        .slice(0, Math.ceil(this.task.expendShopCount / 20))
+      for (const seller of candidates) {
+        this.scope.check()
+        if (this.targetReached || this.expendShopCount >= this.task.expendShopCount) return
+        if (!seller.link || visited.has(seller.link)) continue
+        visited.add(seller.link)
+        this.expendShopCount++
+        await this.step(
+          (signal) => this.runtime.main.changeUrl(seller.link, true, signal),
+          '进入拓展店铺',
+        )
+        await this.getHtmlData()
+        await this.waitForAllTasks()
+      }
+    }
+    for (const goods of Array.from(this.saved.values())) await visit(goods?.sellers?.sellers || [])
+    for (const url of this.runtime.parse.guessLikeList) {
+      if (this.targetReached || this.expendShopCount >= this.task.expendShopCount) break
+      const response = await this.step(
+        (signal) => this.runtime.main.getSellingData(url, signal),
+        '获取拓店卖家',
+      )
+      if (response?.success) {
+        const sellers = JSON.parse(
+          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
+        )
+        await visit(sellers.sellers || [])
+      }
+    }
+  }
+
+  private fail(error: unknown) {
+    if (!this.actor.getSnapshot().matches('running')) return
+    this.failure = error
+    this.actor.send({ type: 'FAIL' })
+    this.scope.stop(error)
+  }
+  closeHandle = () => this.fail(new Error('采集窗口异常关闭'))
+
+  async cancel() {
+    if (this.actor.getSnapshot().status === 'done') return
+    if (this.actor.getSnapshot().matches('cleaning')) {
+      await this.execution?.catch(() => undefined)
+      return
+    }
+    this.failure = new TaskCancelledError()
+    this.actor.send({ type: 'CANCEL' })
+    this.outputLog('正在终止任务，请稍候')
+    this.emitLifecycleState()
+    this.scope.stop(this.failure)
+    if (this.execution) await this.execution.catch(() => undefined)
+    else {
+      await this.cleanup()
+      this.actor.send({ type: 'CLEANED' })
+      this.setStatus('cancelled')
+      await this.statusSync
+      this.actor.stop()
+    }
+  }
+
+  private buildResult(): CollectionResult {
+    return {
+      filePath: this.task.tableFilePath || '',
+      progress: { current: 0, total: this.discovered, totalCount: this.targetData },
+      autoResult: this.task.autoResult,
+      upGoodsList: [...this.saved.values()],
+      hasUpLimit: this.hasUpLimit,
+      status: this.actor.getSnapshot().context.outcome,
+    }
+  }
+
+  /** 所有出口共用的幂等清理。一个资源失败不影响其他资源释放。 */
+  private cleanup(): Promise<void> {
+    if (this.cleanupPromise) return this.cleanupPromise
+    this.disposed = true
+    this.outputLog(this.getPhase() === 'stopping' ? '正在终止任务，请稍候' : '正在结束任务，请稍候')
+    this.emitLifecycleState()
+    this.scope.stop(new TaskCancelledError('任务正在清理'))
+    this.cleanupPromise = (async () => {
+      const cleanups = [
+        () => this.items?.destroy(),
+        () => this.writes?.destroy(),
+        () => this.services?.source.destroy(),
+        () => this.services?.main.destroy(),
+        () => this.services?.excel.destroy(),
+        () => this.services?.data.destroy(),
+        () => this.services?.parse.destroy(),
+      ]
+      for (const release of cleanups) {
+        try {
+          await release()
+        } catch (error) {
+          this.deps.log.error('释放采集资源失败:', error)
+          if (this.actor.getSnapshot().context.outcome === 'completed') {
+            this.failure = error
+            this.actor.send({ type: 'FAIL' })
+          }
+        }
+      }
+      this.saved.clear()
+      this.services = undefined
+      this.items = undefined
+      this.writes = undefined
+      this.mainWindow = null
+    })()
+    return this.cleanupPromise
+  }
+
+  async clearStatus(_retainCompleted = false, _destroy = true) {
+    if (this.execution) {
+      await this.cancel()
+      return
+    }
+    await this.cleanup()
+    this.actor.stop()
+  }
+  updateTaskData(task: Partial<Task>) {
+    const { _id, taskStatus, progress, phase, ...changes } = task
+    Object.assign(this.task, changes)
+  }
+  async updateStatus(status: TaskStatus) {
+    if (status === 'cancelled') return this.cancel()
+    if (status === 'pending' && this.actor.getSnapshot().matches('idle')) this.setStatus(status)
+    await this.statusSync
+  }
+  private setStatus(status: TaskStatus) {
+    this.task.taskStatus = status
+    this.outputLog(`任务状态：${status}`)
+    this.statusSync = this.statusSync.then(async () => {
+      const scope = new TaskScope()
+      try {
+        await scope.run(
+          (signal) =>
+            this.deps.request({
+              url: '/api/auto/autoTask/updateStatus',
+              method: 'post',
+              data: { taskId: this.task._id, taskStatus: status },
+              signal,
+            }),
+          this.deps.timing?.status ?? 5000,
+          '同步任务状态',
+        )
+      } catch (error) {
+        this.deps.log.warn('任务状态同步失败:', error)
+      } finally {
+        scope.stop()
+      }
     })
   }
-  /**
-   * 取消任务
-   */
-  async cancel() {
-    if (this.reason === 'cancel') throw new Error('任务正在取消中，请勿频繁请求')
-    this.reason = 'cancel'
-    // this.reWriteTable()
-    // this.clearStatus(true)
-    this.process = 0
-    this.mainWindowService.destroy()
-    this.updateStatus('cancelled')
-    this.outputLog('任务已取消')
+  outputLog(message: string) {
+    this.task.progress = {
+      current:
+        (this.items?.getTaskCount() ?? 0) +
+        (this.items?.getActiveCount() ?? 0) +
+        (this.writes?.getTaskCount() ?? 0) +
+        (this.writes?.getActiveCount() ?? 0),
+      total: this.discovered,
+      totalCount: this.targetData,
+    }
+    try {
+      if (this.mainWindow && !this.mainWindow.isDestroyed())
+        this.mainWindow.webContents.send('task-progress', {
+          collectionTask: { ...this.task, hasUpLimit: this.hasUpLimit, phase: this.getPhase() },
+          log: { date: `[${dayjs().format('YYYY/MM/DD HH:mm:ss')}]`, taskLog: message },
+        })
+    } catch (error) {
+      this.deps.log.warn('发送采集进度失败:', error)
+    }
+  }
+  private errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error)
   }
 
-  /**
-   * 重新写入表格
-   */
-  async reWriteTable() {
-    if (this.writeError) await this.excelService.flushToDisk()
-    this.writeError = false
-  }
-  /**
-   * 清理工作
-   */
-  clearStatus(isRetainCompletedTasks = false, isDestroy = true) {
-    let uuid = this.uuid
-    if (this.isCleared || this.uuid !== uuid) return
-    this.isCleared = true
-    this.process = 0
-    this.goodsNum = this.parseService.getDataCount()
-    this.windowService.destroy()
-    this.excelService.destroy()
-    this.dataProcessService.destroy()
-    this.parseService.destroy()
-    this.goodsData.clear()
-    this.taskQueueService.destroy(isRetainCompletedTasks, isDestroy)
-    this.outputLog('清理完成')
+  private emitLifecycleState() {
+    try {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('task-status-update', {
+          task: this.getTaskInfo(),
+          status: this.task.taskStatus,
+        })
+      }
+    } catch (error) {
+      this.deps.log.warn('发送任务阶段失败:', error)
+    }
   }
 
-  /**
-   * 初始化查询参数
-   */
-  async initQueryParams(task: Task) {
+  private initQueryParams(task: Task) {
     this.query.weightRangeMin = task.weightRangeMin
     this.query.weightRangeMax = task.weightRangeMax
     this.query.packageLengthMin = task.packageLengthMin
@@ -798,9 +637,9 @@ export class Collection {
     this.query.salesSchema = task.salesSchema
   }
 
-  /** 
+  /**
    * 获取上架时间
-    */
+   */
   getUpDate(startNum: number = 0, endNum: number = 0) {
     const startOfDay = dayjs().startOf('day')
     const endOfDay = dayjs().endOf('day')

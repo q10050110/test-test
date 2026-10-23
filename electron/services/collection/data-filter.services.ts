@@ -8,7 +8,8 @@ export class DataProcessService {
   /**
    * 获取基础数据
    */
-  async getBaseData(data: any[]) {
+  async getBaseData(data: any[], signal?: AbortSignal) {
+    signal?.throwIfAborted()
     for (const item of data) {
       const cached = this.data.get(item.id)
       if (cached) {
@@ -22,12 +23,14 @@ export class DataProcessService {
       const res = await request({
         url: '/api/goods/hotSales/getOzonSaleDataByIds',
         method: 'post',
+        signal,
         data: {
           goodsIds: data.map((item: any) => item.id),
           v: 5,
         },
       })
 
+      signal?.throwIfAborted()
       if (res.data) {
         res.data
           .map((item: any) => ({ ...item, ...item.data }))
@@ -53,6 +56,7 @@ export class DataProcessService {
       })
       return mergeData
     } catch (error) {
+      signal?.throwIfAborted()
       throw new Error('获取基础数据失败')
     }
   }
@@ -60,11 +64,13 @@ export class DataProcessService {
   /**
    * 获取中文名
    */
-  async getChineseName(text: string) {
+  async getChineseName(text: string, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     try {
       const res = await request({
         url: '/api/other/fanyi/translateText',
         method: 'post',
+        signal,
         data: {
           text,
           from: 'ru',
@@ -73,36 +79,43 @@ export class DataProcessService {
       })
       return res.data
     } catch (error) {
+      signal?.throwIfAborted()
       return text
     }
   }
   /**
    * 获取详细数据
    */
-  async getDetailData(params: { taskId: string; reqDatas: any[]; upMode?: 1 | 2 }) {
+  async getDetailData(params: { taskId: string; reqDatas: any[]; upMode?: 1 | 2 }, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     try {
       const { taskId, reqDatas, upMode } = params
       const res = await request({
         url:
           upMode != 2 ? '/api/auto/filterGoods/goodsFilter' : '/api/auto/filterGoods/goodsFilter2',
         method: 'post',
+        signal,
         data: {
           taskId,
           reqDatas,
         },
       })
 
-      let item = res.data[0]
+      signal?.throwIfAborted()
+      let item = res.data?.[0]
+      if (!item) return []
       const obj = this.data.get(item.id)
       if (obj) item = { ...obj, ...item }
       if (!item.commissionRfbs)
         item.commissionRfbs = `<=1500卢布：${item.rfbs_small || 0}% 1501~5000卢布: ${item.rfbs || 0}% >5000卢布：${item.rfbs_large || 0}%`
       if (!item.commissionFbp)
         item.commissionFbp = `<=1500卢布：${item.fbp_small || 0}% 1501~5000卢布: ${item.fbp || 0}% >5000卢布：${item.fbp_large || 0}%`
-      item.chineseName = await this.getChineseName(item.nameLabel)
+      item.chineseName = await this.getChineseName(item.nameLabel, signal)
+      signal?.throwIfAborted()
       return [item]
     } catch (error) {
-      return []
+      signal?.throwIfAborted()
+      throw error
     }
   }
 

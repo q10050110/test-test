@@ -1,143 +1,125 @@
-import log from '../../log/index.js'
+import {
+  BehaviorSubject,
+  EMPTY,
+  Subject,
+  Subscription,
+  catchError,
+  defer,
+  filter,
+  finalize,
+  firstValueFrom,
+  mergeMap,
+  take,
+} from 'rxjs'
+import { TaskCancelledError, TaskScope } from './task-scope.js'
 
-export type TaskHandler<T = any> = (task: any) => Promise<T>
-export type SuccessHandle = (id: string) => void
-export class TaskQueueService {
-  private taskQueue: Map<string, any> = new Map()
-  private isProcessing = false
-  private activeTasks = 0
-  private maxConcurrency = 3
-  private completedTasks: any[] = []
-  private failedTasks: any[] = []
-  private taskHandle: TaskHandler | null
-  private taskIsProcessing: Set<string> = new Set()
-  constructor(taskHandle: TaskHandler, maxConcurrency: number = 3) {
-    this.maxConcurrency = maxConcurrency
-    this.taskHandle = taskHandle
-  }
+export type TaskHandler<T = any> = (task: T, signal: AbortSignal) => Promise<unknown>
+export interface QueueOptions {
+  parent?: AbortSignal
+  timeoutMs?: number
+  onError?: (error: unknown) => void
+}
 
-  /**
-   * 添加任务到队列
-   */
-  addTask(task: any[]): void {
-    task.forEach((task) => {
-      this.taskQueue.set(task.id, task)
-    })
-  }
+/** mergeMap 管理并发；退订丢弃缓冲任务，并终止活跃任务。完成商品只保留计数。 */
+export class TaskQueueService<T extends { id: string } = any> {
+  private readonly input$ = new Subject<T>()
+  private readonly size$ = new BehaviorSubject(0)
+  private readonly pending = new Set<string>()
+  private readonly active = new Set<string>()
+  private readonly scope: TaskScope
+  private readonly subscription: Subscription
+  private stopped = false
+  private completed = 0
+  private failed = 0
 
-  /**
-   * 启动任务处理流程
-   */
-  async startProcessing() {
-    if (this.isProcessing || this.activeTasks >= this.maxConcurrency) {
-      return
-    }
-
-    this.isProcessing = true
-
-    const promises: Promise<void>[] = []
-
-    while (this.taskQueue.size > 0) {
-      if (this.activeTasks >= this.maxConcurrency) {
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        // log.info('队列已满,等待中...')
-        continue
-      }
-      // log.info('队列执行中', this.taskQueue.size)
-      const task = this.taskQueue.values().next().value
-      if (!task) continue
-
-      this.taskQueue.delete(task.id) // 从队列中移除任务
-      if (this.taskIsProcessing.has(task.id)) {
-        // log.info('跳过已处理的任务');
-        continue
-      }
-
-      this.taskIsProcessing.add(task.id)
-      this.activeTasks++
-
-      // log.info(`开始处理任务: ${task.id}, 当前活跃任务数: ${this.activeTasks}`);
-
-      // 并发处理任务
-      const taskPromise = this.processTask(task)
-        .then(() => {
-          this.completedTasks.push(task)
-        })
-        .catch((error) => {
-          log.error(`任务 ${task.id} 处理失败:`, error)
-          this.failedTasks.push(task)
-        })
-        .finally(() => {
-          if (this.activeTasks > 0) this.activeTasks--
-          this.taskIsProcessing.delete(task.id)
-          // log.info(`任务 ${task.id} 处理完成, 当前活跃任务数: ${this.activeTasks}`);
-          this.checkNext() // 触发下一轮任务处理
-        })
-
-      promises.push(taskPromise)
-    }
-
-    // 等待所有任务完成
-    await Promise.all(promises)
-
-    this.isProcessing = false
-    this.checkNext()
-  }
-
-  /**
-   * 处理单个任务
-   */
-  private async processTask(task: any) {
-    if (typeof this.taskHandle !== 'function') {
-      throw new Error(`Invalid taskHandle: expected a function, got ${typeof this.taskHandle}`)
-    }
-    await this.taskHandle(task)
-  }
-
-  /**
-   * 是否还有任务需要处理
-   */
-  private checkNext() {
-    if (this.taskQueue.size && this.activeTasks < this.maxConcurrency) {
-      this.startProcessing()
+  constructor(handler: TaskHandler<T>, concurrency = 3, options: QueueOptions = {}) {
+    this.scope = new TaskScope(options.parent)
+    this.subscription = this.input$
+      .pipe(
+        mergeMap(
+          (task) =>
+            defer(async () => {
+              this.pending.delete(task.id)
+              this.active.add(task.id)
+              this.publish()
+              await this.scope.run(
+                (signal) => handler(task, signal),
+                options.timeoutMs ?? 120_000,
+                '商品处理',
+              )
+              this.completed++
+            }).pipe(
+              catchError((error) => {
+                if (!this.scope.signal.aborted) {
+                  this.failed++
+                  options.onError?.(error)
+                }
+                return EMPTY
+              }),
+              finalize(() => {
+                this.active.delete(task.id)
+                this.publish()
+              }),
+            ),
+          concurrency,
+        ),
+      )
+      .subscribe()
+    if (options.parent) {
+      const stop = () => this.destroy()
+      options.parent.addEventListener('abort', stop, { once: true })
+      this.subscription.add(() => options.parent?.removeEventListener('abort', stop))
+      if (options.parent.aborted) this.destroy()
     }
   }
 
-  /**
-   * 获取队列中的任务数
-   */
-  getTaskCount(): number {
-    return this.taskQueue.size
+  addTask(tasks: T[]) {
+    if (this.stopped) return
+    for (const task of tasks) {
+      if (!task.id || this.pending.has(task.id) || this.active.has(task.id)) continue
+      this.pending.add(task.id)
+      this.publish()
+      this.input$.next(task)
+    }
   }
-  /**
-   * 获取正在执行的任务数量
-   */
+
+  startProcessing() {
+    return this.whenIdle()
+  }
+  getTaskCount() {
+    return this.pending.size
+  }
   getActiveCount() {
-    return this.activeTasks
+    return this.active.size
   }
-  /**
-   * 获取已完成的任务列表
-   */
   getCompletedTasksCount() {
-    return this.completedTasks.length
+    return this.completed
   }
-
-  /**
-   * 获取失败的任务列表
-   */
   getFailedTasksCount() {
-    return this.failedTasks.length
+    return this.failed
+  }
+  whenIdle(): Promise<unknown> {
+    if (!this.pending.size && !this.active.size) return Promise.resolve()
+    return firstValueFrom(
+      this.size$.pipe(
+        filter((size) => size === 0),
+        take(1),
+      ),
+    )
   }
 
-  /**
-   * 清空队列和状态
-   */
-  async destroy(isRetainCompletedTasks = false, isDestroy = false) {
-    this.taskQueue.clear()
-    this.taskIsProcessing.clear()
-    this.activeTasks = 0
-    if (!isRetainCompletedTasks) this.completedTasks = []
-    this.failedTasks = []
-    if (isDestroy) this.taskHandle = null
+  destroy(_retainCompleted = false, _destroyHandler = true) {
+    if (this.stopped) return
+    this.stopped = true
+    this.scope.stop(new TaskCancelledError('商品队列已关闭'))
+    this.subscription.unsubscribe()
+    this.input$.complete()
+    this.pending.clear()
+    this.active.clear()
+    this.publish()
+    this.size$.complete()
+  }
+  private publish() {
+    this.size$.next(this.pending.size + this.active.size)
   }
 }

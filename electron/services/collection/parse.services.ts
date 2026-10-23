@@ -9,7 +9,8 @@ export class ParseService {
   constructor(windowService: MainWindowService) {
     this.windowService = windowService
   }
-  async ozonListParser(html: any | undefined, domain: string) {
+  async ozonListParser(html: any | undefined, domain: string, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     const data: any[] = []
     if (!html) return []
     const $ = cheerio.load(html)
@@ -96,7 +97,9 @@ export class ParseService {
     }
 
     for (const item of uniqueData) {
-      const response = await this.windowService?.getSellingData(item.requestUrl)
+      signal?.throwIfAborted()
+      const response = await this.windowService?.getSellingData(item.requestUrl, signal)
+      signal?.throwIfAborted()
       if (response?.success) {
         const sellers = JSON.parse(
           response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
@@ -128,7 +131,8 @@ export class ParseService {
     })
     return uniqueData
   }
-  async ozonDetailParse(data: any, domain: string, goods: any) {
+  async ozonDetailParse(data: any, domain: string, goods: any, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     if (!data.success) return {}
     try {
       const widgetStatesPrice = JSON.parse(
@@ -152,7 +156,8 @@ export class ParseService {
       const match = str.match(/([0-5](?:\.\d)?)[^0-9]*(\d[\d\s]*)/i)
       const rating = match ? match[1] : 0
       const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
-      const response = await this.windowService?.getSellingData(requestUrl)
+      const response = await this.windowService?.getSellingData(requestUrl, signal)
+      signal?.throwIfAborted()
       let sellers,
         sellerNumber,
         sellerNumber1,
@@ -194,6 +199,7 @@ export class ParseService {
         ...goods,
       }
     } catch (error) {
+      signal?.throwIfAborted()
       log.error('解析数据失败~~~')
       return {}
     }

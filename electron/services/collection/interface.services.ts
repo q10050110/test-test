@@ -139,7 +139,8 @@ export const getCategoryList = async () => {
 /**
  * 批量上架接口
  */
-export const batchUpGoods = async (data: any) => {
+export const batchUpGoods = async (data: any, signal?: AbortSignal) => {
+  signal?.throwIfAborted()
   try {
     const res = await request<
       { code: number; data: null; message: string },
@@ -147,10 +148,12 @@ export const batchUpGoods = async (data: any) => {
     >({
       url: '/api/goods/batchUpGoods/ozon/batchCreateGoods',
       method: 'post',
+      signal,
       data,
     })
     return res
   } catch (error: any) {
+    signal?.throwIfAborted()
     return {
       code: 500,
       message: error,
@@ -162,9 +165,11 @@ export const batchUpGoods = async (data: any) => {
 /**
  * 自动上架
  */
-export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
+export const autoUpGoods = async (task: Task, goodsData: Map<string, any>, signal?: AbortSignal) => {
+  signal?.throwIfAborted()
   if (goodsData.size === 0) return '没有可上架的商品'
   if (!rate) rate = await getRate()
+  signal?.throwIfAborted()
   const source = Array.from(goodsData.values())
   const result = []
   let config: Config | undefined
@@ -193,6 +198,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
   }
 
   while (source.length > 0) {
+    signal?.throwIfAborted()
     const chunk = source
       .splice(0, 100)
       .map((item) => ({
@@ -220,7 +226,7 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
       ...baseParams,
       goods: compressData(chunk),
     }
-    const res = await batchUpGoods(params)
+    const res = await batchUpGoods(params, signal)
     if (res?.code !== 0) {
       result.push(res?.message)
       if (res?.message === '帮豆数量不足，请充值') break
@@ -232,7 +238,8 @@ export const autoUpGoods = async (task: Task, goodsData: Map<string, any>) => {
 /**
  * 保存数据接口
  */
-const saveData = async (data: { taskId: string; datas: any[] }) => {
+const saveData = async (data: { taskId: string; datas: any[] }, signal?: AbortSignal) => {
+  signal?.throwIfAborted()
   try {
     const res = await request<
       { code: number; data: { newCount: number }; message: string },
@@ -240,10 +247,12 @@ const saveData = async (data: { taskId: string; datas: any[] }) => {
     >({
       url: '/api/goods/autoTask/saveAutoPickRecords',
       method: 'post',
+      signal,
       data,
     })
     return res
   } catch (error: any) {
+    signal?.throwIfAborted()
     return {
       code: error === '当日选品额度不足' ? 403 : 500,
       message: error,
@@ -252,17 +261,18 @@ const saveData = async (data: { taskId: string; datas: any[] }) => {
   }
 }
 
-export const autoSaveData = async (data: { taskId: string; datas: any[] }) => {
-  const { datas } = data
+export const autoSaveData = async (data: { taskId: string; datas: any[] }, signal?: AbortSignal) => {
+  const datas = [...data.datas]
   let newCount = 0
   while (datas.length > 0) {
+    signal?.throwIfAborted()
     const chunk = datas.splice(0, 1000)
-    const { code, message, data: apiData } = await saveData({ taskId: data.taskId, datas: chunk })
+    const { code, message, data: apiData } = await saveData({ taskId: data.taskId, datas: chunk }, signal)
     if (code) {
       log.error('保存数据失败', message)
-      return { code, count: 0 }
+      return { code, count: newCount, message }
     }
-    newCount = apiData?.newCount || 0
+    newCount += apiData?.newCount || 0
   }
   return { code: 0, count: newCount }
 }

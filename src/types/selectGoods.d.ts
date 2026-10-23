@@ -1,8 +1,23 @@
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+export type CollectionPhase =
+  | 'idle'
+  | 'initializing'
+  | 'collecting'
+  | 'draining'
+  | 'expanding'
+  | 'drainingExpansion'
+  | 'uploading'
+  | 'stopping'
+  | 'cleaning'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
 export type Task = {
   _id?: string
   taskStatus?: TaskStatus
+  phase?: CollectionPhase
   isUseAutoUpGoods?: boolean
   upDataConfigId?: string
   warehouse_id?: string

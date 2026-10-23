@@ -1,8 +1,24 @@
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+/** 本地生命周期阶段，不作为服务端 taskStatus 提交。 */
+export type CollectionPhase =
+  | 'idle'
+  | 'initializing'
+  | 'collecting'
+  | 'draining'
+  | 'expanding'
+  | 'drainingExpansion'
+  | 'uploading'
+  | 'stopping'
+  | 'cleaning'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
 export interface Task {
   _id: string
   taskStatus: TaskStatus
+  phase?: CollectionPhase
   isUseAutoUpGoods?: boolean
   upDataConfigId?: string
   warehouse_id?: string
@@ -87,7 +103,17 @@ export interface Task {
   returnCancelRateMax?: number // 退货取消率
 }
 
-export type Reason = 'success' | 'cancel' | 'failed' | undefined
+export interface CollectionResult {
+  filePath: string
+  progress: { current: number; total: number; totalCount: number }
+  autoResult?: string
+  upGoodsList: any[]
+  hasUpLimit: boolean
+  status: TaskStatus
+  error?: string
+}
+
+export type CollectionResultSummary = Omit<CollectionResult, 'upGoodsList'>
 
 export type ShopData = {
   client_id: string
@@ -170,6 +196,6 @@ export type Query = {
   qtyViewPdpMax?: number
   pdpToCartConversionMin?: number
   pdpToCartConversionMax?: number
-  salesSchema?: string,
+  salesSchema?: string
   upGoodsTime?: any[]
 }

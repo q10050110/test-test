@@ -196,10 +196,9 @@ export const collectionIpc = (win: BrowserWindow) => {
   // 取消任务
   ipcMain.handle('collection-cancel-task', async (event, taskId: string) => {
     try {
-      const success = await taskManager.cancelTask(taskId)
-      const task = taskManager.getTask(taskId)
+      const task = await taskManager.cancelTask(taskId)
 
-      if (success) {
+      if (task) {
         return {
           code: 200,
           message: '任务取消成功',

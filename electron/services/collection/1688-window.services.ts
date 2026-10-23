@@ -1,145 +1,102 @@
-import path from 'path'
-import * as cheerio from 'cheerio'
+import path from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
-import { fileURLToPath } from 'url'
-import { randomUUID } from 'crypto' // 使用 UUID 确保唯一性
-import log from '../../log/index.js'
-import { memoryMonitor } from '../memory-monitor.services.js'
-import { ParseService } from './parse.services.js'
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import { fileURLToPath } from 'node:url'
+import { randomUUID } from 'node:crypto'
+import type { ParseService } from './parse.services.js'
+import { TaskCancelledError, TaskScope, abortableDelay } from './task-scope.js'
+const directory = path.dirname(fileURLToPath(import.meta.url))
 
 export class WindowService {
-  windows: { cleanup: Function; id: string }[] = []
-  parseService: ParseService
-  constructor(parseService: ParseService) {
-    this.parseService = parseService
+  private readonly windows = new Map<string, () => void>()
+  constructor(private readonly parseService: ParseService) {}
+
+  async createWindow(sourceType: string, cover: string, signal?: AbortSignal): Promise<any> {
+    const scope = new TaskScope(signal)
+    try {
+      return await scope.run((signal) => this.open(sourceType, cover, signal), 120_000, '1688 图搜')
+    } finally {
+      scope.stop()
+    }
   }
 
-  /**
-   * 创建一个浏览器窗口并执行图片搜索任务
-   * @param sourceType 排序类型 ('1' 表示价格, 其他表示销量)
-   * @param cover 图片 URL
-   * @returns 返回解析后的 HTML 数据 (CheerioAPI)
-   */
-  createWindow(sourceType: string, cover: string): Promise<any> {
-    memoryMonitor.trackBusinessMetrics({
-      windowCount: this.windows.length,
-      action: 'create-window',
-    })
-    const winId = randomUUID() // 使用 UUID 确保唯一性
-    let win: BrowserWindow | null = null
-    let settled = false
-    let timer: NodeJS.Timeout | undefined = undefined
-    // 清理资源
-    const cleanup = () => {
-      if (win && !win.isDestroyed()) {
-        win.removeAllListeners()
-        win.destroy()
+  private open(sourceType: string, cover: string, signal: AbortSignal): Promise<any> {
+    signal.throwIfAborted()
+    return new Promise((resolve, reject) => {
+      const id = randomUUID()
+      const channel = 'result-page-' + id
+      const win = new BrowserWindow({
+        width: 1200,
+        height: 800,
+        show: false,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false,
+          preload: path.join(directory, '../../preloads/1688preload.js'),
+          additionalArguments: ['--winId=' + id],
+          backgroundThrottling: false,
+        },
+      })
+      const wc = win.webContents
+      let settled = false
+      const cleanup = () => {
+        signal.removeEventListener('abort', abort)
+        ipcMain.removeListener(channel, received)
+        win.removeListener('closed', closed)
+        if (!wc.isDestroyed()) wc.removeListener('render-process-gone', crashed)
+        this.windows.delete(id)
+        if (!win.isDestroyed()) win.destroy()
       }
-
-      // 移除当前窗口的 IPC 监听器
-      ipcMain.removeAllListeners(`result-page-${winId}`)
-      if (timer) {
-        clearTimeout(timer)
-        timer = undefined
+      const finish = (error?: unknown, value?: any) => {
+        if (settled) return
+        settled = true
+        try {
+          cleanup()
+        } catch (cleanupError) {
+          error ??= cleanupError
+        }
+        if (error) reject(error)
+        else resolve(value)
       }
-      this.windows = this.windows.filter((w) => w.id !== winId)
-      win = null
-      settled = true
-    }
-
-    // 安全 resolve
-    const safeResolve = (value: any, resolve: Function) => {
-      if (settled) return
-      settled = true
-      cleanup()
-      resolve(value)
-    }
-
-    // 安全 reject
-    const safeReject = (error: Error, reject: Function) => {
-      if (settled) return
-      settled = true
-      cleanup()
-      reject({ error: error || '未知错误', winId })
-    }
-
-    return new Promise(async (resolve, reject) => {
-      try {
-        // 创建浏览器窗口
-        win = new BrowserWindow({
-          width: 1200,
-          height: 800,
-          show: false,
-          webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: false,
-            preload: path.join(__dirname, '../../preloads/1688preload.js'),
-            additionalArguments: [`--winId=${winId}`],
-            backgroundThrottling: false,
-          },
-        })
-
-        timer = setTimeout(
-          () => {
-            safeReject(new Error('1688采集超时'), reject)
-          },
-          1000 * 60 * 2,
-        )
-        this.windows.push({ cleanup, id: winId })
-        // 绑定 IPC 监听器（使用唯一事件名称）
-        ipcMain.once(`result-page-${winId}`, async (event, _) => {
-          try {
-            let sortText: string | undefined
-            if (sourceType) {
-              sortText = sourceType === '1' ? '价格' : '销量'
-            }
-            await new Promise((res) => setTimeout(res, 5000))
-            // 执行排序逻辑
-            if (sourceType !== '0')
-              await win?.webContents.executeJavaScript(`
-              new Promise((resolve, reject) => {
-                const sortText = ${JSON.stringify(sortText)};
-                const list = document.querySelectorAll('.sortItem--X1Plgn6V');
-                try {
-                  if (!sortText) resolve(true);
-                  for (const el of list) {
-                    if (sortText && el.textContent === sortText) {
-                      el.click();
-                      break;
-                    }
-                  }
-                  resolve(true);
-                } catch (error) {
-                  reject(error);
-                }
-              });
-            `)
-            await new Promise((resolve) => setTimeout(resolve, 2000))
-            // 获取页面 HTML 并解析
-            const html = await win?.webContents.executeJavaScript(
-              'document.documentElement.outerHTML',
+      const abort = () => finish(signal.reason ?? new TaskCancelledError())
+      const closed = () => finish(new Error('1688 窗口异常关闭'))
+      const crashed = () => finish(new Error('1688 渲染进程退出'))
+      const received = (event: Electron.IpcMainEvent) => {
+        if (event.sender !== wc || settled) return
+        ipcMain.removeListener(channel, received)
+        void (async () => {
+          await abortableDelay(5000, signal)
+          if (sourceType !== '0') {
+            const sortText = sourceType === '1' ? '价格' : '销量'
+            await win.webContents.executeJavaScript(
+              '(function () { const text = ' +
+                JSON.stringify(sortText) +
+                '; for (const el of document.querySelectorAll(".sortItem--X1Plgn6V")) { if (el.textContent === text) { el.click(); break; } } })()',
             )
-            const obj = this.parseService['1688Parse'](html)
-            win?.destroy()
-            // 增加延迟以确保页面稳定
-            await new Promise((res) => setTimeout(res, 5000))
-            safeResolve(obj, resolve)
-          } catch (error) {
-            safeReject(error as Error, reject)
           }
-        })
+          await abortableDelay(2000, signal)
+          signal.throwIfAborted()
+          const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML')
+          const result = await this.parseService['1688Parse'](html)
+          signal.throwIfAborted()
+          finish(undefined, result)
+        })().catch((error) => finish(error))
+      }
+      this.windows.set(id, () => finish(new TaskCancelledError('1688 窗口已回收')))
+      signal.addEventListener('abort', abort, { once: true })
+      win.once('closed', closed)
+      win.webContents.once('render-process-gone', crashed)
+      ipcMain.on(channel, received)
+      void win
+        .loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
+        .then(() => this.startSearch(win, cover, signal))
+        .catch((error) => finish(error))
+    })
+  }
 
-        // 加载目标页面
-        win.loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
-
-        // 等待页面加载完成并增加延迟
-        await new Promise((res) => setTimeout(res, 2000))
-
-        // 执行图片上传和搜索逻辑
-        await win?.webContents?.executeJavaScript(`
+  private async startSearch(win: BrowserWindow, cover: string, signal: AbortSignal) {
+    await abortableDelay(2000, signal)
+    await win?.webContents?.executeJavaScript(`
           new Promise(async (resolve, reject) => {
             try {
               // 获取图片 Blob
@@ -200,18 +157,11 @@ export class WindowService {
             }
           });
         `)
-      } catch (error) {
-        log.error('1688图片搜索失败', error)
-        safeReject(error as Error, reject)
-      }
-    })
+    signal.throwIfAborted()
   }
 
-  /**
-   * 销毁实例
-   */
   destroy() {
-    this.windows.forEach((win) => win.cleanup())
-    this.windows = []
+    for (const cancel of [...this.windows.values()]) cancel()
+    this.windows.clear()
   }
 }

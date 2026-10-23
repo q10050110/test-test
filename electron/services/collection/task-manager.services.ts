@@ -1,26 +1,36 @@
-import { BrowserWindow } from 'electron'
-import { Collection } from './collection.services.js'
+import type { BrowserWindow } from 'electron'
+import { Collection, CollectionRunError } from './collection.services.js'
+import { collectionDependencies } from './collection-runtime.js'
+import { CollectionResultStore } from './collection-result-store.js'
+import type { CollectionResult, CollectionResultSummary } from './type.js'
+import { createHash } from 'node:crypto'
+import { TaskScope } from './task-scope.js'
 import log from '../../log/index.js'
 import request from '../../utils/request.js'
 import { Task } from './type.js'
 import { SysTemUtils } from '../../utils/system.js'
-import { memoryMonitor } from '../memory-monitor.services.js'
-import { autoUpGoods, autoSaveData } from './interface.services.js'
+import { autoUpGoods } from './interface.services.js'
 import { operationStore } from '../../store/index.js'
-import os from 'os'
 import { join } from 'path'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
 export class TaskManager {
   private static instance: TaskManager
   private tasks: Map<string, Collection> = new Map()
   private activeTasks: Set<string> = new Set()
+  private executions = new Map<string, Promise<void>>()
+  private stopping = false
+  private stopPromise?: Promise<void>
   private maxConcurrentTasks
   private taskQueue: string[] = []
   private mainWindow: BrowserWindow | null = null
-  private filePathList: Map<
-    string,
-    { filePath: string; progress: any; autoResult?: string; upGoodsList: any[], hasUpLimit: boolean }
-  > = new Map()
+  private filePathList = new Map<string, CollectionResultSummary>()
+  private get resultStore() {
+    const userId = String(operationStore.get('user')?._id || 'anonymous')
+    const owner = createHash('sha256').update(userId).digest('hex')
+    return new CollectionResultStore(
+      join(SysTemUtils.getAppInfo().userDataPath, 'collection-results', owner),
+    )
+  }
   private constructor() {
     this.maxConcurrentTasks = 4
   }
@@ -45,6 +55,7 @@ export class TaskManager {
    * 设置最大并发任务数
    */
   setMaxConcurrentTasks(max: number) {
+    if (!Number.isInteger(max) || max < 1) throw new Error('并发任务数必须为正整数')
     this.maxConcurrentTasks = max
     while (this.activeTasks.size < this.maxConcurrentTasks && this.taskQueue.length)
       this.processNextTask()
@@ -55,6 +66,14 @@ export class TaskManager {
   addTask(taskData: Task): Promise<string> {
     return new Promise(async (resolve, reject) => {
       let collection: Collection | null = null
+      if (
+        this.stopping ||
+        (taskData._id &&
+          (this.activeTasks.has(taskData._id) || this.taskQueue.includes(taskData._id)))
+      ) {
+        reject(new Error('任务仍在运行或回收中，请稍后再修改'))
+        return
+      }
 
       if (taskData._id) {
         try {
@@ -66,9 +85,11 @@ export class TaskManager {
               taskId: taskData._id,
             },
           })
+          await this.tasks.get(taskData._id)?.clearStatus()
           collection = new Collection(
             { ...response.data, _id: response.data.taskId },
             this.mainWindow!,
+            collectionDependencies,
           )
           this.tasks.set(collection.getTaskInfo()._id, collection)
         } catch (error) {
@@ -88,6 +109,7 @@ export class TaskManager {
           collection = new Collection(
             { ...response.data, _id: response.data.taskId },
             this.mainWindow!,
+            collectionDependencies,
           )
           this.tasks.set(collection.getTaskInfo()._id, collection)
         } catch (error) {
@@ -120,7 +142,8 @@ export class TaskManager {
           },
         })
         const newTaskData = { ...taskData, _id: response.data }
-        const collection = new Collection(newTaskData, this.mainWindow!)
+        const collection = new Collection(newTaskData, this.mainWindow!, collectionDependencies)
+        this.tasks.set(newTaskData._id, collection)
         const taskInfo = collection.getTaskInfo()
         resolve(taskInfo._id)
       } catch (error) {
@@ -132,85 +155,94 @@ export class TaskManager {
   /**
    * 开始执行任务
    */
-  startTaskById(taskId: string): Promise<boolean> {
-    this.refreshTaskQueue()
-    return new Promise(async (resolve, reject) => {
-      const task = this.tasks.get(taskId)
-      if (!task) {
-        reject('任务不存在')
-        return
-      }
-      // 检查任务是否允许重新执行
-      const taskInfo = task.getTaskInfo()
-      if (taskInfo.taskStatus === 'running') {
-        reject('任务已在运行中')
-        return
-      }
-
-      if (this.activeTasks.size < this.maxConcurrentTasks) {
-        this.executeTask(taskId)
-      } else {
-        task.updateStatus('pending')
-        task.outputLog('pending')
-        if (!this.taskQueue.includes(taskId)) this.taskQueue.push(taskId)
-      }
-      resolve(true)
-    })
+  async startTaskById(taskId: string): Promise<boolean> {
+    if (this.stopping) throw new Error('任务管理器正在停止')
+    const task = this.tasks.get(taskId)
+    if (!task) throw new Error('任务不存在')
+    if (this.activeTasks.has(taskId) || this.executions.has(taskId))
+      throw new Error('任务正在运行或回收中')
+    if (this.taskQueue.includes(taskId)) return true
+    if (this.activeTasks.size < this.maxConcurrentTasks) void this.executeTask(taskId)
+    else {
+      this.taskQueue.push(taskId)
+      await task.updateStatus('pending')
+      this.notifyTaskUpdate(taskId, 'pending')
+    }
+    return true
   }
 
   /**
    * 实际执行任务
    */
-  private async executeTask(taskId: string) {
+  private executeTask(taskId: string): Promise<void> {
+    const existing = this.executions.get(taskId)
+    if (existing) return existing
     const task = this.tasks.get(taskId)
-    if (!task) return
-
-    // 记录任务开始前的内存
-    memoryMonitor.trackBusinessMetrics({
-      taskCount: this.tasks.size,
-      activeTaskCount: this.activeTasks.size,
-      queueSize: this.taskQueue.length,
-    })
-
-    // 添加到活动任务并立即通知
+    if (!task || this.stopping) return Promise.resolve()
     this.activeTasks.add(taskId)
     this.notifyTaskUpdate(taskId, 'running')
-    try {
-      const result = await task.run()
-      if (task.getTaskInfo().taskStatus === 'completed')
-        this.mainWindow?.webContents.send('task-completed', {
-          message: `任务：${task.getTaskInfo().taskName}已完成`,
-        })
-      this.filePathList.set(taskId, JSON.parse(JSON.stringify(result)))
-    } catch (error) {
-      this.filePathList.set(taskId, JSON.parse(JSON.stringify(error)))
-    } finally {
-      // 任务完成后清理并通知
-      task.clearStatus(false, true)
-      this.activeTasks.delete(taskId)
-      this.notifyTaskUpdate(taskId, 'completed')
-      this.tasks.delete(taskId)
-      memoryMonitor.trackBusinessMetrics({
-        taskCount: this.tasks.size,
-        activeTaskCount: this.activeTasks.size,
-        queueSize: this.taskQueue.length,
-        filePathListSize: this.filePathList.size,
-      })
-      // 内存压力大时，触发GC
-      const usage = process.memoryUsage()
-      if (usage.heapUsed > 800 * 1024 * 1024) {
-        log.warn('[TaskManager] 内存压力大，触发 GC')
-        memoryMonitor.forceGC()
+    const store = this.resultStore
+    const execution = (async () => {
+      let result: CollectionResult | undefined
+      try {
+        result = await task.run()
+      } catch (error) {
+        if (error instanceof CollectionRunError) result = error.result
+        else log.error('采集任务异常退出:', error)
+      } finally {
+        try {
+          if (result) {
+            const scope = new TaskScope()
+            let summary: CollectionResultSummary
+            try {
+              summary = await scope.run(
+                (signal) => store.save(taskId, result!, signal),
+                30_000,
+                '保存任务结果',
+              )
+            } finally {
+              scope.stop()
+            }
+            this.filePathList.delete(taskId)
+            this.filePathList.set(taskId, summary)
+            // 商品数据在磁盘，摘要缓存也设上限。
+            while (this.filePathList.size > 200)
+              this.filePathList.delete(this.filePathList.keys().next().value!)
+          }
+        } catch (error) {
+          log.error('保存任务结果失败:', error)
+        } finally {
+          try {
+            await task.clearStatus()
+          } catch (error) {
+            log.error('清理任务失败:', error)
+          }
+          this.activeTasks.delete(taskId)
+          this.executions.delete(taskId)
+          const status = task.getTaskInfo().taskStatus
+          try {
+            this.notifyTaskUpdate(taskId, status)
+            if (status === 'completed' && this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send('task-completed', {
+                message: '任务：' + task.getTaskInfo().taskName + '已完成',
+              })
+            }
+          } finally {
+            this.tasks.delete(taskId)
+            if (!this.stopping) this.processNextTask()
+          }
+        }
       }
-      // 处理队列中的下一个任务
-      this.processNextTask()
-    }
+    })().catch((error) => log.error('任务回收失败:', error))
+    this.executions.set(taskId, execution)
+    return execution
   }
 
   /**
    * 处理下一个待执行任务
    */
   private async processNextTask() {
+    if (this.stopping) return
     if (this.taskQueue.length > 0 && this.activeTasks.size < this.maxConcurrentTasks) {
       const nextTaskId = this.taskQueue.shift()
       if (nextTaskId) {
@@ -224,14 +256,28 @@ export class TaskManager {
    */
   getTask(taskId: string) {
     const task = this.tasks.get(taskId)
-    return task ? task.getTaskInfo() : null
+    if (!task) return null
+    const snapshot = task.getTaskInfo()
+    // 状态同步或结果落盘仍在进行时，操作入口继续保持锁定。
+    if (this.activeTasks.has(taskId) || this.executions.has(taskId)) {
+      if (['completed', 'failed', 'cancelled'].includes(snapshot.taskStatus)) {
+        return {
+          ...snapshot,
+          phase:
+            snapshot.taskStatus === 'cancelled' ? ('stopping' as const) : ('cleaning' as const),
+        }
+      }
+    }
+    return snapshot
   }
 
-  /** 
+  /**
    * 获取活跃任务
-    */
+   */
   getActiveTasks() {
-    return Array.from(this.activeTasks.values()).map((task) => this.tasks.get(task)?.getTaskInfo()).filter(Boolean)
+    return Array.from(this.activeTasks.values())
+      .map((task) => this.getTask(task))
+      .filter(Boolean)
   }
   /**
    * 获取任务列表（包括状态）
@@ -239,7 +285,7 @@ export class TaskManager {
   getAllTasksList() {
     const taskList: Task[] = []
     for (const [_, collection] of this.tasks) {
-      taskList.push(collection.getTaskInfo())
+      taskList.push(this.getTask(collection.getTaskInfo()._id)!)
     }
     return taskList
   }
@@ -256,34 +302,22 @@ export class TaskManager {
       })
 
       for (let task of data.list) {
-        const copyTask = this.filePathList.get(task._id)
-        if (!this.tasks.has(task._id)) {
-          task.progress =
-            task.taskStatus !== 'pending'
-              ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
-              : { current: 0, total: 0, totalCount: 0 }
-          task.tableFilePath = copyTask?.filePath
-          task.autoResult = copyTask?.autoResult
-          task.hasUpLimit = copyTask?.hasUpLimit
-          /*           const collection = new Collection(task, this.mainWindow!)
-                    this.tasks.set(task._id, collection) */
-        } else {
-          const progress2 = JSON.parse(
-            JSON.stringify(this.tasks.get(task._id)?.getTaskInfo().progress) || '{}',
-          )
-          const filePath = this.tasks.get(task._id)?.getTaskInfo()?.tableFilePath
-          if (task.taskStatus === 'running' || task.taskStatus === 'pending') {
-            if (filePath && SysTemUtils.fileOperations.exists(filePath))
-              task.tableFilePath = filePath
-            task.progress = progress2
-          } else {
-            task.progress = copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
-            task.autoResult = copyTask?.autoResult
-            task.hasUpLimit = copyTask?.hasUpLimit
-            if (copyTask && SysTemUtils.fileOperations.exists(copyTask.filePath))
-              task.tableFilePath = copyTask.filePath
-          }
+        let copyTask = this.filePathList.get(task._id) || (await this.resultStore.summary(task._id))
+        copyTask = this.filePathList.get(task._id) || copyTask
+        const live = this.getTask(task._id)
+        if (live) {
+          Object.assign(task, live)
+          continue
         }
+        if (copyTask?.status) task.taskStatus = copyTask.status
+        task.phase = ['noExecuted', 'pending'].includes(task.taskStatus) ? 'idle' : task.taskStatus
+        task.progress =
+          task.taskStatus !== 'pending'
+            ? copyTask?.progress || { current: 0, total: 0, totalCount: 0 }
+            : { current: 0, total: 0, totalCount: 0 }
+        task.tableFilePath = copyTask?.filePath
+        task.autoResult = copyTask?.autoResult
+        task.hasUpLimit = copyTask?.hasUpLimit
         if (!task.tableFilePath) {
           const tableName = `${task.taskName}_${task._id}.xlsx`
           const filePath = join(excelDir, tableName)
@@ -300,7 +334,7 @@ export class TaskManager {
   /**
    * 取消任务
    */
-  cancelTask(taskId: string): Promise<boolean> {
+  cancelTask(taskId: string): Promise<Task> {
     return new Promise(async (resolve, reject) => {
       const task = this.tasks.get(taskId)
       if (!task) {
@@ -318,20 +352,21 @@ export class TaskManager {
         // 如果任务在执行中，调用取消方法
         if (this.activeTasks.has(taskId)) {
           await task.cancel()
-          this.activeTasks.delete(taskId)
+          await this.executions.get(taskId)
         } else {
           // 如果任务不在执行中，直接更新状态
-          task.updateStatus('cancelled')
+          await task.cancel()
           task.outputLog('取消任务')
+          this.tasks.delete(taskId)
         }
 
         // 通知状态更新
-        this.notifyTaskUpdate(taskId, 'cancelled')
+        this.notifyTaskUpdate(taskId, task.getTaskInfo().taskStatus, task.getTaskInfo())
 
         // 处理队列中的下一个任务
         this.processNextTask()
 
-        resolve(true)
+        resolve(task.getTaskInfo())
       } catch (error) {
         log.error('取消任务失败', error)
         reject(error)
@@ -342,32 +377,29 @@ export class TaskManager {
   /**
    * 重新执行已完成或失败的任务
    */
-  reExecuteTask(taskId: string): Promise<boolean> {
-    this.refreshTaskQueue()
-    return new Promise(async (resolve, reject) => {
-      const task = this.tasks.get(taskId)
-
-      if (!task) return reject('任务不存在')
-
-      const taskInfo = task!.getTaskInfo()
-      // 只有已完成、失败或已取消的任务才能重新执行
-      if (['completed', 'failed', 'cancelled'].includes(taskInfo.taskStatus)) {
-        // 立即更新状态并通知
-        if (this.activeTasks.size < this.maxConcurrentTasks) {
-          this.executeTask(taskId)
-        } else {
-          if (this.taskQueue.includes(taskId)) return
-          task.updateStatus('pending')
-          task.outputLog('pending')
-          this.filePathList.delete(taskId)
-          this.taskQueue.push(taskId)
-        }
-        resolve(true)
-      } else {
-        reject('任务状态不允许重新执行')
-      }
-      resolve(true)
-    })
+  async reExecuteTask(taskId: string): Promise<boolean> {
+    if (this.stopping || this.activeTasks.has(taskId) || this.executions.has(taskId))
+      throw new Error('任务正在运行或回收中')
+    let current = this.tasks.get(taskId)
+    const info: Task =
+      current?.getTaskInfo() ||
+      (
+        await request({
+          url: '/api/auto/autoTask/getTaskById',
+          method: 'post',
+          data: { taskId },
+        })
+      ).data
+    if (!info || !['completed', 'failed', 'cancelled'].includes(info.taskStatus))
+      throw new Error('当前任务状态不允许重新执行')
+    // 重新执行必须使用新的状态机和取消作用域。
+    if (!current || current.getPhase() !== 'idle') {
+      await current?.clearStatus()
+      current = new Collection({ ...info, _id: taskId }, this.mainWindow!, collectionDependencies)
+      this.tasks.set(taskId, current)
+    }
+    this.filePathList.delete(taskId)
+    return this.startTaskById(taskId)
   }
 
   /**
@@ -388,6 +420,10 @@ export class TaskManager {
           method: 'post',
           data: { taskId: id },
         })
+
+        if (task) await this.cancelTask(id)
+        this.filePathList.delete(id)
+        await this.resultStore.remove(id)
 
         successCount++
 
@@ -413,12 +449,16 @@ export class TaskManager {
   /**
    * 通知任务状态更新
    */
-  private notifyTaskUpdate(taskId: string, status: string) {
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const task = this.getTask(taskId)
-      if (task) {
-        this.mainWindow.webContents.send('task-status-update', { task, status })
+  private notifyTaskUpdate(taskId: string, status: string, fallback?: Task) {
+    try {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        const task = this.getTask(taskId) || fallback
+        if (task) {
+          this.mainWindow.webContents.send('task-status-update', { task, status })
+        }
       }
+    } catch (error) {
+      log.warn('通知任务状态失败:', error)
     }
   }
 
@@ -438,6 +478,9 @@ export class TaskManager {
       for (const id of taskIds) {
         const task = this.tasks.get(id)
         const task2 = this.filePathList.get(id)
+        if (task) await this.cancelTask(id)
+        this.filePathList.delete(id)
+        await this.resultStore.remove(id)
         if (!task && !task2) continue
 
         try {
@@ -467,65 +510,42 @@ export class TaskManager {
 
   // 刷新队列
   refreshTaskQueue() {
-    if (this.activeTasks.size) {
-      for (const taskId of this.activeTasks) {
-        const task = this.tasks.get(taskId)
-        if (task && task.getTaskInfo().taskStatus !== 'running') {
-          this.activeTasks.delete(taskId)
-        }
-      }
-      this.processNextTask()
-    }
+    // 并发名额仅在 executeTask 的 finally 中释放，状态变化不等于资源已回收。
+    this.processNextTask()
   }
 
   /**
    * 终止所有任务（切换登录时调用）
    */
-  async stopAllTasks(): Promise<void> {
-    // 首先清空任务队列
+  stopAllTasks(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise
+    this.stopping = true
     this.taskQueue = []
-
-    // 取消所有活跃任务
-    for (const taskId of [...this.activeTasks]) {
-      // 使用副本避免迭代时修改
+    this.stopPromise = (async () => {
       try {
-        await this.cancelTask(taskId)
+        await Promise.allSettled([...this.tasks.values()].map((task) => task.cancel()))
+        await Promise.allSettled([...this.executions.values()])
+        await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
       } catch (error) {
-        log.error(`取消活跃任务 ${taskId} 失败:`, error)
+        log.error('重置任务状态失败:', error)
+      } finally {
+        this.tasks.clear()
+        this.activeTasks.clear()
+        this.executions.clear()
+        this.filePathList.clear()
+        this.stopping = false
+        this.stopPromise = undefined
       }
-    }
-
-    try {
-      await request({ url: '/api/auto/autoTask/resetStatus', method: 'post', data: {} })
-    } catch (error) {
-      log.error('重置任务状态失败:', error)
-    }
-    this.tasks.clear()
-    this.filePathList.clear()
+    })()
+    return this.stopPromise
   }
 
-  // 上架
   async upGoods(task: Task) {
-    const result = this.filePathList.get(task._id)
-    if (!result) return Promise.reject('任务不存在')
+    const result = this.filePathList.get(task._id) || (await this.resultStore.summary(task._id))
+    if (!result) throw new Error('任务不存在')
     const data = new Map()
-    result.upGoodsList.forEach((item: any) => data.set(item.id, item))
+    const goods = await this.resultStore.goods(task._id)
+    goods.forEach((item: any) => data.set(item.id, item))
     return autoUpGoods(task, data)
   }
-
-  // 保存数据
-  /*   async saveData(list: any[]) {
-      const taskList = operationStore.get('taskList') || []
-      for (const item of list) {
-        const localData = operationStore.get(item)
-        if (localData) {
-          const code = await autoSaveData({ taskId: item, datas: localData.taskData })
-          if (!code) {
-            operationStore.delete(item)
-            taskList.splice(taskList.indexOf(item), 1)
-            operationStore.set('taskList', taskList)
-          }
-        }
-      }
-    } */
 }

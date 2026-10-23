@@ -28,6 +28,13 @@ import feedback from '@/utils/feedback'
 import cLogTab from '@/components/c-log-tab.vue'
 import dayjs from 'dayjs'
 import { useTableHeight } from '@/hooks'
+import {
+  taskStatusOptions,
+  getTaskViewStatus,
+  isTaskBusy,
+  isTaskClosing,
+  type TaskViewState,
+} from './task-state'
 const { check } = useVipCheck()
 // 表单参数
 const initParams = ref({
@@ -38,38 +45,14 @@ const initParams = ref({
 })
 const params = ref({ ...initParams.value })
 
-const taskStatusList = ref([
-  {
-    label: '未执行',
-    value: 'noExecuted',
-    color: '',
-  },
-  {
-    label: '待执行',
-    value: 'pending',
-    color: 'warning',
-  },
-  {
-    label: '执行中',
-    value: 'running',
-    color: 'processing',
-  },
-  {
-    label: '已完成',
-    value: 'completed',
-    color: 'success',
-  },
-  {
-    label: '失败',
-    value: 'failed',
-    color: 'error',
-  },
-  {
-    label: '取消',
-    value: 'cancelled',
-    color: 'warning',
-  },
-])
+const taskStatusList = ref(taskStatusOptions)
+// 本地请求标记只负责点击后的即时反馈，最终结果由主进程确认。
+const cancellingTaskIds = ref(new Set<string>())
+const isCancelRequested = (task: TaskViewState) =>
+  !!task._id && cancellingTaskIds.value.has(task._id)
+const taskClosing = (task: TaskViewState) => isTaskClosing(task, isCancelRequested(task))
+const taskBusy = (task: TaskViewState) => isTaskBusy(task, isCancelRequested(task))
+const taskViewStatus = (task: TaskViewState) => getTaskViewStatus(task, isCancelRequested(task))
 // 任务队列数量
 const taskQueueCount = ref(4)
 const taskNumberList = [4, 6, 8, 12]
@@ -144,6 +127,7 @@ const pageChange = (page: number, pageSize: number) => {
 let startTimer: number | undefined = undefined
 const taskId = ref()
 const startTask = async (task: Task, isThrottle = false) => {
+  if (taskBusy(task)) return feedback.warning('任务正在执行或结束中，请稍候')
   const { data: countData } = await window.electronAPI.invoke<
     Response<{ remain_day_pick_count: number }>
   >('get-today-balance', {})
@@ -156,7 +140,7 @@ const startTask = async (task: Task, isThrottle = false) => {
       startTimer = undefined
     }, 3000)
   }
-  const data = toRaw(task)
+  const { phase, ...data } = toRaw(task)
   if (data.progress) data.progress = toRaw(data.progress)
   const { code, message } = await window.electronAPI.invoke<any>('collection-create-and-start', {
     data,
@@ -179,10 +163,7 @@ const batchStartHandle = async () => {
     return
   }
   const isRunning = selectData.value.some((taskId) =>
-    tableData.value?.some(
-      (task) =>
-        task._id === taskId && (task.taskStatus === 'running' || task.taskStatus === 'pending'),
-    ),
+    tableData.value?.some((task) => task._id === taskId && taskBusy(task)),
   )
   if (isRunning) return feedback.error('当前选中的任务中存在执行的任务，请稍后重试')
   isStart.value = true
@@ -216,11 +197,25 @@ const copyHandle = async (task: Task) => {
 }
 // 取消任务
 const cancelTask = async (taskId: string) => {
-  const { code, message } = await window.electronAPI.invoke<any>('collection-cancel-task', taskId)
-  if (code === 200) return feedback.success('取消任务成功')
-  const obj = tableData.value?.find((item) => item._id === taskId)
-  if (obj) obj.taskStatus = 'cancelled'
-  feedback.error(message)
+  const task = tableData.value?.find((item) => item._id === taskId)
+  if (!task || taskClosing(task)) return
+  cancellingTaskIds.value.add(taskId)
+  try {
+    const { code, message, data } = await window.electronAPI.invoke<Response<Task>>(
+      'collection-cancel-task',
+      taskId,
+    )
+    if (code !== 200) {
+      feedback.error(message)
+      return
+    }
+    getTaskStatus({ task: data })
+    feedback.success(data.taskStatus === 'cancelled' ? '任务已终止' : '任务已结束')
+  } catch (error) {
+    feedback.error(error instanceof Error ? error.message : '终止任务失败，请重试')
+  } finally {
+    cancellingTaskIds.value.delete(taskId)
+  }
 }
 // 批量删除任务
 const deleteTask = async () => {
@@ -228,7 +223,7 @@ const deleteTask = async () => {
     return feedback.error('请选择要删除的任务！')
   const isAlive = tableData.value
     .filter((item) => selectData.value?.includes(item._id!))
-    .some((task) => task.taskStatus === 'running' || task.taskStatus === 'pending')
+    .some(taskBusy)
   if (isAlive) return feedback.error('请将执行、待执行的任务终止后，在删除！')
   const res = await feedback.confirm('确定要删除吗，删除以后数据不可再恢复？')
   if (!res) return
@@ -250,6 +245,13 @@ const getProgress = async (data?: any) => {
   let obj = tableData.value?.find((item) => item._id === collectionTask._id)
   if (obj) Object.assign(obj, collectionTask)
   tabsRef.value?.writeLog(collectionTask._id, log)
+}
+// 列表行也订阅状态事件，不能只依赖进度日志或刷新接口。
+const getTaskStatus = (data?: { task?: Task; status?: Task['taskStatus'] }) => {
+  const task = data?.task
+  if (!task?._id) return
+  const row = tableData.value?.find((item) => item._id === task._id)
+  if (row) Object.assign(row, task, data?.status ? { taskStatus: data.status } : {})
 }
 
 // 获取分类列表
@@ -317,6 +319,7 @@ const upGoods = async (task: Task) => {
 // 新建任务
 const dialogRef = ref<InstanceType<typeof TaskDialog>>()
 const openTaskDialogHandle = async (data?: Task, parentCategoryId?: number, category?: number) => {
+  if (data && taskBusy(data)) return feedback.warning('任务正在执行或结束中，请稍候')
   await nextTick()
   if (data?._id && dialogRef.value) {
     if (data.isUseAutoUpGoods) dialogRef.value.mode = data.upDataConfigId ? false : true
@@ -377,11 +380,12 @@ const getRunningTask = async () => {
   }
 }
 onMounted(async () => {
+  window.electronAPI.on('task-progress', getProgress)
+  window.electronAPI.on('task-status-update', getTaskStatus)
+  window.electronAPI.on('refresh-task-list', refreshTaskList)
   getRunningTask()
   await getCategoryList()
   taskQueueCount.value = await window.electronAPI.invoke('get-current-task-count', {})
-  window.electronAPI.on('task-progress', getProgress)
-  window.electronAPI.on('refresh-task-list', refreshTaskList)
   const parentCategoryId = Number(route.query.parentCategoryId)
   const categoryId = Number(route.query.categoryId)
   if (categoryId) openTaskDialogHandle(undefined, parentCategoryId as number, categoryId as number)
@@ -389,6 +393,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.electronAPI.off('task-progress', getProgress)
+  window.electronAPI.off('task-status-update', getTaskStatus)
   window.electronAPI.off('refresh-task-list', refreshTaskList)
 })
 </script>
@@ -483,14 +488,12 @@ onUnmounted(() => {
                 <div>最近执行：{{ formatDate(record.lastRunningTime) }}</div>
               </template>
               <template v-if="column.key === 'status'">
-                <a-tag
-                  :color="taskStatusList.find((item) => item.value === record.taskStatus)?.color"
-                >
-                  {{
-                    taskStatusList.find((item) => item.value === record.taskStatus)?.label ||
-                    '未执行'
-                  }}
+                <a-tag :color="taskViewStatus(record).color">
+                  {{ taskViewStatus(record).label }}
                 </a-tag>
+                <div v-if="taskClosing(record)" style="color: #8c8c8c; font-size: 12px">
+                  正在结束处理，请稍候
+                </div>
                 <div
                   v-if="record.taskStatus === 'failed' && record.hasUpLimit"
                   style="color: #ff4d4f"
@@ -516,26 +519,28 @@ onUnmounted(() => {
                 <a-button
                   type="link"
                   :icon="h(CaretRightOutlined)"
-                  v-if="record.taskStatus !== 'running' && record.taskStatus !== 'pending'"
+                  v-if="!taskBusy(record)"
                   @click="check(() => startTask(record as Task, true))"
                   >开始</a-button
                 >
                 <a-button
                   type="link"
-                  v-if="record.taskStatus === 'running' || record.taskStatus == 'pending'"
+                  v-if="taskBusy(record)"
                   :icon="h(PauseCircleFilled)"
+                  :loading="taskClosing(record)"
+                  :disabled="taskClosing(record)"
                   @click="cancelTask(record._id)"
-                  >终止</a-button
+                  >{{ taskClosing(record) ? taskViewStatus(record).label : '终止' }}</a-button
                 >
                 <a-tooltip placement="topRight">
                   <template #title>
-                    <span>任务执行中不允许编辑</span>
+                    <span>任务执行或结束过程中不允许编辑</span>
                   </template>
                   <a-button
                     type="link"
                     :icon="h(EditOutlined)"
                     @click="openTaskDialogHandle(record as Task)"
-                    :disabled="record.taskStatus === 'running'"
+                    :disabled="taskBusy(record)"
                     >编辑</a-button
                   >
                 </a-tooltip>
@@ -582,8 +587,7 @@ onUnmounted(() => {
                       record?.autoResult === 'success' ||
                       !record?.tableFilePath ||
                       record?.taskStatus === 'noExecuted' ||
-                      record?.taskStatus === 'running' ||
-                      record?.taskStatus === 'pending'
+                      taskBusy(record)
                     "
                     @click="upGoods(record as Task)"
                     >上架</a-button

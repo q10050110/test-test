@@ -18,6 +18,7 @@
     "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "type-check": "vue-tsc --build",
+    "test:collection": "tsx --test tests/collection/*.test.ts",
     "format": "prettier --write src/ electron/"
   },
   "dependencies": {
