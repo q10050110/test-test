@@ -3,7 +3,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { ParseService } from './parse.services.js'
-import { TaskCancelledError, TaskScope, abortableDelay } from './task-scope.js'
+import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
 const directory = path.dirname(fileURLToPath(import.meta.url))
 
 export class WindowService {

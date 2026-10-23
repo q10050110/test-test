@@ -6,13 +6,13 @@ import {
   CollectionRunError,
   type CollectionDependencies,
 } from '../../electron/services/collection/collection.services.js'
-import { createCollectionActor } from '../../electron/services/collection/collection-machine.js'
+import { createCollectionActor } from '../../electron/services/collection/collection-machine.services.js'
 import {
   TaskScope,
   TaskCancelledError,
   TaskTimeoutError,
-} from '../../electron/services/collection/task-scope.js'
-import { TaskQueueService } from '../../electron/services/collection/task-queue.services.js'
+} from '../../electron/services/common/task-scope.services.js'
+import { TaskQueueService } from '../../electron/services/common/task-queue.services.js'
 import type { Task } from '../../electron/services/collection/type.js'
 
 function fixture(options: Partial<Task> = {}) {

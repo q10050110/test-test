@@ -19,6 +19,7 @@
     "preview": "vite preview",
     "type-check": "vue-tsc --build",
     "test:collection": "tsx --test tests/collection/*.test.ts",
+    "test:inspection": "tsx --test tests/inspection/*.test.ts",
     "format": "prettier --write src/ electron/"
   },
   "dependencies": {

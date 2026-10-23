@@ -65,7 +65,7 @@ export const inspectionIpc = (window: BrowserWindow) => {
   // 执行任务
   ipcMain.handle('inspection-execute-task', async (event, task: Inspection) => {
     try {
-      taskManager.executeTask(task)
+      await taskManager.executeTask(task)
       return { data: null, code: 0, message: '任务执行成功' }
     } catch (error) {
       return { data: null, code: 500, message: '系统错误' }
@@ -74,8 +74,8 @@ export const inspectionIpc = (window: BrowserWindow) => {
   // 停止任务
   ipcMain.handle('inspection-stop-task', async (event, task: Inspection) => {
     try {
-      taskManager.stopTask(task)
-      return { data: null, code: 0, message: '任务停止成功' }
+      const data = await taskManager.stopTask(task)
+      return { data, code: 0, message: '任务停止成功' }
     } catch (error) {
       console.log(error, '出啥错误了')
       return { data: null, code: 500, message: '系统错误' }
@@ -133,6 +133,7 @@ export const inspectionIpc = (window: BrowserWindow) => {
   ipcMain.handle('set-max-concurrent-inspection-task-count', (event, count: number) => {
     taskManager.setConcurrency(count)
   })
+  ipcMain.handle('get-current-inspection-task-count', () => taskManager.getConcurrency())
 
   // 获取今日剩余额度
   ipcMain.handle('get-today-balance', async () => {

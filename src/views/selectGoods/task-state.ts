@@ -1,5 +1,5 @@
 import type { Task } from '@/types/selectGoods'
-export type TaskViewState = Pick<Task, '_id' | 'taskStatus' | 'phase'>
+export type TaskViewState = Pick<Task, '_id' | 'taskStatus' | 'phase' | 'verification'>
 
 export const taskStatusOptions = [
   { label: '未执行', value: 'noExecuted', color: '' },
@@ -25,6 +25,12 @@ export function isTaskBusy(task: TaskViewState, cancelRequested = false) {
 export function getTaskViewStatus(task: TaskViewState, cancelRequested = false) {
   if (cancelRequested || task.phase === 'stopping') return { label: '终止中', color: 'processing' }
   if (task.phase === 'cleaning') return { label: '收尾中', color: 'processing' }
+  if (task.taskStatus === 'running') {
+    const verification = task.verification
+    if (verification?.phase === 'waiting') return { label: '等待验证', color: 'processing' }
+    if (verification?.phase === 'verifying') return { label: `验证中（${verification.attempt ?? 1}/3）`, color: 'processing' }
+    if (verification?.phase === 'retrying') return { label: '恢复请求中', color: 'processing' }
+  }
   return (
     taskStatusOptions.find((option) => option.value === task.taskStatus) || taskStatusOptions[0]!
   )

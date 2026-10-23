@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import log from '../log/index.js'
+import log from '../../log/index.js'
 
 /**
  * 内存监控服务

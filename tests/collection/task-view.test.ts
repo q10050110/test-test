@@ -54,3 +54,16 @@ test('a rejected cancellation request restores the original state instead of rep
   assert.equal(getTaskViewStatus(row, false).label, '执行中')
   assert.equal(row.taskStatus, 'running')
 })
+
+test('verification is visible while running and never overrides stopping or cleaning', () => {
+  const row = task({ verification: { phase: 'verifying', attempt: 3 } })
+  assert.equal(getTaskViewStatus(row).label, '验证中（3/3）')
+  assert.equal(isTaskBusy(row), true)
+  assert.equal(isTaskClosing(row), false)
+  assert.equal(getTaskViewStatus(row, true).label, '终止中')
+  row.phase = 'cleaning'
+  assert.equal(getTaskViewStatus(row).label, '收尾中')
+  row.phase = 'collecting'
+  row.verification = { phase: 'ready' }
+  assert.equal(getTaskViewStatus(row).label, '执行中')
+})

@@ -1,272 +1,198 @@
-
-import { createTaskAPI, getTaskListAPI, updateTaskAPI, deleteTaskAPI, getInspectionDetailAPI, getGoodsDetailAPI, getShopListAPI, getTimerTaskListAPI, getTodayBalanceAPI } from "./api.js"
-import { InspectionList, TaskParams, UpdateTaskParams, Inspection, InspectionDetailParams, InspectionDetailList, GoodsDetailParams, GoodsDetail, ShopList } from './type'
-import { InterfaceResult, PageParams } from '../../types/index'
-import PQueue from 'p-queue'
+import * as api from './api.services.js'
+import type { Inspection, TaskParams, UpdateTaskParams, InspectionDetailParams, GoodsDetailParams } from './type.js'
+import type { PageParams } from '../../types/index.js'
 import { InspectionServices } from './index.services.js'
-import { BrowserWindow } from 'electron'
-import { CronServices } from '../cron.services.js'
+import { inspectionDependencies } from './inspection-runtime.services.js'
+import type { BrowserWindow } from 'electron'
+import { CronServices } from '../common/cron.services.js'
+import { TaskScope } from '../common/task-scope.services.js'
+import log from '../../log/index.js'
+
+interface ManagerDependencies {
+  api: typeof api
+  createTask(task: Inspection, window: BrowserWindow | null): InspectionServices
+  cron: Pick<CronServices, 'register' | 'delete'>
+}
+
 export class TaskManager {
   private static instance: TaskManager
-  private queue: PQueue
-  private runningTasks = new Map<string, any>()
+  private readonly tasks = new Map<string, InspectionServices>()
+  private readonly executions = new Map<string, Promise<void>>()
+  private readonly results = new Map<string, Inspection>()
+  private readonly cronIds = new Set<string>()
+  private queue: string[] = []
   private mainWindow: BrowserWindow | null = null
-  private cronServices: CronServices
   private concurrency = 4
-  constructor() {
-    this.queue = new PQueue({ concurrency: this.concurrency })
-    this.cronServices = CronServices.getInstance()
-  }
+  private stopping = false
+  private generation = 0
+  private stopPromise?: Promise<void>
+  constructor(private readonly deps: ManagerDependencies = {
+    api, createTask: (task, window) => new InspectionServices(task, window, inspectionDependencies), cron: CronServices.getInstance(),
+  }) {}
 
-  // 设置并发数
-  public setConcurrency = (concurrency: number) => {
+  static getInstance() { return this.instance ??= new TaskManager() }
+  setMainWindow(window: BrowserWindow) { this.mainWindow = window }
+  setConcurrency(concurrency: number) {
+    if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('巡查并发数必须为正整数')
     this.concurrency = concurrency
-    this.queue.concurrency = concurrency
-    console.log('设置并发数:', concurrency)
+    this.pump()
   }
+  getConcurrency() { return this.concurrency }
 
-  public static getInstance(): TaskManager {
-    if (!TaskManager.instance) {
-      TaskManager.instance = new TaskManager()
+  async getTaskList(params: PageParams) {
+    const response = await this.deps.api.getTaskListAPI(params)
+    if (response.code === 0) response.data.list = response.data.list.map(task => ({ ...task, ...(this.getTask(task._id) ?? this.results.get(task._id)) }))
+    return response
+  }
+  async getRunningTaskList() { return { code: 0, data: [...this.tasks.keys()].map(id => this.getTask(id)!), message: '获取成功' } }
+  getCronTaskList() { return this.deps.api.getTimerTaskListAPI() }
+  getTask(taskId: string): Inspection | null {
+    const info = this.tasks.get(taskId)?.getTaskInfo()
+    if (!info) return null
+    if (this.executions.has(taskId) && ['completed', 'failed', 'cancelled'].includes(info.status))
+      return { ...info, phase: info.status === 'cancelled' ? 'stopping' : 'cleaning' }
+    return info
+  }
+  async createTask(params: TaskParams) {
+    const generation = this.generation
+    const response = await this.deps.api.createTaskAPI(params)
+    if (response.code === 0 && generation === this.generation) this.schedule(response.data)
+    return response
+  }
+  async updateTask(params: UpdateTaskParams) {
+    const generation = this.generation
+    if (this.tasks.has(params.taskId)) throw new Error('任务正在运行、排队或回收中')
+    const response = await this.deps.api.updateTaskAPI(params)
+    if (response.code === 0 && generation === this.generation) { this.results.delete(params.taskId); this.schedule(response.data) }
+    return response
+  }
+  async deleteTask(params: { taskIds: string[] }) {
+    for (const id of params.taskIds) {
+      const task = this.getTask(id)
+      if (task) await this.stopTask(task)
     }
-    return TaskManager.instance
+    const response = await this.deps.api.deleteTaskAPI(params)
+    if (response.code === 0) for (const id of params.taskIds) {
+      this.deps.cron.delete(id)
+      this.cronIds.delete(id)
+      this.results.delete(id)
+    }
+    return response
+  }
+  private schedule(task: Inspection) {
+    if (this.stopping) return
+    if (task.executionMethod !== 'AUTO') { this.deps.cron.delete(task._id); this.cronIds.delete(task._id); return }
+    const match = String(task.autoExecutionTime).match(/^(\d{1,2}):(\d{2})$/)
+    if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) throw new Error('巡查定时时间格式应为 HH:mm')
+    const generation = this.generation
+    this.deps.cron.register({ name: task._id, expression: `${Number(match[2])} ${Number(match[1])} * * *`, handler: async () => {
+      try { if (generation === this.generation) await this.executeTask(task) }
+      catch (error) { log.error('定时巡查启动失败:', error) }
+    } })
+    this.cronIds.add(task._id)
+  }
+  async restoreScheduledTasks() {
+    const generation = this.generation
+    const response = await this.getCronTaskList()
+    if (response.code !== 0 || this.stopping || generation !== this.generation) return
+    for (const task of response.data) {
+      try { this.schedule(task) } catch (error) { log.error('恢复巡查定时任务失败:', error) }
+    }
   }
 
-  setMainWindow(window: BrowserWindow) {
-    this.mainWindow = window
+  /** 先登记再调度，重复点击或定时触发不能绕过本地去重。满额进入等待队列。 */
+  async executeTask(info: Inspection) {
+    if (this.stopping) throw new Error('巡查管理器正在停止')
+    if (this.tasks.has(info._id)) return false
+    const task = this.deps.createTask({ ...info }, this.mainWindow)
+    this.tasks.set(info._id, task)
+    this.results.delete(info._id)
+    task.markPending()
+    this.queue.push(info._id)
+    this.notify(info._id)
+    this.pump()
+    return true
   }
-
-  // 获取任务列表
-  getTaskList(params: PageParams): Promise<InterfaceResult<InspectionList>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await getTaskListAPI(params)
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
-  // 获取执行任务列表
-  getRunningTaskList(): Promise<InterfaceResult<Inspection[]>> {
-    return new Promise(async (resolve, reject) => {
-      resolve({
-        code: 0,
-        data: [...this.runningTasks.values()].map(item => item.getTaskInfo()),
-        message: '获取成功'
+  private pump() {
+    while (!this.stopping && this.executions.size < this.concurrency && this.queue.length) {
+      const id = this.queue.shift()!
+      const task = this.tasks.get(id)
+      if (!task) continue
+      const execution = Promise.resolve().then(async () => {
+        const running = task.start()
+        this.notify(id)
+        await running
+      }).catch(error => log.warn('巡查执行结束:', error)).finally(async () => {
+        try { await task.stopTask() }
+        catch (error) { log.error('巡查兜底清理失败:', error) }
+        finally {
+          const info = task.getTaskInfo()
+          this.executions.delete(id)
+          this.tasks.delete(id)
+          this.remember(info)
+          this.notify(id, info)
+          this.pump()
+        }
       })
-    })
+      this.executions.set(id, execution)
+    }
   }
-  // 获取定时任务列表
-  getCronTaskList(): Promise<InterfaceResult<Inspection[]>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await getTimerTaskListAPI()
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
-
-  // 创建任务
-  createTask(params: TaskParams): Promise<InterfaceResult<Inspection>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await createTaskAPI(params)
-        if (!code) {
-          if (data.executionMethod === 'AUTO') {
-            const [hours, minutes] = data.autoExecutionTime.split(':').map(Number);
-            const expression = `${minutes} ${hours} * * *`
-            this.cronServices.register({
-              name: data._id,
-              expression,
-              handler: async () => {
-                await this.executeTask(data)
-              }
-            })
-          } else {
-            this.cronServices.delete(data._id)
-          }
-        }
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
-
-  // 编辑任务
-  updateTask(params: UpdateTaskParams): Promise<InterfaceResult<Inspection>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await updateTaskAPI(params)
-        if (!code) {
-          if (data.executionMethod === 'AUTO') {
-            const [hours, minutes] = data.autoExecutionTime.split(':').map(Number);
-            const expression = `${minutes} ${hours} * * *`
-            this.cronServices.register({
-              name: data._id,
-              expression,
-              handler: async () => {
-                await this.executeTask(data)
-              }
-            })
-          } else {
-            this.cronServices.delete(data._id)
-          }
-        }
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
-
-  // 删除任务
-  deleteTask(params: { taskIds: string[] }): Promise<InterfaceResult<string>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await deleteTaskAPI(params)
-        this.cronServices.delete(params.taskIds[0])
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
-
-  // 执行任务
-  async executeTask(task: Inspection) {
-    const { data } = await this.getRunningTaskList()
-    if (data.length >= this.concurrency || data.find(item => item._id === task._id)) return
-    this.queue.add(async () => {
-      const inspection = new InspectionServices(task, this.mainWindow!)
-      const taskInfo = inspection.getTaskInfo()
-      this.runningTasks.set(task._id, inspection)
-      this.notifyTaskUpdate(task._id, 'running')
-      try {
-        await inspection.start()
-      } catch (error) { }
-      this.notifyTaskUpdate(task._id, taskInfo.status)
-      this.runningTasks.delete(task._id)
-    })
-  }
-
-  // 停止任务
-  async stopTask(data: Inspection) {
-    const task = this.runningTasks.get(data._id)
+  async stopTask(info: Inspection): Promise<Inspection> {
+    const task = this.tasks.get(info._id)
+    this.queue = this.queue.filter(id => id !== info._id)
+    let final: Inspection
     if (task) {
       await task.stopTask()
+      await this.executions.get(info._id)
+      final = task.getTaskInfo()
+      this.tasks.delete(info._id)
     } else {
-      const inspection = new InspectionServices(data, this.mainWindow!)
-      this.notifyTaskUpdate(data._id, 'cancelled')
+      const scope = new TaskScope()
       try {
-        await inspection.stopTask()
-      } catch (error) {
-
-      }
+        const response = await scope.run(signal => this.deps.api.updateTaskStatusAPI({ taskId: info._id, status: 'cancelled' }, signal), 5000, '取消未运行巡查')
+        if (response.code !== 0) throw new Error(response.message)
+      } finally { scope.stop() }
+      final = { ...info, status: 'cancelled', phase: 'cancelled' }
     }
+    this.remember(final)
+    this.notify(info._id, final)
+    this.pump()
+    return final
   }
-  /**
-   * 获取任务信息
-   */
-  getTask(taskId: string) {
-    const task = this.runningTasks.get(taskId)
-    return task ? task.getTaskInfo() : null
-  }
-  // 通知视图更新
-  private notifyTaskUpdate(taskId: string, status: string) {
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const task = this.getTask(taskId)
-      if (task) {
-        this.mainWindow.webContents.send('inspection-task-status-update', { task, status })
-      }
-    }
-  }
-
-
-  // 获取商品列表
-  getGoodsList(params: InspectionDetailParams): Promise<InterfaceResult<InspectionDetailList>> {
-    return new Promise(async (resolve, reject) => {
+  stopAllTasks(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise
+    this.stopping = true
+    this.generation++
+    this.queue = []
+    this.stopPromise = (async () => {
       try {
-        const { data, code, message } = await getInspectionDetailAPI(params)
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
+        for (const id of this.cronIds) {
+          try { this.deps.cron.delete(id) } catch (error) { log.error('停止巡查定时器失败:', error) }
+        }
+        this.cronIds.clear()
+        await Promise.allSettled([...this.tasks.values()].map(task => task.stopTask()))
+        await Promise.allSettled([...this.executions.values()])
+        for (const [id, task] of this.tasks) this.notify(id, task.getTaskInfo())
+      } finally {
+        this.tasks.clear(); this.executions.clear(); this.results.clear()
+        this.stopping = false; this.stopPromise = undefined
       }
-    })
+    })()
+    return this.stopPromise
   }
-
-  // 获取商品详情
-  getGoodsDetail(params: GoodsDetailParams): Promise<InterfaceResult<GoodsDetail>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await getGoodsDetailAPI(params)
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
+  private remember(info: Inspection) {
+    this.results.delete(info._id); this.results.set(info._id, info)
+    while (this.results.size > 200) this.results.delete(this.results.keys().next().value!)
   }
-
-  // 获取店铺列表
-  getShopList(params: PageParams): Promise<InterfaceResult<ShopList>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await getShopListAPI(params)
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
+  private notify(id: string, fallback?: Inspection) {
+    try {
+      const task = this.getTask(id) ?? fallback
+      if (task && this.mainWindow && !this.mainWindow.isDestroyed())
+        this.mainWindow.webContents.send('inspection-task-status-update', { task, status: task.status })
+    } catch (error) { log.warn('通知巡查状态失败:', error) }
   }
-
-  // 获取今日剩余额度
-  getTodayBalance(): Promise<InterfaceResult<{ remain_day_pick_count: number }>> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { data, code, message } = await getTodayBalanceAPI()
-        resolve({
-          code,
-          data,
-          message
-        })
-      } catch (error) {
-        reject({ code: 500, data: null, message: error })
-      }
-    })
-  }
+  getGoodsList(params: InspectionDetailParams) { return this.deps.api.getInspectionDetailAPI(params) }
+  getGoodsDetail(params: GoodsDetailParams) { return this.deps.api.getGoodsDetailAPI(params) }
+  getShopList(params: PageParams) { return this.deps.api.getShopListAPI(params) }
+  getTodayBalance() { return this.deps.api.getTodayBalanceAPI() }
 }

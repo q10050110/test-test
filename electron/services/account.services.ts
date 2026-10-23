@@ -65,7 +65,11 @@ export const logout = async () => {
     const taskInExecution = TaskManager.getInstance()
       .getAllTasksList()
       .some((item) => item.taskStatus !== 'noExecuted')
-    if (taskInExecution) await TaskManager.getInstance().stopAllTasks()
+    const { TaskManager: InspectionManager } = await import('./inspection/task-manager.services.js')
+    await Promise.all([
+      taskInExecution ? TaskManager.getInstance().stopAllTasks() : Promise.resolve(),
+      InspectionManager.getInstance().stopAllTasks(),
+    ])
     operationStore.delete('user')
     operationStore.delete('token')
     return await request<InterfaceResult<any>, InterfaceResult<any>>({

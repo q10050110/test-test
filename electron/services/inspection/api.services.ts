@@ -42,9 +42,10 @@ export const createTaskAPI = (data: TaskParams) =>
   })
 
 // 更新任务状态
-export const updateTaskStatusAPI = (data: UpdateTaskStatusParams) =>
+export const updateTaskStatusAPI = (data: UpdateTaskStatusParams, signal?: AbortSignal) =>
   request<InterfaceResult<Inspection>, InterfaceResult<Inspection>>({
     url: '/api/auto/followSellTask/updateFollowSellTaskStatus',
+    signal,
     method: 'post',
     data,
   })
@@ -74,16 +75,18 @@ export const saveSellDataAPI = (data: SaveSellDataParams) =>
   })
 
 // 批量保存跟卖数据
-export const batchSaveSellDataAPI = (data: BatchSaveSellDataParams) =>
+export const batchSaveSellDataAPI = (data: BatchSaveSellDataParams, signal?: AbortSignal) =>
   request<InterfaceResult<{ sku: string, dataId: string }[]>, InterfaceResult<{ sku: string, dataId: string }[]>>({
     url: '/api/auto/followSellTask/addFollowSellDataBatch',
+    signal,
     method: 'post',
     data,
   })
 
 // 保存跟卖列表数据
-export const saveSellListDataAPI = (data: SellListParams) => request<InterfaceResult<string>, InterfaceResult<string>>({
+export const saveSellListDataAPI = (data: SellListParams, signal?: AbortSignal) => request<InterfaceResult<string>, InterfaceResult<string>>({
   url: '/api/auto/followSellTask/addFollowListItems',
+  signal,
   method: 'post',
   data
 })

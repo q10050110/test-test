@@ -4,7 +4,7 @@ import log, { initLogger } from './log/index.js'
 import { CloseProcessService } from './services/closeProcess.services.js'
 import { globalBroadcast } from './ipc/broadcast.js'
 import { operationStore } from './store/index.js'
-import { memoryMonitor } from './services/memory-monitor.services.js'
+import { memoryMonitor } from './services/common/memory-monitor.services.js'
 import { StartProcessService } from './services/startProcess.services.js'
 app.commandLine.appendSwitch('disable-logging')
 app.commandLine.appendSwitch('log-level', '3')

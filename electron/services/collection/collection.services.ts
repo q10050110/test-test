@@ -7,9 +7,10 @@ import type { ExcelService } from './excel.services.js'
 import type { DataProcessService } from './data-filter.services.js'
 import type { ParseService } from './parse.services.js'
 import type { Task, TaskStatus, Query, CollectionResult, CollectionPhase } from './type.js'
-import { createCollectionActor } from './collection-machine.js'
-import { TaskQueueService } from './task-queue.services.js'
-import { TaskCancelledError, TaskScope } from './task-scope.js'
+import { createCollectionActor } from './collection-machine.services.js'
+import { TaskQueueService } from '../common/task-queue.services.js'
+import { TaskCancelledError, TaskScope } from '../common/task-scope.services.js'
+import type { VerificationState } from '../ozon/request-window.services.js'
 
 interface CollectionServices {
   main: Pick<
@@ -41,7 +42,7 @@ interface CollectionServices {
 }
 
 export interface CollectionDependencies {
-  createServices(onClosed: () => void, tableName: string): CollectionServices
+  createServices(onClosed: () => void, tableName: string, onVerification?: (state: VerificationState) => void): CollectionServices
   request(config: AxiosRequestConfig): Promise<any>
   save(
     data: { taskId: string; datas: any[] },
@@ -141,13 +142,21 @@ export class Collection {
       this.services = this.deps.createServices(
         this.closeHandle,
         `${this.task.taskName}_${this.task._id}`,
+        state => {
+          if (this.scope.signal.aborted) return
+          this.task.verification = state
+          const labels = { waiting: '等待验证', verifying: '滑块验证中', retrying: '恢复请求中', ready: '接口请求已恢复', failed: '接口验证或请求失败' }
+          this.outputLog(`${labels[state.phase]}${state.attempt ? `（${state.attempt}/3）` : ''}`)
+        },
       )
       this.items = new TaskQueueService(this.taskHandle, 3, {
+        label: '商品处理',
         parent: this.scope.signal,
         timeoutMs: this.deps.timing?.item ?? 120_000,
         onError: (error) => this.deps.log.warn('单个商品处理失败:', error),
       })
       this.writes = new TaskQueueService(this.saveGoods, 1, {
+        label: '商品保存',
         parent: this.scope.signal,
         timeoutMs: this.deps.timing?.operation ?? 30_000,
         onError: (error) => this.fail(error),
@@ -221,6 +230,10 @@ export class Collection {
   private step<T>(operation: (signal: AbortSignal) => PromiseLike<T> | T, label: string) {
     return this.scope.run(operation, this.deps.timing?.operation ?? 30_000, label)
   }
+  /** 页面接口由请求窗口独立限制网络/验证时长；外层只负责整项任务取消。 */
+  private pageStep<T>(operation: (signal: AbortSignal) => PromiseLike<T> | T, label: string) {
+    return this.scope.run(operation, 0, label)
+  }
   private pause(kind: 'scroll' | 'detail') {
     const ms =
       this.deps.timing?.[kind] ??
@@ -267,12 +280,12 @@ export class Collection {
       for (const goods of filtered) {
         this.scope.check()
         if (this.targetReached) break
-        const response = await this.step(
+        const response = await this.pageStep(
           (signal) => this.runtime.main.getDataByApi(goods._id, signal),
           '获取商品详情',
         )
         const domain = await this.runtime.main.getDomain()
-        const detail = await this.step(
+        const detail = await this.pageStep(
           (signal) => this.runtime.parse.ozonDetailParse(response, domain, goods, signal),
           '解析商品详情',
         )
@@ -290,11 +303,11 @@ export class Collection {
     let emptyScrolls = 0
     let bottomCount = 0
     const parsePage = async () => {
-      const { html, domain } = await this.step(
+      const { html, domain } = await this.pageStep(
         (signal) => this.runtime.main.getHTML(signal),
         '读取页面',
       )
-      const goods = await this.step(
+      const goods = await this.pageStep(
         (signal) => this.runtime.parse.ozonListParser(html, domain, signal),
         '解析商品列表',
       )
@@ -425,7 +438,7 @@ export class Collection {
     for (const goods of Array.from(this.saved.values())) await visit(goods?.sellers?.sellers || [])
     for (const url of this.runtime.parse.guessLikeList) {
       if (this.targetReached || this.expendShopCount >= this.task.expendShopCount) break
-      const response = await this.step(
+      const response = await this.pageStep(
         (signal) => this.runtime.main.getSellingData(url, signal),
         '获取拓店卖家',
       )
@@ -482,6 +495,7 @@ export class Collection {
   private cleanup(): Promise<void> {
     if (this.cleanupPromise) return this.cleanupPromise
     this.disposed = true
+    this.task.verification = undefined
     this.outputLog(this.getPhase() === 'stopping' ? '正在终止任务，请稍候' : '正在结束任务，请稍候')
     this.emitLifecycleState()
     this.scope.stop(new TaskCancelledError('任务正在清理'))

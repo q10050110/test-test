@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { CollectionResultStore } from '../../electron/services/collection/collection-result-store.js'
+import { CollectionResultStore } from '../../electron/services/collection/collection-result-store.services.js'
 
 test('result cache stores goods separately from small summaries, survives restart and deletes both files', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'collection-results-'))

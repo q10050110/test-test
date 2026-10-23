@@ -15,6 +15,11 @@ import feedback from '@/utils/feedback'
 import dayjs from 'dayjs'
 import cLogTab from '@/components/c-log-tab.vue'
 import { useTableHeight, useVipCheck } from '@/hooks/index'
+import { isInspectionBusy, isInspectionClosing, inspectionViewStatus } from './task-state'
+const stoppingIds = ref(new Set<string>())
+const closing = (task: Inspection | Record<string, any>) => isInspectionClosing(task as Inspection, stoppingIds.value.has(task._id))
+const busy = (task: Inspection | Record<string, any>) => isInspectionBusy(task as Inspection, stoppingIds.value.has(task._id))
+const viewStatus = (task: Inspection | Record<string, any>) => inspectionViewStatus(task as Inspection, stoppingIds.value.has(task._id))
 const { check } = useVipCheck()
 const columns: TableColumnsType<Inspection> = [
   {
@@ -53,37 +58,12 @@ const columns: TableColumnsType<Inspection> = [
 const tableData = ref<Inspection[]>([])
 const total = ref()
 
-const taskStatusList = ref([
-  {
-    label: '未执行',
-    value: 'noExecuted',
-    color: '',
-  },
-  {
-    label: '执行中',
-    value: 'running',
-    color: 'processing',
-  },
-  {
-    label: '已完成',
-    value: 'completed',
-    color: 'success',
-  },
-  {
-    label: '已失败',
-    value: 'failed',
-    color: 'error',
-  },
-  {
-    label: '已取消',
-    value: 'cancelled',
-    color: 'warning',
-  },
-])
+
 
 // 新建巡查任务
 const inspectionDialogRef = ref<InstanceType<typeof InspectionDialog>>()
 const showInspectionDialog = async (data?: Inspection) => {
+  if (data && busy(data)) return feedback.warning('任务正在执行或结束中')
   await nextTick()
   if (inspectionDialogRef.value) {
     if (data)
@@ -127,7 +107,7 @@ const pageChange = (page: number, pageSize: number) => {
 
 // 删除任务
 const deleteHandle = async (record: Inspection) => {
-  if (record.status === 'running') return feedback.error('请先终止任务')
+  if (busy(record)) return feedback.error('请先终止任务并等待回收完成')
   const { data, code } = await window.electronAPI.invoke<Response<string>>(
     'inspection-delete-task',
     { taskIds: [record._id] },
@@ -144,36 +124,29 @@ const formatDate = (date: number) => {
 }
 
 // 开始任务
-let startTimer: number | undefined = undefined
-const taskId = ref()
 const startHandle = async (record: Inspection) => {
-  /*   if (startTimer && taskId.value == record._id) return feedback.error('请勿频繁点击！')
-  taskId.value = record._id
-  startTimer = setTimeout(() => {
-    startTimer = undefined
-  }, 3000) */
-  const { data: list } = await window.electronAPI.invoke<Response<Inspection[]>>(
-    'inspection-get-running-task',
-    {},
-  )
-  if (list.length >= taskQueueCount.value) return feedback.error('任务数量已达上限')
-  record.lastRunningTime = formatDate(Date.now())
-  const data = toRaw(record)
-  const { code, message } = await window.electronAPI.invoke<Response<string>>(
-    'inspection-execute-task',
-    data,
-  )
-  if (code) feedback.error(message)
+  if (busy(record)) return
+  record.status = 'pending'
+  record.lastRunningTime = Date.now()
+  try {
+    const { code, message } = await window.electronAPI.invoke<Response<string>>('inspection-execute-task', toRaw(record))
+    if (code) throw new Error(message)
+  } catch (error) {
+    feedback.error(error instanceof Error ? error.message : '启动巡查失败')
+    await getInspectionTaskList()
+  }
 }
 
 // 终止任务
 const stopTask = async (record: Inspection) => {
-  const data = toRaw(record)
-  const { code, message } = await window.electronAPI.invoke<Response<string>>(
-    'inspection-stop-task',
-    data,
-  )
-  if (code) feedback.error(message)
+  if (closing(record)) return
+  stoppingIds.value.add(record._id)
+  try {
+    const { data, code, message } = await window.electronAPI.invoke<Response<Inspection>>('inspection-stop-task', toRaw(record))
+    if (code) throw new Error(message)
+    getTaskStatus({ task: data })
+  } catch (error) { feedback.error(error instanceof Error ? error.message : '终止巡查失败') }
+  finally { stoppingIds.value.delete(record._id) }
 }
 
 // 获取任务进度
@@ -183,6 +156,11 @@ const getProgress = async (data?: any) => {
   let obj = tableData.value?.find((item) => item._id === inspectionTask._id)
   if (obj) Object.assign(obj, inspectionTask)
   tabsRef.value?.writeLog(inspectionTask._id, log)
+}
+const getTaskStatus = (data?: { task?: Inspection }) => {
+  if (!data?.task) return
+  const row = tableData.value.find(item => item._id === data.task?._id)
+  if (row) Object.assign(row, data.task)
 }
 
 // 获取执行中的任务
@@ -205,12 +183,15 @@ const goResult = (id: string) => {
 }
 
 onMounted(async () => {
-  getRunningTask()
   window.electronAPI.on('inspection-progress', getProgress)
+  window.electronAPI.on('inspection-task-status-update', getTaskStatus)
+  getRunningTask()
+  taskQueueCount.value = await window.electronAPI.invoke('get-current-inspection-task-count', {})
 })
 
 onUnmounted(() => {
   window.electronAPI.off('inspection-progress', getProgress)
+  window.electronAPI.off('inspection-task-status-update', getTaskStatus)
 })
 
 const { height, width } = useTableHeight('.table-container', 240, columns)
@@ -278,11 +259,11 @@ const changeTaskQueueCount = () => {
           <!-- 巡查状态列 -->
           <template v-if="column.key === 'status'">
             <a-tag
-              :color="taskStatusList.find((item) => item.value === record.status)?.color"
+              :color="viewStatus(record).color"
               :bordered="false"
               class="status-tag"
             >
-              {{ taskStatusList.find((item) => item.value === record.status)?.label }}
+              {{ viewStatus(record).label }}
             </a-tag>
           </template>
 
@@ -303,7 +284,7 @@ const changeTaskQueueCount = () => {
               <a-button
                 type="link"
                 :icon="h(CaretRightOutlined)"
-                v-if="record.status !== 'running'"
+                v-if="!busy(record)"
                 @click="check(() => startHandle(record as Inspection))"
               >
                 执行
@@ -311,10 +292,12 @@ const changeTaskQueueCount = () => {
               <a-button
                 type="link"
                 :icon="h(PauseCircleFilled)"
-                v-if="record.status === 'running'"
+                v-if="busy(record)"
+                :loading="closing(record)"
+                :disabled="closing(record)"
                 @click="stopTask(record as Inspection)"
               >
-                终止
+                {{ closing(record) ? viewStatus(record).label : '终止' }}
               </a-button>
               <a-button
                 type="link"
@@ -327,7 +310,7 @@ const changeTaskQueueCount = () => {
                 type="link"
                 :icon="h(EditOutlined)"
                 @click="check(() => showInspectionDialog(record as Inspection))"
-                :disabled="record.status === 'running'"
+                :disabled="busy(record)"
               >
                 编辑
               </a-button>
@@ -337,7 +320,7 @@ const changeTaskQueueCount = () => {
                 cancel-text="取消"
                 @confirm="deleteHandle(record as Inspection)"
               >
-                <a-button type="link" :icon="h(DeleteOutlined)" danger> 删除 </a-button>
+                <a-button type="link" :icon="h(DeleteOutlined)" :disabled="busy(record)" danger> 删除 </a-button>
               </a-popconfirm>
             </div>
           </template>

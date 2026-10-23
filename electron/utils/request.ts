@@ -46,6 +46,9 @@ request.interceptors.response.use(
         operationStore.set('expired', true)
         globalBroadcast.broadcast('request', { code, message })
         TaskManager.getInstance().stopAllTasks()
+        void import('../services/inspection/task-manager.services.js')
+          .then(({ TaskManager }) => TaskManager.getInstance().stopAllTasks())
+          .catch(error => log.error('鉴权失败后停止巡查任务失败:', error))
       }
       return Promise.reject(message)
     }

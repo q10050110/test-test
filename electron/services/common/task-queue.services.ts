@@ -11,16 +11,17 @@ import {
   mergeMap,
   take,
 } from 'rxjs'
-import { TaskCancelledError, TaskScope } from './task-scope.js'
+import { TaskCancelledError, TaskScope } from './task-scope.services.js'
 
 export type TaskHandler<T = any> = (task: T, signal: AbortSignal) => Promise<unknown>
 export interface QueueOptions {
   parent?: AbortSignal
   timeoutMs?: number
+  label?: string
   onError?: (error: unknown) => void
 }
 
-/** mergeMap 管理并发；退订丢弃缓冲任务，并终止活跃任务。完成商品只保留计数。 */
+/** mergeMap 管理并发；退订丢弃缓冲任务，并终止活跃任务。完成项只保留计数。 */
 export class TaskQueueService<T extends { id: string } = any> {
   private readonly input$ = new Subject<T>()
   private readonly size$ = new BehaviorSubject(0)
@@ -33,6 +34,8 @@ export class TaskQueueService<T extends { id: string } = any> {
   private failed = 0
 
   constructor(handler: TaskHandler<T>, concurrency = 3, options: QueueOptions = {}) {
+    if (!Number.isInteger(concurrency) || concurrency < 1)
+      throw new Error('队列并发数必须为正整数')
     this.scope = new TaskScope(options.parent)
     this.subscription = this.input$
       .pipe(
@@ -45,7 +48,7 @@ export class TaskQueueService<T extends { id: string } = any> {
               await this.scope.run(
                 (signal) => handler(task, signal),
                 options.timeoutMs ?? 120_000,
-                '商品处理',
+                options.label ?? '队列任务',
               )
               this.completed++
             }).pipe(
@@ -111,7 +114,7 @@ export class TaskQueueService<T extends { id: string } = any> {
   destroy(_retainCompleted = false, _destroyHandler = true) {
     if (this.stopped) return
     this.stopped = true
-    this.scope.stop(new TaskCancelledError('商品队列已关闭'))
+    this.scope.stop(new TaskCancelledError('队列已关闭'))
     this.subscription.unsubscribe()
     this.input$.complete()
     this.pending.clear()

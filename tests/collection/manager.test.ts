@@ -78,8 +78,8 @@ const hook = registerHooks({
   resolve(specifier, context, next) {
     const mocks: Record<string, string> = {
       './collection.services.js': 'collection',
-      './collection-runtime.js': 'runtime',
-      './collection-result-store.js': 'store',
+      './collection-runtime.services.js': 'runtime',
+      './collection-result-store.services.js': 'store',
       '../../utils/request.js': 'request',
       '../../log/index.js': 'log',
       '../../utils/system.js': 'system',

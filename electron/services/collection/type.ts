@@ -19,6 +19,7 @@ export interface Task {
   _id: string
   taskStatus: TaskStatus
   phase?: CollectionPhase
+  verification?: { phase: 'waiting' | 'verifying' | 'retrying' | 'ready' | 'failed'; attempt?: number }
   isUseAutoUpGoods?: boolean
   upDataConfigId?: string
   warehouse_id?: string

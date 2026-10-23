@@ -12,6 +12,9 @@ class FakeContents extends EventEmitter {
   stop() {
     this.stopped = true
   }
+  getURL() {
+    return 'https://test/page'
+  }
   executeJavaScript() {
     return Promise.resolve('')
   }
@@ -53,7 +56,7 @@ const hooks = registerHooks({
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export const { BrowserWindow, ipcMain } = globalThis.__collectionElectron;',
+        source: 'export const { BrowserWindow, ipcMain } = globalThis.__collectionElectron; export const app = { isPackaged: false };',
       }
     if (url === 'test:log')
       return {
@@ -67,7 +70,91 @@ const hooks = registerHooks({
 const { MainWindowService } =
   await import('../../electron/services/collection/main-window.services.js')
 const { WindowService } = await import('../../electron/services/collection/1688-window.services.js')
+const { BrowserWindowService } = await import('../../electron/services/common/browser-window.services.js')
+const { MainWindowService: InspectionWindowService } = await import('../../electron/services/inspection/main-window.services.js')
 hooks.deregister()
+
+class TestWindowService extends BrowserWindowService {
+  async open(timeoutMs = 1000) {
+    const win = this.createBrowserWindow()
+    try {
+      await this.loadWindow(win, 'https://test', { timeoutMs })
+      return win
+    } catch (error) {
+      this.destroy()
+      throw error
+    }
+  }
+}
+
+test('shared window load deadline destroys the window and detaches all owned listeners', async () => {
+  const service = new TestWindowService()
+  await assert.rejects(service.open(10), /超时/)
+  const win = FakeWindow.instances.at(-1)!
+  assert.equal(win.destroyed, true)
+  assert.equal(win.listenerCount('closed'), 0)
+  assert.equal(win.contents.listenerCount('did-finish-load'), 0)
+  assert.equal(win.contents.listenerCount('render-process-gone'), 0)
+})
+
+test('shared window crash rejects the pending load and notifies the owner once', async () => {
+  let closed = 0
+  const service = new TestWindowService(() => { closed++ })
+  const opened = service.open()
+  const rejected = assert.rejects(opened, /渲染进程退出/)
+  const win = FakeWindow.instances.at(-1)!
+  win.contents.emit('render-process-gone')
+  await rejected
+  service.destroy()
+  assert.equal(closed, 1)
+  assert.equal(win.listenerCount('closed'), 0)
+})
+
+test('shared HTML reader rejects late content after cancellation', async () => {
+  const service = new TestWindowService()
+  const opened = service.open()
+  const win = FakeWindow.instances.at(-1)!
+  win.contents.emit('did-finish-load')
+  await opened
+  const gate = Promise.withResolvers<string>()
+  win.contents.executeJavaScript = () => gate.promise
+  const controller = new AbortController()
+  const content = service.getHTML(controller.signal)
+  const rejected = assert.rejects(content, /cancel/)
+  controller.abort(new Error('cancel'))
+  gate.resolve('<html>late</html>')
+  await rejected
+  service.destroy()
+})
+
+test('inspection inherits loading but still awaits its private page checks', async () => {
+  const service = new InspectionWindowService(() => {})
+  const gate = Promise.withResolvers<void>()
+  let checked = false
+  service.checkPage = async () => { await gate.promise; checked = true }
+  const opened = service.createCollectionWindow('https://test')
+  const win = FakeWindow.instances.at(-1)!
+  assert.equal(win.options.webPreferences.webSecurity, false)
+  win.contents.emit('dom-ready')
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.equal(checked, false)
+  gate.resolve()
+  await opened
+  assert.equal(checked, true)
+  service.destroy()
+  assert.equal(win.listenerCount('closed'), 0)
+})
+
+test('inspection page-check rejection closes its inherited window', async () => {
+  const service = new InspectionWindowService(() => {})
+  service.checkPage = async () => { throw new Error('page check failed') }
+  const opened = service.createCollectionWindow('https://test')
+  const rejected = assert.rejects(opened, /page check failed/)
+  const win = FakeWindow.instances.at(-1)!
+  win.contents.emit('dom-ready')
+  await rejected
+  assert.equal(win.destroyed, true)
+})
 
 test('aborting main-window creation rejects and removes loading listeners and abort listener', async () => {
   let abnormal = 0

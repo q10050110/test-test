@@ -2,6 +2,8 @@
 
 本文对应当前目录的实现，目标是帮助第一次接触这部分代码的人找到入口、串起调用链，并理解状态、并发、取消和资源释放之间的关系。
 
+通用能力已迁到 [common](../common/README.md)：队列、取消作用域、窗口生命周期和 JSON 文件机制。本文中的业务窗口继承 `BrowserWindowService`，结果存储继承 `JsonFileStoreService`；阅读业务类时可继续跟进基类的受保护方法。
+
 建议先读第 1～4 节建立整体认识，再根据要修改的功能跳转到具体模块。不要从窗口 DOM 脚本或 Excel 字段映射开始逐行阅读，容易丢失任务的主线。
 
 ## 1. 先认识三个层次
@@ -21,7 +23,7 @@ flowchart TD
     View[selectGoods 页面] --> IPC[collection.ipc.ts]
     IPC --> Manager[TaskManager：多个采集任务]
     Manager --> Collection[Collection：单次运行]
-    Runtime[collection-runtime.ts：组装真实依赖] --> Collection
+    Runtime[collection-runtime.services.ts：组装真实依赖] --> Collection
     Collection --> Machine[XState：生命周期转换]
     Collection --> Scope[TaskScope：取消与超时]
     Collection --> Main[MainWindowService：OZON 页面]
@@ -41,7 +43,7 @@ flowchart TD
     Manager -. 状态事件 .-> View
 ```
 
-图中是业务数据流；实际依赖通过 `collection-runtime.ts` 注入，商品处理和保存之间通过队列衔接，并非整条链都直接同步调用。
+图中是业务数据流；实际依赖通过 `collection-runtime.services.ts` 注入，商品处理和保存之间通过队列衔接，并非整条链都直接同步调用。
 
 ## 2. 推荐从哪里开始读
 
@@ -51,7 +53,7 @@ flowchart TD
 | --- | --- | --- |
 | 1 | [type.ts](./type.ts)：`Task`、`CollectionResult`、`CollectionPhase` | 输入配置、运行阶段和最终结果分别长什么样？ |
 | 2 | [collection.services.ts](./collection.services.ts)：`run → execute → workflow` | 一次任务有哪些步骤？成功和异常最终走到哪里？ |
-| 3 | [collection-runtime.ts](./collection-runtime.ts)：`collectionDependencies` | `runtime.main/source/parse/data` 实际绑定哪个类？`deps.save/upload` 实际调用谁？ |
+| 3 | [collection-runtime.services.ts](./collection-runtime.services.ts)：`collectionDependencies` | `runtime.main/source/parse/data` 实际绑定哪个类？`deps.save/upload` 实际调用谁？ |
 | 4 | [collection.services.ts](./collection.services.ts)：`getHtmlData → processData → enqueue → taskHandle → saveGoods` | 一个商品怎样从页面进入队列，并成为已保存结果？ |
 | 5 | [task-manager.services.ts](./task-manager.services.ts)：`startTaskById → executeTask` | 谁决定何时启动任务、何时释放并发名额？ |
 | 6 | [collection.ipc.ts](../../ipc/collection.ipc.ts) 与 [页面 index.vue](../../../src/views/selectGoods/index.vue) | 用户的点击如何进入主进程？主进程如何更新页面？ |
@@ -62,10 +64,10 @@ flowchart TD
 
 依次阅读：
 
-1. [collection-machine.ts](./collection-machine.ts)：允许哪些事件和转换。
+1. [collection-machine.services.ts](./collection-machine.services.ts)：允许哪些事件和转换。
 2. `Collection.cancel / fail / cleanup / getPhase`：业务怎样驱动状态机。
-3. [task-scope.ts](./task-scope.ts)：取消如何传递，超时如何结束等待。
-4. [task-queue.services.ts](./task-queue.services.ts)：并发、排空、销毁分别做什么。
+3. [task-scope.services.ts](../common/task-scope.services.ts)：取消如何传递，超时如何结束等待。
+4. [task-queue.services.ts](../common/task-queue.services.ts)：并发、排空、销毁分别做什么。
 5. `TaskManager.executeTask / cancelTask / stopAllTasks / getTask`：回收期间为什么还占并发名额。
 6. [task-state.ts](../../../src/views/selectGoods/task-state.ts)：页面如何解释“终止中”和“收尾中”。
 
@@ -74,27 +76,25 @@ flowchart TD
 - 页面结构变化、抓不到商品：读 `main-window.services.ts`、`parse.services.ts`。
 - 筛选条件或利润结果不对：读 `data-filter.services.ts`、`interface.services.ts`，并区分本地规则和服务端计算。
 - 1688 货源结果不返回：读 `1688-window.services.ts`，继续跟到 [1688preload.ts](../../preloads/1688preload.ts)。
-- 完成后的结果、手动上架：读 `collection-result-store.ts`、`TaskManager.upGoods`、`autoUpGoods`。
+- 完成后的结果、手动上架：读 `collection-result-store.services.ts`、`TaskManager.upGoods`、`autoUpGoods`。
 - Excel 导出：读 `excel.services.ts`，同时检查当前调用方是否真的调用了 `saveExcel`。
 
 ## 3. 目录中每个模块负责什么
 
 ```text
 collection/
-├── task-manager.services.ts     多任务调度与最终回收
-├── collection.services.ts       单次采集流程与资源所有权
-├── collection-runtime.ts        真实依赖组装
-├── collection-machine.ts        XState 生命周期定义
-├── task-scope.ts                可取消的等待与操作超时
-├── task-queue.services.ts       RxJS 商品队列
-├── main-window.services.ts      OZON 窗口与页面请求
-├── 1688-window.services.ts      1688 搜图窗口与 IPC 回包
-├── parse.services.ts            页面/API 数据解析与去重
-├── data-filter.services.ts      数据补全、筛选、详情处理
-├── interface.services.ts        保存、上架、配置等接口封装
-├── collection-result-store.ts   本地结果与摘要存储
-├── excel.services.ts            Excel 工具封装
-└── type.ts                      共享类型
+├── task-manager.services.ts              多任务调度与最终回收
+├── collection.services.ts                单次采集流程与资源所有权
+├── collection-runtime.services.ts        真实依赖组装
+├── collection-machine.services.ts        XState 生命周期定义
+├── main-window.services.ts               OZON 窗口与页面请求
+├── 1688-window.services.ts               1688 搜图窗口与 IPC 回包
+├── parse.services.ts                     页面/API 数据解析与去重
+├── data-filter.services.ts               数据补全、筛选、详情处理
+├── interface.services.ts                 保存、上架、配置等接口封装
+├── collection-result-store.services.ts   本地结果与摘要存储
+├── excel.services.ts                     Excel 工具封装
+└── type.ts                               共享类型
 ```
 
 ### 3.1 `task-manager.services.ts`：多任务的调度者
@@ -143,7 +143,7 @@ collection/
 
 `execute()` 创建服务和两个队列，运行 `workflow`，并在 `finally` 中统一构造结果、清理资源、进入终态。失败或取消时抛出带结果的 `CollectionRunError`，使管理器仍有机会保存已经成功采集的商品。
 
-### 3.3 `collection-runtime.ts`：真实实现的组装点
+### 3.3 `collection-runtime.services.ts`：真实实现的组装点
 
 这里定义生产环境的 `collectionDependencies`：
 
@@ -157,13 +157,13 @@ collection/
 
 这是理解依赖注入的关键：`Collection` 中看到的 `deps` 是能力契约，具体实现要到这里确认。测试可以注入替身和较短的时间参数，无需打开真实 Electron 窗口。
 
-### 3.4 `collection-machine.ts`：生命周期规则
+### 3.4 `collection-machine.services.ts`：生命周期规则
 
 它使用 XState 描述允许的状态转换和结束结果，不执行抓页面、保存、关闭窗口等业务操作。业务操作仍由 `Collection` 执行，再发送事件。
 
 重点看 `running` 的子状态、父级的 `CANCEL/FAIL`，以及 `cleaning` 收到 `CLEANED` 后如何根据 `context.outcome` 选择终态。完整说明见第 5 节。
 
-### 3.5 `task-scope.ts`：取消和超时基础设施
+### 3.5 `common/task-scope.services.ts`：取消和超时基础设施
 
 `TaskScope` 组合 RxJS 与 `AbortController`：
 
@@ -177,7 +177,7 @@ collection/
 
 RxJS 退订可以结束本地等待，但任意 Promise 不会因此自动停止底层工作。HTTP、窗口操作还要接收并使用 `AbortSignal`，在 `await` 后检查信号，防止迟到结果继续入队或保存。
 
-### 3.6 `task-queue.services.ts`：商品处理队列
+### 3.6 `common/task-queue.services.ts`：通用队列在采集中的使用
 
 `TaskQueueService` 通过 `Subject → mergeMap` 控制并发，用 `pending/active` 两个 ID 集合和 `BehaviorSubject` 记录当前规模。
 
@@ -197,13 +197,15 @@ RxJS 退订可以结束本地等待，但任意 Promise 不会因此自动停止
 
 - `createCollectionWindow`：创建窗口并等待页面就绪。
 - `getHTML / getDomain / scrollPage`：读取页面和滚动。
-- `getSellingData / getDataByApi`：通过页面环境请求卖家或商品数据。
+- `getSellingData / getDataByApi`：继承自 `OzonWindowService`，委托独立隐藏请求窗口获取卖家或商品数据，不在当前业务窗口执行 fetch。
 - `changeUrl`：复用窗口进入拓展店铺。
 - `destroy`：关闭本服务持有的窗口。
 
 窗口加载会处理就绪、失败、超时、取消，并在结束时移除监听。异常关闭或渲染进程退出通过回调通知 `Collection`；主动销毁则避免把正常关闭误报成采集失败。
 
-页面请求通过 `fetchPage` 在渲染端登记 `AbortController`，主进程取消时通知渲染端中止对应请求，结束后移除登记。因此排查页面请求卡住时，要同时看主进程信号和渲染端请求注册表。
+窗口创建、加载、`getDomain`、`fetchPage` 和销毁由 [BrowserWindowService](../common/browser-window.services.ts) 提供。页面请求在渲染端 `window.__serviceRequests` 登记 `AbortController`，主进程取消时通知渲染端中止对应请求，结束后移除登记。因此排查页面请求卡住时，要同时看主进程信号和渲染端请求注册表。
+
+新增的 [ozon/main-window.services.ts](../ozon/main-window.services.ts) 负责业务窗口与请求窗口的组合；[ozon/request-window.services.ts](../ozon/request-window.services.ts) 负责串行请求、403 后导航或同 Session 重建、最多 3 次滑块验证及原接口重试。公共滑块算法已从巡查窗口迁到 `common/slider-verification.services.ts`。具体恢复及取消约定见 [OZON 请求说明](../ozon/README.md)。
 
 ### 3.8 `1688-window.services.ts`：按商品查找货源
 
@@ -255,7 +257,7 @@ RxJS 退订可以结束本地等待，但任意 Promise 不会因此自动停止
 
 `autoUpGoods` 以字符串返回结果，`'success'` 才表示该封装认为成功；自动上架返回其他内容会使本次采集运行失败。这里只能看到客户端处理，服务端事务、幂等和回滚能力需要另外核实。
 
-### 3.12 `collection-result-store.ts`：完成结果的本地存储
+### 3.12 `collection-result-store.services.ts`：完成结果的本地存储
 
 `CollectionResultStore` 把完整商品与摘要拆开：
 
@@ -482,6 +484,7 @@ stateDiagram-v2
 | 边界 | 默认期限/策略 | 位置 |
 | --- | --- | --- |
 | 普通 `step`、保存队列单项 | 30 秒 | `Collection` 的 `timing.operation` |
+| 页面接口及验证等待 `pageStep` | 支持整项任务取消；内部网络/窗口加载各限 30 秒，验证最多 3 轮 | `OzonRequestWindowService` |
 | 商品处理单项 | 120 秒 | `timing.item` |
 | 整项任务、排空等待 | 默认不设总时限，仍支持取消 | `timing.run ?? 0` |
 | 创建 OZON 窗口 | 100 秒 | `workflow` 与窗口加载逻辑 |
@@ -514,7 +517,7 @@ stateDiagram-v2
 | 页面有商品，任务却没有选品结果 | 依次检查解析数、筛选后数、货源结果、详情结果、保存 `count` |
 | 分类选品提前完成或漏数据 | `categoryMode` 的分页/游标与被等待的详情请求 |
 | 1688 窗口一直挂着 | `createWindow/open`、预加载回包、IPC sender 校验、超时和清理 |
-| “获取页面数据报错~~” | `MainWindowService.getDataByApi/fetchPage`，再看页面请求是否成功和是否已取消 |
+| 接口 403 或滑块恢复失败 | `OzonRequestWindowService` 的响应、恢复次数、请求窗口导航，以及公共验证协调器 |
 | 保存成功但进度不增加 | `saveGoods` 的 `code/count`，确认是否为服务端认定的新增商品 |
 | 完成后手动上架找不到数据 | `CollectionResultStore` 的账号目录、商品/摘要文件和落盘错误 |
 | 任务完成但没有 Excel | 核实 `saveExcel` 是否存在真实调用，区分 JSON 与 Excel |

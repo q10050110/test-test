@@ -6,14 +6,14 @@ import { ParseService } from './parse.services.js'
 import request from '../../utils/request.js'
 import log from '../../log/index.js'
 import { autoSaveData, autoUpGoods } from './interface.services.js'
-import { memoryMonitor } from '../memory-monitor.services.js'
+import { memoryMonitor } from '../common/memory-monitor.services.js'
 import type { CollectionDependencies } from './collection.services.js'
 
 /** Electron 依赖留在组装层，生命周期和队列可直接在 Node 中测试。 */
 export const collectionDependencies: CollectionDependencies = {
-  createServices(onClosed, tableName) {
-    const main = new MainWindowService(onClosed)
-    const parse = new ParseService(main)
+  createServices(onClosed, tableName, onVerification) {
+    const main = new MainWindowService(onClosed, onVerification)
+    const parse = new ParseService(main, log)
     return {
       main,
       parse,

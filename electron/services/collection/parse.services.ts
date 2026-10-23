@@ -1,154 +1,53 @@
 import * as cheerio from 'cheerio'
-import { MainWindowService } from './main-window.services.js'
-import log from '../../log/index.js'
+import { VerificationFailedError } from '../common/verification-coordinator.services.js'
+import { OzonParseService, type SellerSummary, type SellerDataSource } from '../common/ozon-parse.services.js'
 
-export class ParseService {
-  protected ozonGoodsData: Set<string> = new Set()
-  private windowService: MainWindowService | null = null
-  guessLikeList: Set<string> = new Set()
-  constructor(windowService: MainWindowService) {
-    this.windowService = windowService
-  }
-  async ozonListParser(html: any | undefined, domain: string, signal?: AbortSignal) {
+export class ParseService extends OzonParseService {
+  constructor(source: SellerDataSource, private readonly log: Pick<Console, 'error'> = console) { super(source) }
+  readonly guessLikeList = new Set<string>()
+
+  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal) {
     signal?.throwIfAborted()
-    const data: any[] = []
-    if (!html) return []
-    const $ = cheerio.load(html)
-    const dom = $('#contentScrollPaginator a')
-    // 解析DOM，获取商品数据
-    dom.each((index, element) => {
-      const href = $(element).attr('href')
-      const cover = $(element).find('img')?.attr('src')
-      const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
-      const queryUrl = encodeURIComponent(
-        `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`,
-      )
-      const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
-      const link = `https://www.ozon.ru/product/${id}`
-      const price = $(element)
-        .parent()
-        .find('.tsHeadline500Medium')
-        .text()
-        .trim()
-        .replace(/[\s\u2009₽]/g, '')
-      const oPrice = $(element)
-        .parent()
-        .find('.tsBodyControl400Small')
-        .text()
-        .match(/[\d\s\u2009]+(?=₽)/)?.[0]
-        ?.replace(/[\s\u2009]/g, '')
-      // const discount = $(element).parent().find('.tsBodyControl400Small').text().trim().match(/-\d+%|\d+%/)?.[0];
-      const name = $(element).parent().find('a').children('div').children('span').text()
-      let str = $(element)
-        .parent()
-        .find('.tsBodyMBold')
-        .text()
-        .replace(/\u202F/g, ' ')
-      if (!str)
-        str = $(element)
-          .parent()
-          .find('.tsBodyControl300XSmall')
-          .text()
-          .replace(/\u202F/g, ' ')
-
-      const match = str.match(/\s*([0-5]\.\d{1})\s*(\d[\d\s]*)\s*/i)
-      const rating = match ? match[1] : 0
-      const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
-      const obj = {
-        href,
-        price: Number(price),
-        price1: Number(price),
-        oPrice,
-        oPrice1: oPrice,
-        // discountLabel: isNaN(Number(discount)) ? discount : `${Number(discount).toFixed(2)}%`,
-        link,
-        cover,
-        cover3: cover,
-        nameLabel: name,
-        id,
-        rating,
-        sku: id,
-        requestUrl,
-        reviewCountLabel,
-      }
-      if (id) {
-        data.push(obj)
-      }
-    })
-    if (!this.guessLikeList.size) {
-      const likeDom = $('[data-widget="skuGrid"] a')
-      // 获取猜你喜欢数据
-      likeDom.each((index, element) => {
-        const href = $(element).attr('href')
-        const id = href?.match(/-(\d+)(?=\/|\?)/)?.[1]
-        const queryUrl = encodeURIComponent(
-          `/modal/otherOffersFromSellers?product_id=${id}&page_changed=true`,
-        )
-        const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
-        this.guessLikeList.add(requestUrl)
+    if (html && !this.guessLikeList.size) {
+      const $ = cheerio.load(html)
+      $('[data-widget="skuGrid"] a').each((_index, element) => {
+        const id = this.productId($(element).attr('href'))
+        if (id) this.guessLikeList.add(this.offersUrl(id, domain))
       })
     }
-
-    const uniqueData: any[] = []
-    for (const item of data) {
-      if (this.ozonGoodsData.has(item.id)) continue
-      this.ozonGoodsData.add(item.id)
-      uniqueData.push(item)
-    }
-
-    for (const item of uniqueData) {
-      signal?.throwIfAborted()
-      const response = await this.windowService?.getSellingData(item.requestUrl, signal)
-      signal?.throwIfAborted()
-      if (response?.success) {
-        const sellers = JSON.parse(
-          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
-        )
-        item.sellerNumber = sellers?.sellers?.length || undefined
-        const priceList = sellers?.sellers
-          ?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, ''))
-          .filter((subItem: any) => subItem && subItem < item.price)
-        item.sellerNumber1 = item.sellerNumber
-        item.followMinPrice = priceList?.length ? Math.min(...priceList) : item.price
-        item.followMinPrice1 = item.followMinPrice
-      } else {
-        item.sellerNumber = undefined
-        item.sellerNumber1 = undefined
-        item.followMinPrice = item.price
-        item.followMinPrice1 = item.price
-        log.error('获取跟卖数据失败')
-      }
-    }
-    return uniqueData
+    return super.ozonListParser(html, domain, signal)
   }
+
+  protected override mapGoods(goods: any, sellers: SellerSummary) {
+    return { ...super.mapGoods(goods, sellers), price1: goods.price, oPrice1: goods.oPrice,
+      cover3: goods.cover, sellerNumber1: sellers.count || undefined, followMinPrice1: sellers.minPrice }
+  }
+
   /**
    * 商品去重
    */
   async ozonDetailListParser(list: any[]) {
-    const uniqueData = list.filter((item) => !this.ozonGoodsData.has(item._id))
-    uniqueData.forEach((item) => {
-      this.ozonGoodsData.add(item._id)
-    })
-    return uniqueData
+    const result: any[] = []
+    for (const item of list) {
+      const id = String(item._id ?? '')
+      if (!id || this.ozonGoodsData.has(id)) continue
+      this.ozonGoodsData.add(id)
+      result.push(item)
+    }
+    return result
   }
+
   async ozonDetailParse(data: any, domain: string, goods: any, signal?: AbortSignal) {
     signal?.throwIfAborted()
     if (!data.success) return {}
     try {
-      const widgetStatesPrice = JSON.parse(
-        data.data.widgetStates?.['webPrice-3121879-default-1'] || '{}',
-      )
-      const widgetStatesScore = JSON.parse(
-        data.data.widgetStates?.['webSingleProductScore-3386432-default-1'] || '{}',
-      )
+      const widgetStatesPrice = this.widget(data.data, 'webPrice-')
+      const widgetStatesScore = this.widget(data.data, 'webSingleProductScore-')
       const queryUrl = encodeURIComponent(
         `/modal/otherOffersFromSellers?product_id=${goods._id}&page_changed=true`,
       )
       const requestUrl = `${domain}/api/entrypoint-api.bx/page/json/v2?url=${queryUrl}`
-      const cleanPrice = (str: string | undefined) => {
-        if (!str) return 0
-        return Number(str.replace(/[\s\u2009\u202F₽]/g, '')) || 0
-      }
+      const cleanPrice = (value: unknown) => this.money(value)
       const price = cleanPrice(widgetStatesPrice?.cardPrice || widgetStatesPrice?.price)
       const blackPrice = cleanPrice(widgetStatesPrice?.price)
       const oPrice = cleanPrice(widgetStatesPrice?.originalPrice)
@@ -158,29 +57,11 @@ export class ParseService {
       const reviewCountLabel = match ? match[2].replace(/\s/g, '') : 0
       const response = await this.windowService?.getSellingData(requestUrl, signal)
       signal?.throwIfAborted()
-      let sellers,
-        sellerNumber,
-        sellerNumber1,
-        followMinPrice,
-        followMinPrice1 = undefined
-      if (response?.success) {
-        sellers = JSON.parse(
-          response.data.widgetStates?.['webSellerList-4723017-default-1'] || '{}',
-        )
-        sellerNumber = sellers?.sellers?.length
-        const priceList = sellers?.sellers
-          ?.map((item: any) => +item?.price?.cardPrice?.price?.replace(/[^\d.]/g, ''))
-          .filter((subItem: any) => subItem && subItem < price)
-        sellerNumber1 = sellerNumber
-        followMinPrice = priceList?.length ? Math.min(...priceList) : price
-        followMinPrice1 = priceList?.length ? Math.min(...priceList) : price
-      } else {
-        sellerNumber = undefined
-        sellerNumber1 = undefined
-        followMinPrice = price
-        followMinPrice1 = price
-        log.error('获取跟卖数据失败')
-      }
+      const summary = this.sellers(response, price)
+      const sellerNumber = summary.count || undefined
+      const sellerNumber1 = sellerNumber
+      const followMinPrice = summary.minPrice
+      const followMinPrice1 = followMinPrice
       return {
         id: goods._id,
         price,
@@ -200,7 +81,8 @@ export class ParseService {
       }
     } catch (error) {
       signal?.throwIfAborted()
-      log.error('解析数据失败~~~')
+      if (error instanceof VerificationFailedError) throw error
+      this.log.error('解析数据失败~~~')
       return {}
     }
   }
@@ -228,7 +110,7 @@ export class ParseService {
       const sourcePrice = isNaN(Number(price)) ? 0 : price
       return { link1688, sourcePrice, cover2 }
     } catch (error) {
-      log.error('解析数据失败~~~')
+      this.log.error('解析数据失败~~~')
       return { link1688: '', sourcePrice: '', cover2: '' }
     }
   }
@@ -253,16 +135,5 @@ export class ParseService {
   /**
    * 获取商品数量
    */
-  getDataCount() {
-    return this.ozonGoodsData.size
-  }
-
-  /**
-   * 销毁实例
-   */
-  destroy() {
-    this.ozonGoodsData.clear()
-    this.guessLikeList.clear()
-    this.windowService = null
-  }
+  override destroy() { this.guessLikeList.clear(); super.destroy() }
 }

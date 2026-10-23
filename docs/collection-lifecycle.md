@@ -2,6 +2,8 @@
 
 采集任务用项目已有的 XState 5 和 RxJS 7 管理，不需要增加运行时依赖。
 
+通用队列与取消作用域已迁到 `electron/services/common`，采集、巡查窗口共同继承 `BrowserWindowService`，采集结果存储继承 `JsonFileStoreService`。实现文件统一使用 `.services.ts` 后缀；公共模块职责及继承示例见 [公共服务说明](../electron/services/common/README.md)。
+
 ## 状态与职责
 
 ```mermaid
@@ -31,7 +33,7 @@ stateDiagram-v2
 任务列表同时订阅 `task-status-update`。刷新列表时优先使用本地活跃任务及其阶段；结果落盘、状态同步尚未完成时仍保持结束中的提示，清理完成后才恢复操作入口。
 
 - `Collection`：一次运行的资源所有者。重复 `run()` 返回同一个 Promise；重新执行由管理器创建新实例。
-- `collection-machine.ts`：允许的阶段转换和最终结果。
+- `collection-machine.services.ts`：允许的阶段转换和最终结果。
 - `TaskScope`：RxJS 订阅、取消等待和操作超时；退订会触发底层 `AbortSignal`。
 - `TaskQueueService`：`mergeMap` 控制并发，商品处理并发为 3，保存并发为 1。只保留成功/失败计数，不缓存已完成商品对象。
 - `TaskManager`：只在运行结束、结果落盘和清理完成后移除任务并释放并发名额。退出和切换账号共用同一个停止 Promise。
@@ -47,6 +49,8 @@ stateDiagram-v2
 状态同步串行执行，并设置独立的 5 秒超时；断网不会阻止本地资源回收，但云端状态可能未成功同步。进程被强制终止时无法执行 JavaScript 清理，内存由操作系统回收，不能将 `finally` 当作服务端状态持久化保证。
 
 ## 结果与内存
+
+`getSellingData/getDataByApi` 使用每任务独立的隐藏请求窗口，并与业务窗口共用 Session。403/验证 HTML 触发导航或重建请求窗口，暂停同 Session、同来源的接口请求；滑块验证最多 3 次，以原接口返回正常 JSON 确认恢复。超过上限明确失败，不当作空商品继续采集。采集视图通过本地 `verification` 字段显示验证进度，终止操作仍然有效。实现和测试入口见 [OZON 请求窗口](../electron/services/ozon/README.md)。
 
 商品结果保存在 Electron `userData/collection-results/<账号哈希>/`，每个任务分为商品文件和摘要文件。管理器最多在内存中缓存 200 个摘要，手动上架时才读取商品文件；删除任务时同步删除缓存。商品文件不因任务完成而自动删除，以保留手动上架能力。
 

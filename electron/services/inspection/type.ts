@@ -1,5 +1,7 @@
 export type TaskStatus = 'noExecuted' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type Inspection = {
+  phase?: 'idle' | 'opening' | 'scanning' | 'saving' | 'cleaning' | 'stopping' | 'completed' | 'failed' | 'cancelled'
+  verification?: { phase: 'waiting' | 'verifying' | 'retrying' | 'ready' | 'failed'; attempt?: number }
   _id: string
   shopName: string
   shopUrl: string
@@ -23,7 +25,7 @@ export type TaskParams = {
   shopUrl: string
   taskStatus: string
   executionMethod: 'AUTO' | 'MANUAL'
-  autoExecutionTime?: number
+  autoExecutionTime?: string
 }
 
 export type UpdateTaskStatusParams = {
