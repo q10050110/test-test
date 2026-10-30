@@ -1,12 +1,13 @@
 import { BrowserWindowService } from '../common/browser-window.services.js'
 import { SliderVerificationService } from '../common/slider-verification.services.js'
-import { OzonRequestWindowService, type VerificationState } from './request-window.services.js'
+import type { VerificationState } from './request-window.services.js'
+import { acquireOzonRequests } from './shared-request.services.js'
 import log from '../../log/index.js'
 import { TaskScope } from '../common/task-scope.services.js'
 
-/** OZON 业务窗口只读取页面；两个易受限接口委托给独立请求窗口。 */
+/** 采集与巡查的业务窗口只读取页面；接口统一交给共享请求窗口。 */
 export class OzonWindowService extends BrowserWindowService {
-  private requests?: OzonRequestWindowService
+  private readonly requests = new Map<string, ReturnType<typeof acquireOzonRequests>>()
   private readonly slider = new SliderVerificationService()
 
   constructor(onClosed: () => void, private readonly onVerification?: (state: VerificationState) => void) {
@@ -29,16 +30,18 @@ export class OzonWindowService extends BrowserWindowService {
   async getSellingData(url: string, signal?: AbortSignal) {
     signal?.throwIfAborted()
     if (!this.browserWindow || this.browserWindow.isDestroyed()) throw new Error('OZON 任务窗口已关闭')
-    if (!this.requests) {
-      const origin = new URL(url).origin
+    const origin = new URL(url).origin
+    let requests = this.requests.get(origin)
+    if (!requests) {
       const pageUrl = this.browserWindow.webContents.getURL()
       const entry = new URL(pageUrl).origin === origin ? pageUrl : origin + '/'
-      this.requests = new OzonRequestWindowService(this.browserWindow.webContents.session, entry, state => {
+      requests = acquireOzonRequests(this.browserWindow.webContents.session, entry, state => {
         log.info('OZON 接口验证状态:', state)
         this.onVerification?.(state)
       })
+      this.requests.set(origin, requests)
     }
-    return this.requests.request(url, signal)
+    return requests.request(url, signal)
   }
 
   getDataByApi(id: string, signal?: AbortSignal) {
@@ -46,8 +49,8 @@ export class OzonWindowService extends BrowserWindowService {
   }
 
   override destroy() {
-    this.requests?.destroy()
-    this.requests = undefined
+    for (const requests of this.requests.values()) requests.release()
+    this.requests.clear()
     super.destroy()
   }
 }

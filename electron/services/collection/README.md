@@ -205,7 +205,7 @@ RxJS 退订可以结束本地等待，但任意 Promise 不会因此自动停止
 
 窗口创建、加载、`getDomain`、`fetchPage` 和销毁由 [BrowserWindowService](../common/browser-window.services.ts) 提供。页面请求在渲染端 `window.__serviceRequests` 登记 `AbortController`，主进程取消时通知渲染端中止对应请求，结束后移除登记。因此排查页面请求卡住时，要同时看主进程信号和渲染端请求注册表。
 
-新增的 [ozon/main-window.services.ts](../ozon/main-window.services.ts) 负责业务窗口与请求窗口的组合；[ozon/request-window.services.ts](../ozon/request-window.services.ts) 负责串行请求、403 后导航或同 Session 重建、最多 3 次滑块验证及原接口重试。公共滑块算法已从巡查窗口迁到 `common/slider-verification.services.ts`。具体恢复及取消约定见 [OZON 请求说明](../ozon/README.md)。
+新增的 [ozon/main-window.services.ts](../ozon/main-window.services.ts) 通过 [共享请求管理器](../ozon/shared-request.services.ts) 让采集与巡查任务按 Session 和来源共用一个请求窗口，最后一个任务结束后回收；[ozon/request-window.services.ts](../ozon/request-window.services.ts) 负责串行请求、403 后导航或同 Session 重建、最多 3 次滑块验证及原接口重试。公共滑块算法已从巡查窗口迁到 `common/slider-verification.services.ts`。具体恢复及取消约定见 [OZON 请求说明](../ozon/README.md)。
 
 ### 3.8 `1688-window.services.ts`：按商品查找货源
 

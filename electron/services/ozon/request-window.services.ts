@@ -16,13 +16,13 @@ interface Options {
   settleMs?: number
 }
 
-/** 每个任务一个隐藏请求窗口；与采集窗口共用 Session，生命周期和队列独立。 */
+/** 同 Session、同来源共享的隐藏请求窗口，串行执行所有任务的接口请求。 */
 export class OzonRequestWindowService extends BrowserWindowService {
   private readonly scope = new TaskScope()
   private tail: Promise<void> = Promise.resolve()
   private readonly slider: Pick<SliderVerificationService, 'prepare' | 'hasChallenge' | 'verify'>
   private readonly origin: string
-  private state: VerificationState['phase'] = 'ready'
+  private pending = 0
 
   constructor(
     private readonly session: Session,
@@ -35,11 +35,15 @@ export class OzonRequestWindowService extends BrowserWindowService {
     this.slider = options.slider ?? new SliderVerificationService()
   }
 
-  request(url: string, signal?: AbortSignal): Promise<PageResponse> {
+  get stopped() { return this.scope.signal.aborted }
+
+  request(url: string, signal?: AbortSignal, onState = this.onState): Promise<PageResponse> {
     if (new URL(url).origin !== this.origin) return Promise.reject(new Error('请求地址与 OZON 会话来源不一致'))
     const combined = signal ? AbortSignal.any([signal, this.scope.signal]) : this.scope.signal
     const scope = new TaskScope(combined)
     const previous = this.tail
+    const emit = (state: VerificationState) => this.emit(state, onState)
+    if (this.pending++) emit({ phase: 'waiting' })
     let finished = false
     const abort = () => { if (!finished) this.releaseWindow() }
     const result = scope.run(async () => {
@@ -50,24 +54,24 @@ export class OzonRequestWindowService extends BrowserWindowService {
         let response = await verificationCoordinator.request(this.session, this.origin, async () => {
           await this.ensureWindow(scope.signal)
           return this.fetch(url, scope.signal)
-        }, scope.signal, () => this.emit({ phase: 'waiting' }))
+        }, scope.signal, () => emit({ phase: 'waiting' }))
         if (this.needsRecovery(response)) {
-          this.emit({ phase: 'waiting' })
+          emit({ phase: 'waiting' })
           let recovered: PageResponse | undefined
           await verificationCoordinator.recover(this.session, this.origin, async () => {
-            recovered = await this.recover(url, response, scope.signal)
+            recovered = await this.recover(url, response, scope.signal, emit)
           }, scope.signal)
           scope.check()
           response = recovered ?? await verificationCoordinator.request(this.session, this.origin,
             async () => { await this.ensureWindow(scope.signal); return this.fetch(url, scope.signal) }, scope.signal,
-            () => this.emit({ phase: 'waiting' }))
+            () => emit({ phase: 'waiting' }))
           if (this.needsRecovery(response)) throw new OzonVerificationError()
         }
         if (!this.isData(response)) throw new Error(`OZON 接口返回异常：HTTP ${response.status}，${response.contentType}`)
-        this.emit({ phase: 'ready' })
+        emit({ phase: 'ready' })
         return response
       } catch (error) {
-        this.emit({ phase: 'failed' })
+        emit({ phase: 'failed' })
         throw error
       } finally {
         finished = true
@@ -76,12 +80,12 @@ export class OzonRequestWindowService extends BrowserWindowService {
     }, 0)
     const settled = result.then(() => undefined, () => undefined)
     this.tail = previous.then(() => settled)
-    return result.finally(() => scope.stop())
+    return result.finally(() => { this.pending--; scope.stop() })
   }
 
   protected async ensureWindow(signal: AbortSignal) {
     if (this.browserWindow && !this.browserWindow.isDestroyed()) return
-    const win = this.createBrowserWindow({ show: false, webPreferences: { session: this.session } })
+    const win = this.createBrowserWindow({ show: true, webPreferences: { session: this.session } })
     try {
       await this.navigate(this.entryUrl, signal)
       signal.throwIfAborted()
@@ -115,11 +119,11 @@ export class OzonRequestWindowService extends BrowserWindowService {
     return response.status === 403 || response.contentType.includes('text/html')
   }
 
-  private async recover(url: string, initial: PageResponse, signal: AbortSignal): Promise<PageResponse> {
+  private async recover(url: string, initial: PageResponse, signal: AbortSignal, emit: (state: VerificationState) => void): Promise<PageResponse> {
     let response = initial
     for (let attempt = 1; attempt <= MAX_SLIDER_ATTEMPTS; attempt++) {
       signal.throwIfAborted()
-      this.emit({ phase: 'verifying', attempt })
+      emit({ phase: 'verifying', attempt })
       try {
         const redirect = response.redirected && response.url !== url && new URL(response.url).origin === this.origin
         if (redirect && this.browserWindow && !this.browserWindow.isDestroyed()) await this.navigate(response.url, signal)
@@ -134,7 +138,7 @@ export class OzonRequestWindowService extends BrowserWindowService {
           log.info('请求窗口滑块拖动结果:', { attempt, ...result })
           await abortableDelay(this.options.settleMs ?? 1000, signal)
         }
-        this.emit({ phase: 'retrying', attempt })
+        emit({ phase: 'retrying', attempt })
         response = await this.fetch(url, signal)
         if (this.isData(response)) return response
         if (!this.needsRecovery(response)) throw new Error(`OZON 接口返回 HTTP ${response.status}`)
@@ -146,10 +150,8 @@ export class OzonRequestWindowService extends BrowserWindowService {
     throw new OzonVerificationError()
   }
 
-  private emit(state: VerificationState) {
-    if (state.phase === 'ready' && this.state === 'ready') return
-    this.state = state.phase
-    try { this.onState?.(state) }
+  private emit(state: VerificationState, onState?: (state: VerificationState) => void) {
+    try { onState?.(state) }
     catch (error) { log.warn('通知验证状态失败:', error) }
   }
 

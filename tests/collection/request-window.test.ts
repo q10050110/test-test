@@ -63,6 +63,8 @@ const hooks = registerHooks({
 })
 const { OzonRequestWindowService, OzonVerificationError } = await import('../../electron/services/ozon/request-window.services.js')
 const { MainWindowService } = await import('../../electron/services/collection/main-window.services.js')
+const { MainWindowService: InspectionWindowService } = await import('../../electron/services/inspection/main-window.services.js')
+const { acquireOzonRequests } = await import('../../electron/services/ozon/shared-request.services.js')
 const { BrowserWindowService } = await import('../../electron/services/common/browser-window.services.js')
 const { ParseService } = await import('../../electron/services/collection/parse.services.js')
 hooks.deregister()
@@ -289,6 +291,109 @@ test('business window delegates both API methods and stays on its original page'
     assert.equal(business.urls.length, 0)
     assert.ok(requests[1]!.includes('123'))
   } finally { main.destroy() }
+  assert.ok(FakeWindow.instances.every(win => win.destroyed))
+})
+
+test('collection and inspection tasks share one request window until the last task ends', async () => {
+  fixture()
+  class Collection extends MainWindowService { open() { return this.createBrowserWindow() } }
+  class Inspection extends InspectionWindowService { open() { return this.createBrowserWindow() } }
+  const first = new Collection(() => {}), second = new Collection(() => {}), inspection = new Inspection(() => {})
+  const business = [first.open(), second.open(), inspection.open()]
+  try {
+    await Promise.all([first.getSellingData(api), second.getDataByApi('123'), inspection.getSellingData(api + '?inspection')])
+    assert.equal(FakeWindow.instances.length, 4)
+    assert.equal(FakeWindow.instances.filter(win => win.options.show === false).length, 1)
+    const shared = FakeWindow.instances[3]!
+    first.destroy()
+    second.destroy()
+    assert.equal(shared.destroyed, false)
+    await inspection.getDataByApi('456')
+    assert.equal(FakeWindow.instances.length, 4)
+    assert.ok(business.every(win => (win as any as FakeWindow).urls.length === 0))
+    inspection.destroy()
+    assert.equal(shared.destroyed, true)
+  } finally { first.destroy(); second.destroy(); inspection.destroy() }
+})
+
+test('destroying a queued task leaves the active shared request and its window intact', async () => {
+  fixture()
+  class Main extends MainWindowService { open() { return this.createBrowserWindow() } }
+  const first = new Main(() => {}), second = new Main(() => {})
+  first.open(); second.open()
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  respond = url => { if (url === api) { entered.resolve(); return release.promise } return good() }
+  try {
+    const active = first.getSellingData(api)
+    await entered.promise
+    const waiting = second.getSellingData(api + '?cancelled')
+    const rejected = assert.rejects(waiting, /取消/)
+    second.destroy()
+    await rejected
+    assert.equal(FakeWindow.instances[2]!.destroyed, false)
+    release.resolve(good())
+    await active
+    await first.getSellingData(api + '?next')
+    assert.deepEqual(requests, [api, api + '?next'])
+    assert.equal(FakeWindow.instances.length, 3)
+  } finally { release.resolve(good()); first.destroy(); second.destroy() }
+})
+
+test('destroying the active task lets another task continue through the shared queue', async () => {
+  fixture()
+  class Main extends MainWindowService { open() { return this.createBrowserWindow() } }
+  const first = new Main(() => {}), second = new Main(() => {})
+  first.open(); second.open()
+  const entered = Promise.withResolvers<void>()
+  respond = url => { if (url === api) { entered.resolve(); return new Promise(() => {}) } return good() }
+  try {
+    const active = first.getSellingData(api)
+    const rejected = assert.rejects(active, /取消/)
+    await entered.promise
+    const waiting = second.getSellingData(api + '?next')
+    first.destroy()
+    await rejected
+    assert.equal((await waiting).success, true)
+    assert.deepEqual(requests, [api, api + '?next'])
+    assert.ok(FakeWindow.instances[2]!.destroyed)
+    assert.equal(FakeWindow.instances.filter(win => win.options.show === false && !win.destroyed).length, 1)
+  } finally { first.destroy(); second.destroy() }
+})
+
+test('shared request state callbacks belong to the requesting task', async () => {
+  fixture()
+  const session: any = {}, firstStates: any[] = [], secondStates: any[] = []
+  const first = acquireOzonRequests(session, entry, state => firstStates.push(state))
+  const second = acquireOzonRequests(session, entry, state => secondStates.push(state))
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  respond = url => { if (url === api) { entered.resolve(); return release.promise } return good() }
+  try {
+    const active = first.request(api)
+    await entered.promise
+    const waiting = second.request(api + '?next')
+    assert.deepEqual(secondStates, [{ phase: 'waiting' }])
+    assert.deepEqual(firstStates, [])
+    release.resolve(good())
+    await Promise.all([active, waiting])
+    assert.deepEqual(firstStates, [{ phase: 'ready' }])
+    assert.deepEqual(secondStates, [{ phase: 'waiting' }, { phase: 'ready' }])
+    assert.equal(FakeWindow.instances.length, 1)
+  } finally { release.resolve(good()); first.release(); second.release() }
+})
+
+test('different sessions stay isolated and a crashed shared window can be recreated', async () => {
+  fixture()
+  const first = acquireOzonRequests({} as any, entry), second = acquireOzonRequests({} as any, entry)
+  try {
+    await first.request(api)
+    await second.request(api)
+    assert.equal(FakeWindow.instances.length, 2)
+    FakeWindow.instances[0]!.contents.emit('render-process-gone')
+    await first.request(api)
+    assert.equal(FakeWindow.instances.length, 3)
+    assert.equal(FakeWindow.instances[0]!.destroyed, true)
+    assert.equal(FakeWindow.instances[1]!.destroyed, false)
+  } finally { first.release(); second.release() }
   assert.ok(FakeWindow.instances.every(win => win.destroyed))
 })
 
