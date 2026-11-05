@@ -28,7 +28,7 @@ export class TaskManager {
   private stopPromise?: Promise<void>
   constructor(private readonly deps: ManagerDependencies = {
     api, createTask: (task, window) => new InspectionServices(task, window, inspectionDependencies), cron: CronServices.getInstance(),
-  }) {}
+  }) { }
 
   static getInstance() { return this.instance ??= new TaskManager() }
   setMainWindow(window: BrowserWindow) { this.mainWindow = window }
@@ -85,10 +85,12 @@ export class TaskManager {
     const match = String(task.autoExecutionTime).match(/^(\d{1,2}):(\d{2})$/)
     if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) throw new Error('巡查定时时间格式应为 HH:mm')
     const generation = this.generation
-    this.deps.cron.register({ name: task._id, expression: `${Number(match[2])} ${Number(match[1])} * * *`, handler: async () => {
-      try { if (generation === this.generation) await this.executeTask(task) }
-      catch (error) { log.error('定时巡查启动失败:', error) }
-    } })
+    this.deps.cron.register({
+      name: task._id, expression: `${Number(match[2])} ${Number(match[1])} * * *`, handler: async () => {
+        try { if (generation === this.generation) await this.executeTask(task) }
+        catch (error) { log.error('定时巡查启动失败:', error) }
+      }
+    })
     this.cronIds.add(task._id)
   }
   async restoreScheduledTasks() {

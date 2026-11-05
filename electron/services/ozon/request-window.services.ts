@@ -16,13 +16,12 @@ interface Options {
   settleMs?: number
 }
 
-/** 同 Session、同来源共享的隐藏请求窗口，串行执行所有任务的接口请求。 */
+/** 同 Session、同来源共享请求窗口；正常请求并发，验证恢复由协调器独占。 */
 export class OzonRequestWindowService extends BrowserWindowService {
   private readonly scope = new TaskScope()
-  private tail: Promise<void> = Promise.resolve()
+  private windowReady?: Promise<void>
   private readonly slider: Pick<SliderVerificationService, 'prepare' | 'hasChallenge' | 'verify'>
   private readonly origin: string
-  private pending = 0
 
   constructor(
     private readonly session: Session,
@@ -41,15 +40,9 @@ export class OzonRequestWindowService extends BrowserWindowService {
     if (new URL(url).origin !== this.origin) return Promise.reject(new Error('请求地址与 OZON 会话来源不一致'))
     const combined = signal ? AbortSignal.any([signal, this.scope.signal]) : this.scope.signal
     const scope = new TaskScope(combined)
-    const previous = this.tail
     const emit = (state: VerificationState) => this.emit(state, onState)
-    if (this.pending++) emit({ phase: 'waiting' })
-    let finished = false
-    const abort = () => { if (!finished) this.releaseWindow() }
     const result = scope.run(async () => {
-      await scope.run(() => previous, 0)
       scope.check()
-      combined.addEventListener('abort', abort, { once: true })
       try {
         let response = await verificationCoordinator.request(this.session, this.origin, async () => {
           await this.ensureWindow(scope.signal)
@@ -73,27 +66,34 @@ export class OzonRequestWindowService extends BrowserWindowService {
       } catch (error) {
         emit({ phase: 'failed' })
         throw error
-      } finally {
-        finished = true
-        combined.removeEventListener('abort', abort)
       }
     }, 0)
-    const settled = result.then(() => undefined, () => undefined)
-    this.tail = previous.then(() => settled)
-    return result.finally(() => { this.pending--; scope.stop() })
+    return result.finally(() => scope.stop())
   }
 
   protected async ensureWindow(signal: AbortSignal) {
-    if (this.browserWindow && !this.browserWindow.isDestroyed()) return
-    const win = this.createBrowserWindow({ show: true, webPreferences: { session: this.session } })
-    try {
-      await this.navigate(this.entryUrl, signal)
-      signal.throwIfAborted()
-      if (win.isDestroyed()) throw new Error('OZON 请求窗口已关闭')
-    } catch (error) {
-      if (this.browserWindow === win) this.releaseWindow()
-      throw error
+    signal.throwIfAborted()
+    if (!this.windowReady) {
+      if (this.browserWindow && !this.browserWindow.isDestroyed()) return
+      const win = this.createBrowserWindow({ show: true, webPreferences: { session: this.session } })
+      // 初始化属于共享服务，单个请求取消不能中止其他请求正在等待的页面加载。
+      const ready = this.navigate(this.entryUrl, this.scope.signal).then(() => {
+        this.scope.check()
+        if (win.isDestroyed()) throw new Error('OZON 请求窗口已关闭')
+      }).catch(error => {
+        if (this.browserWindow === win) this.releaseWindow()
+        throw error
+      }).finally(() => {
+        if (this.windowReady === ready) this.windowReady = undefined
+      })
+      this.windowReady = ready
+      // 所有等待者都取消后，加载仍可能失败；避免留下无人处理的拒绝。
+      void ready.catch(() => undefined)
     }
+    const ready = this.windowReady
+    const scope = new TaskScope(signal)
+    try { await scope.run(() => ready, 0) }
+    finally { scope.stop() }
   }
 
   protected async navigate(url: string, signal: AbortSignal) {

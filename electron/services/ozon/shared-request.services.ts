@@ -26,7 +26,7 @@ export function acquireOzonRequests(session: Session, entryUrl: string, onState?
   return {
     request(url: string, signal?: AbortSignal) {
       controller.signal.throwIfAborted()
-      // 异常关闭使旧队列全部退出；后续请求仍可创建新的共享窗口。
+      // 异常关闭使旧服务的请求全部退出；后续请求仍可创建新的共享窗口。
       if (entry.worker.stopped) {
         entry.worker.destroy()
         entry.worker = new OzonRequestWindowService(session, entryUrl)

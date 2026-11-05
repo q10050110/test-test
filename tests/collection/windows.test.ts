@@ -156,6 +156,34 @@ test('inspection page-check rejection closes its inherited window', async () => 
   assert.equal(win.destroyed, true)
 })
 
+test('collection awaits verification on startup even when no HTML will be read', async () => {
+  const service = new MainWindowService(() => {})
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  service.checkPage = async () => { entered.resolve(); await release.promise }
+  let ready = false
+  const opened = service.createCollectionWindow('https://test').then(win => { ready = true; return win })
+  const win = FakeWindow.instances.at(-1)!
+  win.contents.emit('dom-ready')
+  try {
+    await entered.promise
+    assert.equal(ready, false)
+    release.resolve()
+    await opened
+    assert.equal(ready, true)
+  } finally { release.resolve(); service.destroy() }
+})
+
+test('collection startup verification failure rejects and closes the window', async () => {
+  const service = new MainWindowService(() => {})
+  service.checkPage = async () => { throw new Error('page check failed') }
+  const opened = service.createCollectionWindow('https://test')
+  const rejected = assert.rejects(opened, /page check failed/)
+  const win = FakeWindow.instances.at(-1)!
+  win.contents.emit('dom-ready')
+  await rejected
+  assert.equal(win.destroyed, true)
+})
+
 test('aborting main-window creation rejects and removes loading listeners and abort listener', async () => {
   let abnormal = 0
   const main = new MainWindowService(() => {

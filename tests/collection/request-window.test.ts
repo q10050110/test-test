@@ -10,7 +10,7 @@ const api = 'https://www.ozon.ru/api/test'
 const good = (): PageResponse => ({ success: true, status: 200, contentType: 'application/json', url: api, redirected: false, data: { widgetStates: {} } })
 const forbidden = (redirected = false): PageResponse => ({ success: false, status: 403, contentType: 'text/html', url: redirected ? 'https://www.ozon.ru/verify' : api, redirected, data: '<html>verify</html>' })
 let respond: (url: string, win: FakeWindow) => Promise<PageResponse> | PageResponse = () => good()
-let onLoad: (win: FakeWindow) => void = () => {}
+let onLoad: (win: FakeWindow) => boolean | void = () => {}
 const requests: string[] = []
 const defaultSession = {}
 
@@ -43,8 +43,7 @@ class FakeWindow extends EventEmitter {
   async loadURL(url: string) {
     this.url = url
     this.urls.push(url)
-    onLoad(this)
-    queueMicrotask(() => this.contents.emit('dom-ready'))
+    if (onLoad(this) !== false) queueMicrotask(() => this.contents.emit('dom-ready'))
   }
   destroy() { if (!this.destroyed) { this.destroyed = true; this.emit('closed') } }
 }
@@ -81,17 +80,59 @@ function fixture(verify = async () => ({ success: true }), session: any = {}) {
   return { worker, states, session, slider, attempts: () => attempts }
 }
 
-test('normal requests reuse one hidden window and its original Session', async () => {
+test('normal requests reuse one window and its original Session with renderer isolation', async () => {
   const f = fixture()
   try {
     await f.worker.request(api)
     await f.worker.request(api + '?second')
     assert.equal(FakeWindow.instances.length, 1)
-    assert.equal(FakeWindow.instances[0]!.options.show, false)
+    assert.equal(FakeWindow.instances[0]!.options.webPreferences.sandbox, true)
+    assert.equal(FakeWindow.instances[0]!.options.webPreferences.nodeIntegration, false)
     assert.equal(FakeWindow.instances[0]!.contents.session, f.session)
     assert.equal(f.attempts(), 0)
   } finally { f.worker.destroy() }
   assert.equal(FakeWindow.instances[0]!.destroyed, true)
+})
+
+test('normal requests run concurrently in one window after shared initialization', async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  onLoad = () => { entered.resolve(); return false }
+  respond = () => release.promise
+  const urls = [api, api + '?second', api + '?third']
+  const pending = urls.map(url => f.worker.request(url))
+  try {
+    await entered.promise
+    await new Promise(setImmediate)
+    assert.equal(FakeWindow.instances.length, 1)
+    assert.deepEqual(requests, [])
+    const fetched = Promise.withResolvers<void>()
+    respond = () => { if (requests.length === urls.length) fetched.resolve(); return release.promise }
+    FakeWindow.instances[0]!.contents.emit('dom-ready')
+    await fetched.promise
+    assert.deepEqual(requests, urls)
+    assert.deepEqual(f.states, [])
+    release.resolve(good())
+    await Promise.all(pending)
+    assert.deepEqual(f.states, urls.map(() => ({ phase: 'ready' })))
+  } finally { release.resolve(good()); f.worker.destroy(); await Promise.allSettled(pending) }
+})
+
+test('cancelling the first caller during initialization leaves the shared load available to peers', async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>(), controller = new AbortController()
+  onLoad = () => { entered.resolve(); return false }
+  const first = f.worker.request(api, controller.signal)
+  const rejected = assert.rejects(first, /cancel/)
+  await entered.promise
+  const second = f.worker.request(api + '?second')
+  try {
+    controller.abort(new Error('cancel initialization caller'))
+    await rejected
+    assert.equal(FakeWindow.instances[0]!.destroyed, false)
+    FakeWindow.instances[0]!.contents.emit('dom-ready')
+    assert.equal((await second).success, true)
+    assert.deepEqual(requests, [api + '?second'])
+    assert.equal(FakeWindow.instances.length, 1)
+  } finally { f.worker.destroy(); await Promise.allSettled([first, second]) }
 })
 
 test('403 without redirect rebuilds the request window, verifies, then replays the exact URL', async () => {
@@ -139,7 +180,7 @@ test('a rebuilt window without a slider resumes only after a successful API prob
   finally { f.worker.destroy() }
 })
 
-test('queued requests remain paused while verification runs', async () => {
+test('new requests remain paused while verification runs', async () => {
   const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
   let blocked = true
   const f = fixture(async () => { entered.resolve(); await release.promise; blocked = false; return { success: true } })
@@ -154,22 +195,31 @@ test('queued requests remain paused while verification runs', async () => {
   finally { f.worker.destroy() }
 })
 
-test('cancelling a queued request cannot release the active request or let later work overtake it', async () => {
+test('cancelling one concurrent request preserves the window and other in-flight requests', async () => {
   const f = fixture(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
-  respond = url => { if (url === api) { entered.resolve(); return release.promise } return good() }
+  const secondEntered = Promise.withResolvers<void>()
+  respond = url => {
+    if (url === api) { entered.resolve(); return release.promise }
+    if (url.endsWith('?cancelled')) { secondEntered.resolve(); return new Promise(() => {}) }
+    return good()
+  }
   const first = f.worker.request(api)
   await entered.promise
   const controller = new AbortController()
   const second = f.worker.request(api + '?cancelled', controller.signal)
   const rejected = assert.rejects(second, /cancel/)
+  await secondEntered.promise
   controller.abort(new Error('cancel'))
   await rejected
   const third = f.worker.request(api + '?third')
-  await new Promise(setImmediate)
-  assert.deepEqual(requests, [api])
-  release.resolve(good())
-  try { await Promise.all([first, third]); assert.deepEqual(requests, [api, api + '?third']) }
-  finally { f.worker.destroy() }
+  try {
+    assert.equal((await third).success, true)
+    assert.equal(FakeWindow.instances[0]!.destroyed, false)
+    assert.deepEqual(requests, [api, api + '?cancelled', api + '?third'])
+    release.resolve(good())
+    assert.equal((await first).success, true)
+    assert.equal(FakeWindow.instances.length, 1)
+  } finally { release.resolve(good()); f.worker.destroy() }
 })
 
 test('destroy during hung verification rejects callers and releases the shared session gate', async () => {
@@ -189,7 +239,7 @@ test('destroy during hung verification rejects callers and releases the shared s
   assert.ok(FakeWindow.instances.every(win => win.destroyed))
 })
 
-test('normal fetch timeout rejects rather than stranding the queue', async () => {
+test('normal fetch timeout rejects without preventing later requests', async () => {
   const f = fixture()
   respond = () => new Promise(() => {})
   try {
@@ -251,6 +301,56 @@ test('simultaneous 403 responses share one verification and each replay their ow
   } finally { f.worker.destroy(); other.destroy() }
 })
 
+test('simultaneous 403 responses in one shared window verify once and replay each URL', async () => {
+  let blocked = true
+  const f = fixture(async () => { blocked = false; return { success: true } })
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  respond = async () => {
+    if (!blocked) return good()
+    if (requests.length === 3) entered.resolve()
+    await release.promise
+    return forbidden()
+  }
+  const urls = [api, api + '?second', api + '?third']
+  const pending = urls.map(url => f.worker.request(url))
+  try {
+    await entered.promise
+    release.resolve()
+    await Promise.all(pending)
+    assert.equal(f.attempts(), 1)
+    assert.equal(FakeWindow.instances.length, 2)
+    for (const url of urls) assert.equal(requests.filter(request => request === url).length, 2)
+  } finally { release.resolve(); f.worker.destroy(); await Promise.allSettled(pending) }
+})
+
+test('recovery drains in-flight requests before rebuilding the shared window and pauses new requests', async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  let blocked = true
+  f.slider.verify = async () => { blocked = false; return { success: true } }
+  respond = url => {
+    if (url === api) { entered.resolve(); return release.promise }
+    return blocked ? forbidden() : good()
+  }
+  const active = f.worker.request(api)
+  await entered.promise
+  const waiting = Promise.withResolvers<void>()
+  const recovering = f.worker.request(api + '?blocked', undefined, state => {
+    if (state.phase === 'waiting') waiting.resolve()
+  })
+  await waiting.promise
+  const next = f.worker.request(api + '?next')
+  try {
+    await new Promise(setImmediate)
+    assert.deepEqual(requests, [api, api + '?blocked'])
+    assert.equal(FakeWindow.instances.length, 1)
+    assert.equal(FakeWindow.instances[0]!.destroyed, false)
+    release.resolve(good())
+    await Promise.all([active, recovering, next])
+    assert.equal(FakeWindow.instances.length, 2)
+    assert.deepEqual(requests, [api, api + '?blocked', api + '?blocked', api + '?next'])
+  } finally { release.resolve(good()); f.worker.destroy(); await Promise.allSettled([active, recovering, next]) }
+})
+
 test('a waiting task can take over verification when the original owner is cancelled', async () => {
   const entered = Promise.withResolvers<void>()
   const f = fixture(async () => { entered.resolve(); return new Promise(() => {}) })
@@ -303,7 +403,7 @@ test('collection and inspection tasks share one request window until the last ta
   try {
     await Promise.all([first.getSellingData(api), second.getDataByApi('123'), inspection.getSellingData(api + '?inspection')])
     assert.equal(FakeWindow.instances.length, 4)
-    assert.equal(FakeWindow.instances.filter(win => win.options.show === false).length, 1)
+    assert.equal(FakeWindow.instances.filter(win => win.options.webPreferences.session === defaultSession).length, 1)
     const shared = FakeWindow.instances[3]!
     first.destroy()
     second.destroy()
@@ -316,7 +416,7 @@ test('collection and inspection tasks share one request window until the last ta
   } finally { first.destroy(); second.destroy(); inspection.destroy() }
 })
 
-test('destroying a queued task leaves the active shared request and its window intact', async () => {
+test('destroying a task before its request starts leaves active shared work intact', async () => {
   fixture()
   class Main extends MainWindowService { open() { return this.createBrowserWindow() } }
   const first = new Main(() => {}), second = new Main(() => {})
@@ -339,25 +439,32 @@ test('destroying a queued task leaves the active shared request and its window i
   } finally { release.resolve(good()); first.destroy(); second.destroy() }
 })
 
-test('destroying the active task lets another task continue through the shared queue', async () => {
+test('destroying an active task preserves another task and the shared window', async () => {
   fixture()
   class Main extends MainWindowService { open() { return this.createBrowserWindow() } }
   const first = new Main(() => {}), second = new Main(() => {})
   first.open(); second.open()
-  const entered = Promise.withResolvers<void>()
-  respond = url => { if (url === api) { entered.resolve(); return new Promise(() => {}) } return good() }
+  const entered = Promise.withResolvers<void>(), secondEntered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  respond = url => {
+    if (url === api) { entered.resolve(); return new Promise(() => {}) }
+    secondEntered.resolve()
+    return release.promise
+  }
   try {
     const active = first.getSellingData(api)
     const rejected = assert.rejects(active, /取消/)
     await entered.promise
     const waiting = second.getSellingData(api + '?next')
+    await secondEntered.promise
     first.destroy()
     await rejected
+    assert.equal(FakeWindow.instances[2]!.destroyed, false)
+    release.resolve(good())
     assert.equal((await waiting).success, true)
     assert.deepEqual(requests, [api, api + '?next'])
-    assert.ok(FakeWindow.instances[2]!.destroyed)
-    assert.equal(FakeWindow.instances.filter(win => win.options.show === false && !win.destroyed).length, 1)
-  } finally { first.destroy(); second.destroy() }
+    assert.equal(FakeWindow.instances.length, 3)
+    assert.equal(FakeWindow.instances.filter(win => win.options.webPreferences.session === defaultSession && !win.destroyed).length, 1)
+  } finally { release.resolve(good()); first.destroy(); second.destroy() }
 })
 
 test('shared request state callbacks belong to the requesting task', async () => {
@@ -371,12 +478,12 @@ test('shared request state callbacks belong to the requesting task', async () =>
     const active = first.request(api)
     await entered.promise
     const waiting = second.request(api + '?next')
-    assert.deepEqual(secondStates, [{ phase: 'waiting' }])
+    assert.deepEqual(secondStates, [])
     assert.deepEqual(firstStates, [])
     release.resolve(good())
     await Promise.all([active, waiting])
     assert.deepEqual(firstStates, [{ phase: 'ready' }])
-    assert.deepEqual(secondStates, [{ phase: 'waiting' }, { phase: 'ready' }])
+    assert.deepEqual(secondStates, [{ phase: 'ready' }])
     assert.equal(FakeWindow.instances.length, 1)
   } finally { release.resolve(good()); first.release(); second.release() }
 })

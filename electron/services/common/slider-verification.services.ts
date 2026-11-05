@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TaskScope, abortableDelay } from './task-scope.services.js'
+import log from '../../log/index.js'
 
 export const MAX_SLIDER_ATTEMPTS = 3
 const directory = path.dirname(fileURLToPath(import.meta.url))
 export interface SliderResult { success: boolean; reason?: string; message?: string; [key: string]: unknown }
+interface CanvasImage { source: string; data: string }
 
 /** 复用现有图像匹配和拖动算法；调用方必须用接口响应确认解除限制。 */
 export class SliderVerificationService {
@@ -49,6 +51,9 @@ export class SliderVerificationService {
     const scope = new TaskScope(signal)
     try {
       await this.injectOpenCV(wc, scope.signal)
+      // 页面上的 CDN 图片可能已污染 Canvas。用原 Session 读取图片字节，
+      // 再创建仅供计算的 data URL 图片，页面节点及拖动坐标仍使用原图。
+      const images = await this.readCanvasImages(wc, scope.signal)
       const result = await scope.run(() => wc.executeJavaScript(`
         (async () => {
           try {
@@ -118,13 +123,29 @@ export class SliderVerificationService {
               puzzleImg === document.querySelector('#puzzle') && slider.isConnected &&
               bgImg.currentSrc === bgSource && puzzleImg.currentSrc === puzzleSource;
 
+            const canvasImages = new Map();
+            const imageSources = ${JSON.stringify(images)};
+            for (const image of [bgImg, puzzleImg]) {
+              const source = image.currentSrc || image.src;
+              const cached = imageSources.find(item => item.source === source);
+              if (!cached) return { success: false, reason: 'captcha_changed' };
+              const clean = new Image();
+              clean.src = cached.data;
+              await clean.decode();
+              if (clean.naturalWidth !== image.naturalWidth || clean.naturalHeight !== image.naturalHeight) {
+                return { success: false, reason: 'captcha_changed' };
+              }
+              canvasImages.set(image, clean);
+            }
+            if (!isCurrentCaptcha()) return { success: false, reason: 'captcha_changed' };
+
             // 2. 辅助函数：Image -> Canvas
             function imageToCanvas(img, width = img.naturalWidth, height = img.naturalHeight) {
               const canvas = document.createElement('canvas');
               canvas.width = width;
               canvas.height = height;
               const ctx = canvas.getContext('2d', { willReadFrequently: true });
-              ctx.drawImage(img, 0, 0, width, height);
+              ctx.drawImage(canvasImages.get(img), 0, 0, width, height);
               return canvas;
             }
 
@@ -427,11 +448,38 @@ export class SliderVerificationService {
     } finally { scope.stop() }
   }
 
+  private async readCanvasImages(wc: WebContents, signal: AbortSignal): Promise<CanvasImage[]> {
+    const scope = new TaskScope(signal)
+    try {
+      return await scope.run(async innerSignal => {
+        const sources: string[] = await wc.executeJavaScript(`
+          ['#image', '#puzzle'].map(selector => {
+            const image = document.querySelector(selector);
+            return image?.currentSrc || image?.src || '';
+          })
+        `)
+        return await Promise.all(sources.map(async source => {
+          if (!source) throw new Error('验证码图片尚未加载')
+          const url = new URL(source)
+          if (url.protocol === 'data:' || url.protocol === 'blob:') return { source, data: source }
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('验证码图片协议不受支持')
+          const response = await wc.session.fetch(source, { signal: innerSignal, credentials: 'include' })
+          if (!response.ok) throw new Error(`读取验证码图片失败：HTTP ${response.status}`)
+          const contentType = response.headers.get('content-type')?.split(';')[0]?.trim()
+          if (!contentType?.startsWith('image/')) throw new Error('验证码图片响应不是图片')
+          const data = Buffer.from(await response.arrayBuffer()).toString('base64')
+          return { source, data: `data:${contentType};base64,${data}` }
+        }))
+      }, 10_000, '读取验证码图片')
+    } finally { scope.stop() }
+  }
+
   async checkPage(wc: WebContents, signal?: AbortSignal) {
     await this.prepare(wc, signal)
     for (let attempt = 1; attempt <= MAX_SLIDER_ATTEMPTS; attempt++) {
       if (!await this.hasChallenge(wc, signal)) return
-      await this.verify(wc, signal)
+      const result = await this.verify(wc, signal)
+      log.info('业务窗口滑块拖动结果:', { attempt, ...result })
       await abortableDelay(1000, signal)
     }
     if (await this.hasChallenge(wc, signal)) throw new Error('滑块验证失败，已达到 3 次上限')

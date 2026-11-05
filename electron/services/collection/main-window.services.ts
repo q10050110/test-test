@@ -6,6 +6,9 @@ export class MainWindowService extends OzonWindowService {
     const win = this.createBrowserWindow()
     try {
       await this.loadWindow(win, url, { event: 'dom-ready', timeoutMs: 100_000, readyDelayMs: 3000, signal })
+      await this.checkPage(signal)
+      signal?.throwIfAborted()
+      if (win.isDestroyed()) throw new Error('采集窗口已关闭')
       return win
     } catch (error) { this.destroy(); throw error }
   }
