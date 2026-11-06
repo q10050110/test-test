@@ -109,11 +109,11 @@ const hook = registerHooks({
 })
 const { TaskManager } = await import('../../electron/services/collection/task-manager.services.js')
 hook.deregister()
-function setup() {
+function setup(concurrency = 1) {
   save = async (_id, { upGoodsList, ...meta }) => meta
   request = async () => ({ data: {} })
   const manager: any = Reflect.construct(TaskManager, [])
-  manager.setMaxConcurrentTasks(1)
+  manager.setMaxConcurrentTasks(concurrency)
   const add = (id: string) => {
     const task = new FakeCollection({ _id: id, taskStatus: 'noExecuted', taskName: id })
     manager.tasks.set(id, task)
@@ -121,6 +121,22 @@ function setup() {
   }
   return { manager, add }
 }
+
+test('manager starts four tasks together and queues the fifth until a slot is released', async () => {
+  const { manager, add } = setup(4)
+  const ids = ['a', 'b', 'c', 'd', 'e']
+  const tasks = ids.map(add)
+  try {
+    await Promise.all(ids.map(id => manager.startTaskById(id)))
+    assert.deepEqual(tasks.map(task => task.started), [1, 1, 1, 1, 0])
+    assert.equal(manager.activeTasks.size, 4)
+    const finished = manager.executions.get('a')
+    tasks[0]!.complete()
+    await finished
+    assert.equal(tasks[4]!.started, 1)
+    assert.equal(manager.activeTasks.size, 4)
+  } finally { await manager.stopAllTasks() }
+})
 
 test('manager retains concurrency slot until result persistence and cleanup finish', async () => {
   const { manager, add } = setup()

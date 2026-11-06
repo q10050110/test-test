@@ -166,16 +166,17 @@ const batchStartHandle = async () => {
   )
   if (isRunning) return feedback.error('当前选中的任务中存在执行的任务，请稍后重试')
   isStart.value = true
-  for (const item of selectData.value) {
-    const task = tableData.value?.find((task) => task._id === item)
-    if (!task) continue
-    if (route.fullPath.includes('login')) return
-    await startTask(task)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  try {
+    const results = await Promise.allSettled(selectData.value.map(async (item) => {
+      const task = tableData.value?.find((task) => task._id === item)
+      if (!task || route.fullPath.includes('login')) return
+      await startTask(task)
+    }))
+    if (results.some(result => result.status === 'rejected')) feedback.error('部分任务启动失败，请检查任务状态')
+    selectData.value = []
+  } finally {
+    isStart.value = false
   }
-
-  selectData.value = []
-  isStart.value = false
 }
 
 // 复制任务

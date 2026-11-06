@@ -13,7 +13,15 @@ import {
   TaskTimeoutError,
 } from '../../electron/services/common/task-scope.services.js'
 import { TaskQueueService } from '../../electron/services/common/task-queue.services.js'
+import { mapConcurrent, mapPaced } from '../../electron/services/common/concurrent-map.services.js'
 import type { Task } from '../../electron/services/collection/type.js'
+import { ParseService } from '../../electron/services/collection/parse.services.js'
+import type { GoodsConsumer } from '../../electron/services/common/ozon-parse.services.js'
+
+async function parsedGoods(goods: any[], signal: AbortSignal, onGoods?: GoodsConsumer) {
+  for (const item of goods) await onGoods?.(item, signal)
+  return goods
+}
 
 function fixture(options: Partial<Task> = {}) {
   const task = {
@@ -55,10 +63,10 @@ function fixture(options: Partial<Task> = {}) {
       destroy: () => calls.push('source.destroy'),
     },
     parse: {
-      ozonListParser: async () => {
+      ozonListParser: async (_html: unknown, _domain: string, signal: AbortSignal, onGoods?: GoodsConsumer) => {
         if (visited.has(stage)) return []
         visited.add(stage)
-        return stage ? [second] : [first]
+        return parsedGoods(stage ? [second] : [first], signal, onGoods)
       },
       ozonDetailListParser: async (list: any[]) => list,
       ozonDetailParse: async () => ({ ...first, price: 1 }),
@@ -146,6 +154,183 @@ test('producer requests are awaited before deciding queues are empty', async () 
   assert.equal(finished, false)
   gate.resolve([{ id: '1', cover: 'cover' }])
   assert.equal((await running).upGoodsList.length, 1)
+  assertReleased(f.calls)
+})
+
+test('category launches the next detail without waiting for the previous three and saves before the page drains', async () => {
+  const f = fixture({ isUseCategorySelect: 0 })
+  const ids = ['1', '2', '3', '4']
+  const gates = ids.map(() => Promise.withResolvers<void>())
+  const entered = Promise.withResolvers<void>(), saved = Promise.withResolvers<void>()
+  const started: string[] = []
+  let active = 0, peak = 0
+  f.deps.request = async config => config.url?.includes('getReMaiData')
+    ? { data: { list: ids.map(_id => ({ _id })), total: ids.length } } : {}
+  f.services.main.getDataByApi = async (id: string) => {
+    started.push(id)
+    peak = Math.max(peak, ++active)
+    if (started.length === 4) entered.resolve()
+    await gates[ids.indexOf(id)]!.promise
+    active--
+    return {}
+  }
+  f.services.parse.ozonDetailParse = async (_response: any, _domain: string, goods: any) => ({ id: goods._id, price: 1 })
+  const save = f.deps.save
+  f.deps.save = async (...args) => { const result = await save(...args); saved.resolve(); return result }
+  const running = f.collection.run()
+  try {
+    await entered.promise
+    assert.deepEqual(started, ids)
+    gates[0]!.resolve()
+    await saved.promise
+    assert.equal(f.saved[0].id, '1')
+    assert.equal(active >= 2, true)
+    for (const gate of gates) gate.resolve()
+    const result = await running
+    assert.equal(result.upGoodsList.length, 4)
+    assert.equal(peak, 4)
+    assertReleased(f.calls)
+  } finally { for (const gate of gates) gate.resolve(); await f.collection.cancel(); await running.catch(() => undefined) }
+})
+
+test('page scrolling and the next base-data batch do not wait for a slow base-data response', async () => {
+  const f = fixture()
+  const gate = Promise.withResolvers<any[]>(), overlap = Promise.withResolvers<void>()
+  let page = 0, calls = 0
+  f.services.main.scrollPage = async () => { page++; return true }
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods?: GoodsConsumer) =>
+    parsedGoods(page < 2 ? [{ id: String(page + 1), cover: 'cover' }] : [], signal, onGoods)
+  f.services.data.getBaseData = async (goods: any[]) => {
+    calls++
+    if (calls === 1) return gate.promise
+    overlap.resolve()
+    return goods
+  }
+  const running = f.collection.run()
+  try {
+    await overlap.promise
+    assert.equal(calls, 2)
+    assert.ok(page >= 1)
+    gate.resolve([{ id: '1', cover: 'cover' }])
+    assert.equal((await running).upGoodsList.length, 2)
+    assertReleased(f.calls)
+  } finally { gate.resolve([]); await f.collection.cancel(); await running.catch(() => undefined) }
+})
+
+const pageCards = `<div id="contentScrollPaginator">${['1', '2', '3'].map(id =>
+  `<article><a href="/product/item-${id}/"><img src="${id}.png"></a><span class="tsHeadline500Medium">100 ₽</span></article>`,
+).join('')}</div>`
+const sellerResponse = { success: true, data: { widgetStates: {} } }
+
+test('a ready page product reaches saving while other seller requests are still pending', { timeout: 2000 }, async () => {
+  const f = fixture()
+  const entered = Promise.withResolvers<void>(), saved = Promise.withResolvers<void>()
+  const gates = ['1', '2', '3'].map(() => Promise.withResolvers<any>())
+  let active = 0, started = 0
+  f.services.parse = new ParseService({ getSellingData: async url => {
+    const id = Number(decodeURIComponent(url).match(/product_id=(\d+)/)![1])
+    active++
+    if (++started === 3) entered.resolve()
+    try { return await gates[id - 1]!.promise }
+    finally { active-- }
+  } })
+  const destroy = f.services.parse.destroy.bind(f.services.parse)
+  f.services.parse.destroy = () => { f.calls.push('parse.destroy'); destroy() }
+  f.services.main.getHTML = async () => ({ html: pageCards, domain: 'https://www.ozon.ru' })
+  const save = f.deps.save
+  f.deps.save = async (...args) => { const result = await save(...args); saved.resolve(); return result }
+  const running = f.collection.run()
+  try {
+    await entered.promise
+    gates[0]!.resolve(sellerResponse)
+    await saved.promise
+    assert.equal(f.saved[0].id, '1')
+    assert.equal(active, 2)
+    gates.forEach(gate => gate.resolve(sellerResponse))
+    assert.equal((await running).upGoodsList.length, 3)
+    assertReleased(f.calls)
+  } finally {
+    gates.forEach(gate => gate.resolve(sellerResponse))
+    await f.collection.cancel()
+    await running.catch(() => undefined)
+  }
+})
+
+test('reaching the page target aborts pending seller requests without waiting for the whole page', { timeout: 2000 }, async () => {
+  const f = fixture({ targetCount: 1 })
+  const entered = Promise.withResolvers<void>()
+  let started = 0, aborted = 0
+  f.services.parse = new ParseService({ getSellingData: async (url, signal) => {
+    if (++started === 3) entered.resolve()
+    if (decodeURIComponent(url).includes('product_id=1&')) { await entered.promise; return sellerResponse }
+    signal!.addEventListener('abort', () => aborted++, { once: true })
+    return new Promise(() => {})
+  } })
+  const destroy = f.services.parse.destroy.bind(f.services.parse)
+  f.services.parse.destroy = () => { f.calls.push('parse.destroy'); destroy() }
+  f.services.main.getHTML = async () => ({ html: pageCards, domain: 'https://www.ozon.ru' })
+  const result = await f.collection.run()
+  assert.equal(result.status, 'completed')
+  assert.equal(result.upGoodsList.length, 1)
+  assert.equal(aborted, 2)
+  assertReleased(f.calls)
+})
+
+test('a paced detail failure stops the launch interval and aborts already started work', async () => {
+  const failure = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>()
+  let calls = 0, intervalAborted = false
+  const running = mapPaced([1, 2, 3], async () => { calls++; return failure.promise }, async signal => {
+    entered.resolve()
+    signal.addEventListener('abort', () => { intervalAborted = true }, { once: true })
+    await new Promise(() => {})
+  })
+  const rejected = assert.rejects(running, /detail failed/)
+  await entered.promise
+  failure.reject(new Error('detail failed'))
+  await rejected
+  assert.equal(calls, 1)
+  assert.equal(intervalAborted, true)
+})
+
+test('a failed concurrent detail cancels its peers and never launches the rest of the batch', async () => {
+  const entered = Promise.withResolvers<void>(), failure = Promise.withResolvers<void>()
+  const started: number[] = []
+  let aborted = false
+  const running = mapConcurrent([0, 1, 2, 3], 2, async (id, _index, signal) => {
+    started.push(id)
+    if (started.length === 2) entered.resolve()
+    if (id === 0) return failure.promise
+    signal.addEventListener('abort', () => { aborted = true }, { once: true })
+    return new Promise<void>(() => {})
+  })
+  const rejected = assert.rejects(running, /detail failed/)
+  await entered.promise
+  failure.reject(new Error('detail failed'))
+  await rejected
+  assert.equal(aborted, true)
+  assert.deepEqual(started, [0, 1])
+})
+
+test('reaching the category target aborts outstanding detail requests and completes without waiting for them', async () => {
+  const f = fixture({ isUseCategorySelect: 0, targetCount: 1 })
+  const entered = Promise.withResolvers<void>()
+  const started: string[] = []
+  let aborted = 0
+  f.deps.request = async config => config.url?.includes('getReMaiData')
+    ? { data: { list: ['1', '2', '3', '4'].map(_id => ({ _id })), total: 4 } } : {}
+  f.services.main.getDataByApi = async (id: string, signal: AbortSignal) => {
+    started.push(id)
+    if (started.length === 4) entered.resolve()
+    if (id === '1') { await entered.promise; return {} }
+    signal.addEventListener('abort', () => { aborted++ }, { once: true })
+    return new Promise(() => {})
+  }
+  f.services.parse.ozonDetailParse = async (_response: any, _domain: string, goods: any) => ({ id: goods._id, price: 1 })
+  const result = await f.collection.run()
+  assert.equal(result.status, 'completed')
+  assert.equal(result.upGoodsList.length, 1)
+  assert.equal(aborted, 3)
+  assert.deepEqual(started, ['1', '2', '3', '4'])
   assertReleased(f.calls)
 })
 
@@ -331,14 +516,17 @@ test('unlimited total duration still responds to cancellation', async () => {
 test('reaching the target aborts other item windows before they can persist', async () => {
   const f = fixture({ targetCount: 1 })
   let parsed = false
-  f.services.parse.ozonListParser = async () => {
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods?: GoodsConsumer) => {
     if (parsed) return []
     parsed = true
-    return ['one', 'two', 'three'].map((id) => ({ id, cover: id }))
+    return parsedGoods(['one', 'two', 'three'].map((id) => ({ id, cover: id })), signal, onGoods)
   }
   let aborted = 0
+  let started = 0
+  const entered = Promise.withResolvers<void>()
   f.services.source.createWindow = async (_type: string, cover: string, signal: AbortSignal) => {
-    if (cover === 'one') return { link1688: 'source', sourcePrice: 1 }
+    if (++started === 3) entered.resolve()
+    if (cover === 'one') { await entered.promise; return { link1688: 'source', sourcePrice: 1 } }
     await new Promise<void>((resolve) =>
       signal.addEventListener(
         'abort',

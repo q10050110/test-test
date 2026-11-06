@@ -36,7 +36,6 @@ export class OzonWindowService extends BrowserWindowService {
       const pageUrl = this.browserWindow.webContents.getURL()
       const entry = new URL(pageUrl).origin === origin ? pageUrl : origin + '/'
       requests = acquireOzonRequests(this.browserWindow.webContents.session, entry, state => {
-        log.info('OZON 接口验证状态:', state)
         this.onVerification?.(state)
       })
       this.requests.set(origin, requests)

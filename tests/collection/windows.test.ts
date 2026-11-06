@@ -226,8 +226,43 @@ test('cancelling an image-search window releases IPC, abort listener and browser
   await rejected
   assert.equal(win.destroyed, true)
   assert.equal(ipc.listenerCount('result-page-' + id), 0)
+  assert.equal(win.contents.listenerCount('dom-ready'), 0)
   assert.equal(getEventListeners(controller.signal, 'abort').length, 0)
   source.destroy()
+})
+
+test('three image searches start on DOM readiness while full page loads are still pending', async () => {
+  const source = new WindowService({} as any)
+  const originalLoad = FakeWindow.prototype.loadURL
+  const loads = Array.from({ length: 3 }, () => Promise.withResolvers<void>())
+  let loadIndex = 0, started = 0
+  FakeWindow.prototype.loadURL = () => loads[loadIndex++]!.promise
+  ;(source as any).startSearch = async () => { started++ }
+  const controllers = Array.from({ length: 3 }, () => new AbortController())
+  const pending = controllers.map(controller => source.createWindow('1', 'cover', controller.signal))
+  const settled = Promise.allSettled(pending)
+  try {
+    await new Promise(setImmediate)
+    const windows = FakeWindow.instances.slice(-3)
+    assert.equal(loadIndex, 3)
+    assert.equal(started, 0)
+    for (const win of windows) {
+      win.contents.emit('dom-ready')
+      win.contents.emit('dom-ready')
+    }
+    await new Promise(setImmediate)
+    assert.equal(started, 3)
+    // 上传触发导航使旧 loadURL 被中止时，不应使正在等待结果的图搜失败。
+    for (const load of loads) load.reject(Object.assign(new Error('ERR_ABORTED'), { errno: -3 }))
+    await new Promise(setImmediate)
+    assert.ok(windows.every(win => !win.destroyed))
+  } finally {
+    for (const controller of controllers) controller.abort(new Error('cancel test'))
+    for (const load of loads) load.resolve()
+    await settled
+    source.destroy()
+    FakeWindow.prototype.loadURL = originalLoad
+  }
 })
 
 test('unexpected image-search window close rejects without accessing destroyed webContents', async () => {

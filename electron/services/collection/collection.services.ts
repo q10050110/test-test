@@ -9,7 +9,8 @@ import type { ParseService } from './parse.services.js'
 import type { Task, TaskStatus, Query, CollectionResult, CollectionPhase } from './type.js'
 import { createCollectionActor } from './collection-machine.services.js'
 import { TaskQueueService } from '../common/task-queue.services.js'
-import { TaskCancelledError, TaskScope } from '../common/task-scope.services.js'
+import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
+import { mapPaced } from '../common/concurrent-map.services.js'
 import type { VerificationState } from '../ozon/request-window.services.js'
 
 interface CollectionServices {
@@ -78,6 +79,9 @@ export class Collection {
   private services?: CollectionServices
   private items?: TaskQueueService
   private writes?: TaskQueueService
+  private batches?: TaskQueueService<{ id: string; goods: any[] }>
+  private batchIndex = 0
+  private detailScope?: TaskScope
   private execution?: Promise<CollectionResult>
   private cleanupPromise?: Promise<void>
   private statusSync = Promise.resolve()
@@ -161,6 +165,12 @@ export class Collection {
         timeoutMs: this.deps.timing?.operation ?? 30_000,
         onError: (error) => this.fail(error),
       })
+      this.batches = new TaskQueueService(({ goods }, signal) => this.processData(goods, signal), 2, {
+        label: '基础数据处理',
+        parent: this.scope.signal,
+        timeoutMs: this.deps.timing?.operation ?? 30_000,
+        onError: (error) => this.fail(error),
+      })
       this.deps.metrics({ taskId: this.task._id, taskName: this.task.taskName, phase: 'start' })
       await this.scope.run(() => this.workflow(), this.deps.timing?.run ?? 0, '采集任务')
       this.scope.check()
@@ -234,19 +244,31 @@ export class Collection {
   private pageStep<T>(operation: (signal: AbortSignal) => PromiseLike<T> | T, label: string) {
     return this.scope.run(operation, 0, label)
   }
-  private pause(kind: 'scroll' | 'detail') {
+  private async measure<T>(stage: string, operation: () => PromiseLike<T> | T, goodsId?: string): Promise<T> {
+    const started = performance.now()
+    try { return await operation() }
+    finally {
+      this.deps.log.info('采集阶段耗时:', {
+        taskId: this.task._id, stage, goodsId, elapsedMs: Math.round(performance.now() - started),
+        activeItems: this.items?.getActiveCount() ?? 0, pendingItems: this.items?.getTaskCount() ?? 0,
+      })
+    }
+  }
+  private pause(kind: 'scroll' | 'detail', signal = this.scope.signal) {
     const ms =
       this.deps.timing?.[kind] ??
       (kind === 'scroll' ? 3000 + Math.random() * 2000 : 1000 + Math.random() * 3000)
-    return this.scope.sleep(ms)
+    return abortableDelay(ms, signal)
   }
-  private async backpressure() {
+  private async backpressure(signal = this.scope.signal) {
     while (
       !this.targetReached &&
-      (this.items?.getTaskCount() ?? 0) + (this.writes?.getTaskCount() ?? 0) > 20
+      ((this.items?.getTaskCount() ?? 0) + (this.writes?.getTaskCount() ?? 0) > 20 ||
+        (this.batches?.getTaskCount() ?? 0) >= 2)
     ) {
-      await this.scope.sleep(250)
+      await abortableDelay(250, signal)
     }
+    signal.throwIfAborted()
     this.scope.check()
   }
 
@@ -274,26 +296,34 @@ export class Collection {
         goods.releaseDate = dayjs().diff(dayjs(goods.nullableCreateDate), 'day')
         goods.clickRate = (((goods.qtyViewPdp || 0) / (goods.views || 1)) * 100).toFixed(2)
       }
-      const filtered = await this.runtime.data.filterData(unique, this.task, 'base')
-      const detailed = []
-      // 详情请求串行，单个拒绝不会留下未等待的 Promise。
-      for (const goods of filtered) {
-        this.scope.check()
-        if (this.targetReached) break
-        const response = await this.pageStep(
-          (signal) => this.runtime.main.getDataByApi(goods._id, signal),
-          '获取商品详情',
-        )
+      const filtered: any[] = await this.runtime.data.filterData(unique, this.task, 'base')
+      // 沿用重构前按间隔启动的节奏，发下一件不等待前一件响应。
+      const detailScope = new TaskScope(this.scope.signal)
+      this.detailScope = detailScope
+      await mapPaced(filtered, async (goods, _index, signal) => {
+        await this.backpressure()
+        signal.throwIfAborted()
+        if (this.targetReached) return
+        const response = await this.measure('OZON详情接口', () => this.runtime.main.getDataByApi(goods._id, signal), goods._id)
+        signal.throwIfAborted()
         const domain = await this.runtime.main.getDomain()
-        const detail = await this.pageStep(
-          (signal) => this.runtime.parse.ozonDetailParse(response, domain, goods, signal),
-          '解析商品详情',
-        )
-        if (detail?.price)
-          detailed.push({ href: `https://www.ozon.ru/product/${detail.id}`, ...detail })
-        await this.pause('detail')
-      }
-      this.enqueue(await this.runtime.data.filterData(detailed, this.task, 'detail'))
+        signal.throwIfAborted()
+        const detail = await this.measure('详情解析及跟卖接口', () => this.runtime.parse.ozonDetailParse(response, domain, goods, signal), goods._id)
+        signal.throwIfAborted()
+        if (detail?.price && !this.targetReached) {
+          const goods = await this.runtime.data.filterData(
+            [{ href: `https://www.ozon.ru/product/${detail.id}`, ...detail }], this.task, 'detail',
+          )
+          signal.throwIfAborted()
+          this.enqueue(goods)
+        }
+      }, signal => this.pause('detail', signal), detailScope.signal).catch(error => {
+        this.scope.check()
+        if (!this.targetReached || !detailScope.signal.aborted) throw error
+      }).finally(() => {
+        detailScope.stop()
+        this.detailScope = undefined
+      })
       if (!list.length || this.query.pageNo >= this.query.maxPage) break
       this.query.pageNo++
     }
@@ -303,18 +333,34 @@ export class Collection {
     let emptyScrolls = 0
     let bottomCount = 0
     const parsePage = async () => {
-      const { html, domain } = await this.pageStep(
-        (signal) => this.runtime.main.getHTML(signal),
-        '读取页面',
-      )
-      const goods = await this.pageStep(
-        (signal) => this.runtime.parse.ozonListParser(html, domain, signal),
-        '解析商品列表',
-      )
-      this.scope.check()
-      this.discovered = this.runtime.parse.getDataCount()
-      if (goods.length && !this.targetReached) await this.processData(goods)
-      return goods.length
+      const pageScope = new TaskScope(this.scope.signal)
+      this.detailScope = pageScope
+      let delivered = 0
+      try {
+        const { html, domain } = await pageScope.run(
+          (signal) => this.runtime.main.getHTML(signal), 0, '读取页面',
+        )
+        await this.measure('页面解析及跟卖接口', () => pageScope.run(
+          (signal) => this.runtime.parse.ozonListParser(html, domain, signal, async (goods, signal) => {
+            await this.backpressure(signal)
+            if (this.targetReached) return
+            signal.throwIfAborted()
+            this.batches?.addTask([{ id: String(++this.batchIndex), goods: [goods] }])
+            delivered++
+          }),
+          0, '解析商品列表',
+        ))
+        this.scope.check()
+        this.discovered = this.runtime.parse.getDataCount()
+        return delivered
+      } catch (error) {
+        this.scope.check()
+        if (!this.targetReached || !pageScope.signal.aborted) throw error
+        return delivered
+      } finally {
+        pageScope.stop()
+        this.detailScope = undefined
+      }
     }
     await parsePage()
     while (!this.targetReached && emptyScrolls < 10 && bottomCount < 3) {
@@ -330,15 +376,13 @@ export class Collection {
     }
   }
 
-  private async processData(goods: any[]) {
-    const base = await this.step(
-      (signal) => this.runtime.data.getBaseData(goods, signal),
-      '获取基础数据',
-    )
-    this.scope.check()
+  private async processData(goods: any[], signal: AbortSignal) {
+    const base = await this.measure('基础数据接口', () => this.runtime.data.getBaseData(goods, signal))
+    signal.throwIfAborted()
     const filtered = !this.task.aiSelectType
       ? await this.runtime.data.aiFilterData(base)
       : await this.runtime.data.filterData(base, this.task)
+    signal.throwIfAborted()
     this.enqueue(filtered)
   }
   private enqueue(goods: any[]) {
@@ -352,14 +396,14 @@ export class Collection {
   private taskHandle = async (goods: any, signal: AbortSignal) => {
     signal.throwIfAborted()
     if (this.targetReached) return
-    const { link1688, sourcePrice, cover2 } = await this.runtime.source.createWindow(
+    const { link1688, sourcePrice, cover2 } = await this.measure('1688图搜', () => this.runtime.source.createWindow(
       this.task.sourceType,
       goods.cover,
       signal,
-    )
+    ), goods.id)
     signal.throwIfAborted()
     if (this.targetReached) return
-    const detail = await this.runtime.data.getDetailData(
+    const detail = await this.measure('商品筛选及翻译接口', () => this.runtime.data.getDetailData(
       {
         taskId: this.task._id,
         upMode: this.task.upMode,
@@ -376,7 +420,7 @@ export class Collection {
         ],
       },
       signal,
-    )
+    ), goods.id)
     signal.throwIfAborted()
     if (!this.targetReached) this.writes?.addTask(detail)
   }
@@ -384,10 +428,10 @@ export class Collection {
   private saveGoods = async (goods: any, signal: AbortSignal) => {
     signal.throwIfAborted()
     if (this.targetReached || this.saved.has(goods.id)) return
-    const { code, count, message } = await this.deps.save(
+    const { code, count, message } = await this.measure('商品保存接口', () => this.deps.save(
       { taskId: this.task._id, datas: [goods] },
       signal,
-    )
+    ), goods.id)
     signal.throwIfAborted()
     if (code) {
       this.hasUpLimit = code === 402 || code === 403
@@ -398,12 +442,18 @@ export class Collection {
     if (count > 0) {
       this.saved.set(goods.id, goods)
       this.targetData += count
-      if (this.targetReached) this.items?.destroy()
+      if (this.targetReached) {
+        this.items?.destroy()
+        this.batches?.destroy()
+        this.detailScope?.stop(new TaskCancelledError('已达到采集目标'))
+      }
     }
     this.outputLog('商品已保存')
   }
 
   private async waitForAllTasks() {
+    if (this.targetReached) this.batches?.destroy()
+    await this.scope.run(() => this.batches?.whenIdle(), this.deps.timing?.run ?? 0, '等待基础数据处理')
     if (this.targetReached) this.items?.destroy()
     await this.scope.run(() => this.items?.whenIdle(), this.deps.timing?.run ?? 0, '等待商品处理')
     await this.scope.run(() => this.writes?.whenIdle(), this.deps.timing?.run ?? 0, '等待商品保存')
@@ -501,6 +551,7 @@ export class Collection {
     this.scope.stop(new TaskCancelledError('任务正在清理'))
     this.cleanupPromise = (async () => {
       const cleanups = [
+        () => this.batches?.destroy(),
         () => this.items?.destroy(),
         () => this.writes?.destroy(),
         () => this.services?.source.destroy(),
@@ -523,6 +574,7 @@ export class Collection {
       this.saved.clear()
       this.services = undefined
       this.items = undefined
+      this.batches = undefined
       this.writes = undefined
       this.mainWindow = null
     })()

@@ -1,12 +1,13 @@
 import * as cheerio from 'cheerio'
 import { VerificationFailedError } from '../common/verification-coordinator.services.js'
-import { OzonParseService, type SellerSummary, type SellerDataSource } from '../common/ozon-parse.services.js'
+import { OzonParseService, type SellerSummary, type SellerDataSource, type GoodsConsumer } from '../common/ozon-parse.services.js'
 
 export class ParseService extends OzonParseService {
+  protected override readonly requestConcurrency = 3
   constructor(source: SellerDataSource, private readonly log: Pick<Console, 'error'> = console) { super(source) }
   readonly guessLikeList = new Set<string>()
 
-  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal) {
+  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer) {
     signal?.throwIfAborted()
     if (html && !this.guessLikeList.size) {
       const $ = cheerio.load(html)
@@ -15,7 +16,7 @@ export class ParseService extends OzonParseService {
         if (id) this.guessLikeList.add(this.offersUrl(id, domain))
       })
     }
-    return super.ozonListParser(html, domain, signal)
+    return super.ozonListParser(html, domain, signal, onGoods)
   }
 
   protected override mapGoods(goods: any, sellers: SellerSummary) {

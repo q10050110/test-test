@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { ParseService } from './parse.services.js'
 import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
+import log from '../../log/index.js'
 const directory = path.dirname(fileURLToPath(import.meta.url))
 
 export class WindowService {
@@ -39,11 +40,16 @@ export class WindowService {
       })
       const wc = win.webContents
       let settled = false
+      let searchStarted = false
+      const started = performance.now()
       const cleanup = () => {
         signal.removeEventListener('abort', abort)
         ipcMain.removeListener(channel, received)
         win.removeListener('closed', closed)
-        if (!wc.isDestroyed()) wc.removeListener('render-process-gone', crashed)
+        if (!wc.isDestroyed()) {
+          wc.removeListener('render-process-gone', crashed)
+          wc.removeListener('dom-ready', ready)
+        }
         this.windows.delete(id)
         if (!win.isDestroyed()) win.destroy()
       }
@@ -61,8 +67,16 @@ export class WindowService {
       const abort = () => finish(signal.reason ?? new TaskCancelledError())
       const closed = () => finish(new Error('1688 窗口异常关闭'))
       const crashed = () => finish(new Error('1688 渲染进程退出'))
+      const ready = () => {
+        if (settled || searchStarted) return
+        searchStarted = true
+        wc.removeListener('dom-ready', ready)
+        log.info('1688 图搜阶段耗时:', { windowId: id, stage: '入口DOM就绪', elapsedMs: Math.round(performance.now() - started) })
+        void this.startSearch(win, cover, signal).catch(error => finish(error))
+      }
       const received = (event: Electron.IpcMainEvent) => {
         if (event.sender !== wc || settled) return
+        log.info('1688 图搜阶段耗时:', { windowId: id, stage: '收到搜索结果', elapsedMs: Math.round(performance.now() - started) })
         ipcMain.removeListener(channel, received)
         void (async () => {
           await abortableDelay(5000, signal)
@@ -86,11 +100,12 @@ export class WindowService {
       signal.addEventListener('abort', abort, { once: true })
       win.once('closed', closed)
       win.webContents.once('render-process-gone', crashed)
+      wc.once('dom-ready', ready)
       ipcMain.on(channel, received)
       void win
         .loadURL('https://pages-fast.1688.com/wow/cbu/srch_rec/image_search/youyuan/index.html?')
-        .then(() => this.startSearch(win, cover, signal))
-        .catch((error) => finish(error))
+        // DOM 就绪即可上传；图片、统计等资源不能阻塞整个商品处理槽。
+        .catch((error) => { if (!searchStarted || error?.errno !== -3) finish(error) })
     })
   }
 
