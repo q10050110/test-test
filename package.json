@@ -14,6 +14,8 @@
     "clean": "rimraf dist dist-electron release",
     "build": "yarn clean && vite build --mode development && yarn build:electron && cross-env APP_ENV=development electron-builder --config build.config.js",
     "build:prod": "yarn clean && vite build --mode prod && yarn build:electron && cross-env APP_ENV=prod electron-builder --config build.config.js",
+    "build:mac:unsigned": "yarn clean && vite build --mode prod && yarn build:electron && cross-env APP_ENV=prod CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config build.mac-unsigned.config.js --mac --publish never",
+    "build:mac:unsigned:dev": "yarn clean && vite build --mode development && yarn build:electron && cross-env APP_ENV=development CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config build.mac-unsigned.config.js --mac --publish never",
     "build-only": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",

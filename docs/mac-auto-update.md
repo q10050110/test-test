@@ -3,13 +3,48 @@
 实际配置是 `build.config.js`。`package.json` 的 `build.extends` 和兼容入口
 `electron-builder.jsonc` 都指向它；打包脚本及 CI 也显式指定此配置。
 
+## 无需 Apple 证书的手动分发包
+
+公司申请证书前，可以使用 `build.mac-unsigned.config.js` 构建手动分发包。
+该模式不需要上述五项 Apple 凭据，不执行公证，也不要求 Developer ID 签名。
+Apple Silicon 需要本机 ad-hoc 签名，构建工具会自动处理，无需申请证书。
+
+在 GitHub 仓库打开 **Actions → Build macOS packages → Run workflow**：
+
+- `app_env`：选 `production` 或 `development`；
+- `signing_mode`：选 `unsigned`（默认）。
+
+运行完成后，在该次任务的 **Artifacts** 下载
+`macOS-production-unsigned` 或 `macOS-development-unsigned`，解压获得安装文件。
+
+也可以在本地 Mac 上执行：
+
+```sh
+# 正式环境
+yarn build:mac:unsigned
+
+# 测试环境
+yarn build:mac:unsigned:dev
+```
+
+输出目录是 `release/mac-unsigned/`，包含 x64、arm64 的 DMG 和 ZIP，文件名带
+`unsigned` 标记。包内关闭自动检测、下载和安装，不生成 `latest-mac.yml` 或
+`app-update.yml`，请让用户手动下载安装新版本，不要将这些包发布到自动更新目录。
+
+安装时将应用拖入 `/Applications`。未公证的应用首次打开可能被 macOS 阻止；
+确认来源可信后，可按系统提示在“系统设置 → 隐私与安全性”中选择“仍要打开”。
+设备管理策略可能限制此操作。参考 [Apple 打开未签名或未公证应用的说明](https://support.apple.com/en-us/102445)。
+
+公司证书申请完成后，在工作流选择 `signed`，配置下面的 Secrets，恢复签名、公证和
+自动更新发布。已经安装的手动分发包需要手动替换为签名版一次，之后再使用自动更新。
+
 ## 签名和公证
 
 必须在 macOS 上构建，安装 Xcode Command Line Tools，并准备带私钥的
 **Developer ID Application** 证书。当前版本与更新版本需要保持应用标识及签名身份兼容，
 不要在发布途中改变 `appId`、开发团队或应用名称。
 
-GitHub Actions 的 `Build signed macOS updates` 工作流需要以下 Repository Secrets：
+GitHub Actions 的 `Build macOS packages` 工作流在 `signing_mode=signed` 时需要以下 Repository Secrets：
 
 | Secret                        | 内容                                       |
 | ----------------------------- | ------------------------------------------ |

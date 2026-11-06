@@ -2,6 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { registerHooks } from 'node:module'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 test('更新生命周期：下载、原生签名校验、失败恢复和安装清理', async (t) => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -10,7 +13,10 @@ test('更新生命周期：下载、原生签名校验、失败恢复和安装�
   const values = new Map<string, any>()
   const messages: { channel: string; payload: any }[] = []
   const logger = { info() {}, warn() {}, error() {} }
+  const prefix = join(tmpdir(), 'shopbang-updater-')
+  const directory = mkdtempSync(prefix)
   ;(globalThis as any).__updateTest = {
+    app: { isPackaged: true, getAppPath: () => directory },
     updater,
     nativeUpdater,
     logger,
@@ -21,7 +27,7 @@ test('更新生命周期：下载、原生签名校验、失败恢复和安装�
   }
   const sources: Record<string, string> = {
     electron:
-      'export const autoUpdater = globalThis.__updateTest.nativeUpdater; export class BrowserWindow {}',
+      'export const app = globalThis.__updateTest.app; export const autoUpdater = globalThis.__updateTest.nativeUpdater; export class BrowserWindow {}',
     'electron-updater': 'export default { autoUpdater: globalThis.__updateTest.updater }',
     '../log/index.js': 'export default globalThis.__updateTest.logger',
     '../store/index.js': 'export const operationStore = globalThis.__updateTest.operationStore',
@@ -40,6 +46,8 @@ test('更新生命周期：下载、原生签名校验、失败恢复和安装�
   t.after(() => {
     hook.deregister()
     Object.defineProperty(process, 'platform', originalPlatform)
+    assert.ok(directory.startsWith(prefix))
+    rmSync(directory, { recursive: true, force: true })
     delete (globalThis as any).__updateTest
   })
   const { UpdaterManager } = await import('../../electron/services/update.services.js')
@@ -51,7 +59,11 @@ test('更新生命周期：下载、原生签名校验、失败恢复和安装�
       { url: `app-${process.arch}.zip`, size: 500 },
     ],
   }
-  function setup(platform: string) {
+  function setup(platform: string, manual = false) {
+    writeFileSync(
+      join(directory, 'package.json'),
+      JSON.stringify(manual ? { MAC_UPDATE_MODE: 'manual' } : {}),
+    )
     Object.defineProperty(process, 'platform', { ...originalPlatform, value: platform })
     updater.removeAllListeners()
     nativeUpdater.removeAllListeners()
@@ -65,6 +77,35 @@ test('更新生命周期：下载、原生签名校验、失败恢复和安装�
     } as any)
     return manager
   }
+
+  await t.test('手动分发包清除旧更新状态，所有更新入口均不触发网络或安装', async () => {
+    const manager = setup('darwin', true)
+    values.set('update-status', 'downloaded')
+    let calls = 0
+    updater.checkForUpdates = async () => {
+      calls++
+      throw new Error('不应检测更新')
+    }
+    updater.downloadUpdate = async () => {
+      calls++
+      throw new Error('不应下载更新')
+    }
+    updater.quitAndInstall = () => {
+      calls++
+    }
+    manager.init()
+    await manager.checkUpdate()
+    await manager.checkForUpdatesAndNotify()
+    await manager.startDownload()
+    await manager.quitAndInstall()
+    assert.equal(calls, 0)
+    assert.equal(updater.autoDownload, false)
+    assert.equal(updater.autoInstallOnAppQuit, false)
+    assert.equal(updater.listenerCount('update-available'), 0)
+    assert.equal(nativeUpdater.listenerCount('update-downloaded'), 0)
+    assert.equal(values.get('update-status'), 'hasNew')
+    assert.deepEqual(messages, [])
+  })
 
   await t.test('mac 自动下载，只有 Squirrel 验签成功后才允许安装，安装不重复下载', async () => {
     const manager = setup('darwin')

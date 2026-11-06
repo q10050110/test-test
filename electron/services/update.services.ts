@@ -1,5 +1,7 @@
 import pkg from 'electron-updater'
-import { autoUpdater as nativeAutoUpdater, BrowserWindow } from 'electron'
+import { app, autoUpdater as nativeAutoUpdater, BrowserWindow } from 'electron'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { UpdateInfo } from 'electron-updater'
 import log from '../log/index.js'
 import { operationStore } from '../store/index.js'
@@ -9,6 +11,7 @@ export class UpdaterManager {
   private static instance: UpdaterManager | null = null
   private win: BrowserWindow | null = null
   private isInit = false
+  private updatesEnabled = true
   private updateAvailable = false
   private downloaded = false
   private installing = false
@@ -114,7 +117,7 @@ export class UpdaterManager {
   }
 
   async checkUpdate() {
-    if (this.installing || this.downloaded) return
+    if (!this.updatesEnabled || this.installing || this.downloaded) return
     log.info('开始检测更新')
     try {
       const result = await autoUpdater.checkForUpdates()
@@ -128,7 +131,7 @@ export class UpdaterManager {
   }
 
   async startDownload() {
-    if (this.installing || this.downloaded) return
+    if (!this.updatesEnabled || this.installing || this.downloaded) return
     try {
       // 重启后仅有持久化状态，需重新检测，让 updater 恢复并验证缓存。
       if (!this.updateAvailable) {
@@ -146,7 +149,7 @@ export class UpdaterManager {
   }
 
   async quitAndInstall() {
-    if (this.installing) return
+    if (!this.updatesEnabled || this.installing) return
     try {
       if (!this.downloaded) throw new Error('更新尚未完成下载或签名校验，请下载完成后再安装。')
       this.installing = true
@@ -161,14 +164,29 @@ export class UpdaterManager {
   public init() {
     if (this.isInit) return
     this.isInit = true
+    if (process.platform === 'darwin' && app.isPackaged) {
+      try {
+        const metadata = JSON.parse(
+          readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8'),
+        )
+        this.updatesEnabled = metadata.MAC_UPDATE_MODE !== 'manual'
+      } catch (error) {
+        this.updatesEnabled = false
+        log.warn('无法读取更新模式，暂停自动更新', error)
+      }
+    }
     autoUpdater.logger = log
-    autoUpdater.autoDownload = process.platform === 'darwin'
+    autoUpdater.autoDownload = this.updatesEnabled && process.platform === 'darwin'
     autoUpdater.allowDowngrade = false
     // macOS 必须让 Squirrel.Mac 提前准备、校验更新，退出时也可完成安装。
-    autoUpdater.autoInstallOnAppQuit = process.platform === 'darwin'
+    autoUpdater.autoInstallOnAppQuit = this.updatesEnabled && process.platform === 'darwin'
     autoUpdater.autoRunAppAfterInstall = true
     // 上次进程中的 downloaded 不能代表本次进程的 native updater 已准备好。
     operationStore.set('update-status', 'hasNew')
+    if (!this.updatesEnabled) {
+      log.info('当前 macOS 包使用手动安装和升级')
+      return
+    }
     this.registerEvents()
   }
 }

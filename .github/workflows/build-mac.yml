@@ -1,4 +1,4 @@
-name: Build signed macOS updates
+name: Build macOS packages
 
 on:
   workflow_dispatch:
@@ -11,6 +11,14 @@ on:
           - development
           - production
         default: production
+      signing_mode:
+        description: 'unsigned：无需证书，手动升级；signed：签名公证，支持自动更新'
+        required: true
+        type: choice
+        options:
+          - unsigned
+          - signed
+        default: unsigned
 
 permissions:
   contents: read
@@ -22,6 +30,7 @@ jobs:
 
     env:
       APP_ENV: ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
+      MAC_OUTPUT_DIR: ${{ inputs.signing_mode == 'unsigned' && 'release/mac-unsigned' || 'release' }}
 
     steps:
       - name: Checkout
@@ -42,6 +51,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Check environment
+        if: ${{ inputs.signing_mode == 'signed' }}
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -61,7 +71,8 @@ jobs:
       - name: Build Electron main process
         run: yarn build:electron
 
-      - name: Package macOS
+      - name: Package signed macOS
+        if: ${{ inputs.signing_mode == 'signed' }}
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -70,30 +81,52 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: yarn electron-builder --config build.config.js --mac --publish never
 
+      - name: Package macOS without Apple credentials
+        if: ${{ inputs.signing_mode == 'unsigned' }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: yarn electron-builder --config build.mac-unsigned.config.js --mac --publish never
+
       - name: Check macOS artifacts
         run: |
           set -euo pipefail
-          test -s release/latest-mac.yml
           for arch in x64 arm64; do
-            test -n "$(find release -maxdepth 1 -name "*-${arch}.zip" -print -quit)"
-            test -n "$(find release -maxdepth 1 -name "*-${arch}.dmg" -print -quit)"
-            grep -q -- "-${arch}.zip" release/latest-mac.yml
+            test -n "$(find "$MAC_OUTPUT_DIR" -maxdepth 1 -name "*-${arch}.zip" -print -quit)"
+            test -n "$(find "$MAC_OUTPUT_DIR" -maxdepth 1 -name "*-${arch}.dmg" -print -quit)"
+          done
+
+      - name: Verify signed updates
+        if: ${{ inputs.signing_mode == 'signed' }}
+        run: |
+          set -euo pipefail
+          test -s "$MAC_OUTPUT_DIR/latest-mac.yml"
+          for arch in x64 arm64; do
+            grep -q -- "-${arch}.zip" "$MAC_OUTPUT_DIR/latest-mac.yml"
           done
           while IFS= read -r -d '' app_path; do
             codesign --verify --deep --strict --verbose=2 "$app_path"
             spctl --assess --type execute --verbose=2 "$app_path"
             xcrun stapler validate "$app_path"
             test -s "$app_path/Contents/Resources/app-update.yml"
-          done < <(find release -maxdepth 2 -name '*.app' -print0)
+          done < <(find "$MAC_OUTPUT_DIR" -maxdepth 2 -name '*.app' -print0)
+
+      - name: Verify manual distribution
+        if: ${{ inputs.signing_mode == 'unsigned' }}
+        run: |
+          set -euo pipefail
+          test ! -e "$MAC_OUTPUT_DIR/latest-mac.yml"
+          while IFS= read -r -d '' app_path; do
+            test ! -e "$app_path/Contents/Resources/app-update.yml"
+          done < <(find "$MAC_OUTPUT_DIR" -maxdepth 2 -name '*.app' -print0)
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: macOS-${{ inputs.app_env }}
+          name: macOS-${{ inputs.app_env }}-${{ inputs.signing_mode }}
           path: |
-            release/*.dmg
-            release/*.zip
-            release/*.yml
-            release/*.blockmap
+            ${{ env.MAC_OUTPUT_DIR }}/*.dmg
+            ${{ env.MAC_OUTPUT_DIR }}/*.zip
+            ${{ env.MAC_OUTPUT_DIR }}/*.yml
+            ${{ env.MAC_OUTPUT_DIR }}/*.blockmap
           if-no-files-found: error
           retention-days: 7
