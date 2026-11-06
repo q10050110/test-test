@@ -25,6 +25,7 @@ import {
   copyFileSync,
 } from 'fs'
 import log from '../log/index.js'
+import { listLogFiles } from '../log/file-store.js'
 import dayjs from 'dayjs'
 /**
  * Electron 系统级能力封装
@@ -96,12 +97,7 @@ export class SysTemUtils {
           return []
         }
 
-        const files = readdirSync(logDir)
-        // 过滤出日志文件（匹配 YYYY-MM-DD.log 格式）
-        return files
-          .filter((file) => /^\d{4}-\d{2}-\d{2}\.log$/.test(file))
-          .map((file) => join(logDir, file))
-          .sort((a, b) => basename(b).localeCompare(basename(a))) // 按日期降序排列
+        return listLogFiles(logDir)
       } catch (error) {
         console.error('获取日志文件列表失败:', error)
         return []
@@ -153,7 +149,7 @@ export class SysTemUtils {
             title: '导出日志文件',
             defaultPath: fileName,
             filters: [
-              { name: '日志文件', extensions: ['log'] },
+              { name: '日志文件', extensions: ['txt', 'log'] },
               { name: '所有文件', extensions: ['*'] },
             ],
           })

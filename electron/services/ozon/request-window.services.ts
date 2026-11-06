@@ -3,7 +3,7 @@ import { BrowserWindowService, type PageResponse } from '../common/browser-windo
 import { MAX_SLIDER_ATTEMPTS, SliderVerificationService } from '../common/slider-verification.services.js'
 import { verificationCoordinator, VerificationFailedError } from '../common/verification-coordinator.services.js'
 import { TaskScope, TaskCancelledError, abortableDelay } from '../common/task-scope.services.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 
 export class OzonVerificationError extends VerificationFailedError {
   constructor() { super('OZON 验证恢复失败，已达到 3 次尝试上限'); this.name = 'OzonVerificationError' }

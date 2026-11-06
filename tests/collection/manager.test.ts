@@ -82,6 +82,7 @@ const hook = registerHooks({
       './collection-result-store.services.js': 'store',
       '../../utils/request.js': 'request',
       '../../log/index.js': 'log',
+      '../../log/business.js': 'log',
       '../../utils/system.js': 'system',
       '../../store/index.js': 'account',
       '../memory-monitor.services.js': 'memory',

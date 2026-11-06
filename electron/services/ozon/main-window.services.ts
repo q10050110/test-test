@@ -2,7 +2,7 @@ import { BrowserWindowService } from '../common/browser-window.services.js'
 import { SliderVerificationService } from '../common/slider-verification.services.js'
 import type { VerificationState } from './request-window.services.js'
 import { acquireOzonRequests } from './shared-request.services.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 import { TaskScope } from '../common/task-scope.services.js'
 
 /** 采集与巡查的业务窗口只读取页面；接口统一交给共享请求窗口。 */

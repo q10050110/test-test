@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { promises as fsPromises } from 'fs'
 import { dirname } from 'path'
 import type { Workbook, Worksheet, Row, Font, Fill, Border, CellValue } from 'exceljs'
-import log from '../log/index.js'
+import log from '../log/business.js'
 import sharp from 'sharp'
 export class ExcelWriter {
   private workbook!: Workbook

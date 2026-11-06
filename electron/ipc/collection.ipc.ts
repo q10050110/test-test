@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, shell, app } from 'electron'
 import { TaskManager } from '../services/collection/task-manager.services.js'
 import { SysTemUtils } from '../utils/system.js'
-import log from '../log/index.js'
+import log from '../log/business.js'
 import {
   getShopList,
   getLogisticsList,

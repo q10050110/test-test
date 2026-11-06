@@ -2,8 +2,9 @@ import log from 'electron-log'
 import os from 'os'
 import { app } from 'electron'
 import path from 'node:path'
-import fs from 'node:fs'
+import { formatWithOptions } from 'node:util'
 import { SysTemUtils } from '../utils/system.js'
+import { LogFileStore, LOG_POLICIES, localLogDate } from './file-store.js'
 /**
  * 日志管理器类
  */
@@ -11,6 +12,7 @@ class LoggerManager {
   private static instance: LoggerManager
   private installDir: string
   private logPath: string
+  private initialized = false
 
   private constructor() {
     this.installDir = app.getPath('userData')
@@ -31,11 +33,8 @@ class LoggerManager {
    * 初始化日志系统
    */
   public initLogger(): typeof log {
-    // 确保日志目录存在
-    this.ensureLogDirectoryExists()
-
-    // 清理旧日志文件，只保留最近5天的日志
-    this.cleanupOldLogs()
+    if (this.initialized) return log
+    this.initialized = true
 
     // 主进程日志配置
     this.configureFileTransport()
@@ -46,9 +45,6 @@ class LoggerManager {
     // 设置异常处理器
     this.setupErrorHandler()
 
-    // 捕获未处理的 Promise 拒绝
-    this.setupUnhandledRejectionHandler()
-
     // 记录启动信息
     this.logStartupInfo()
 
@@ -56,27 +52,32 @@ class LoggerManager {
   }
 
   /**
-   * 确保日志目录存在
-   */
-  private ensureLogDirectoryExists(): void {
-    if (!fs.existsSync(this.logPath)) {
-      fs.mkdirSync(this.logPath, { recursive: true })
-    }
-  }
-
-  /**
    * 配置文件传输
    */
   private configureFileTransport(): void {
-    log.transports.file.level = 'info'
-    log.transports.file.maxSize = 10 * 1024 * 1024 // 10MB
-    log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}'
-
-    log.transports.file.resolvePathFn = () => {
-      // 按日期生成日志文件名
-      const date = new Date()
-      const fileName = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.log`
-      return path.join(this.logPath, fileName)
+    // 禁用默认 .old 覆盖轮转，仍使用 electron-log 的级别、控制台和异常捕获。
+    log.transports.file.level = false
+    try {
+      const files = new LogFileStore(this.logPath)
+      log.transports.storage = Object.assign(
+        (message: log.LogMessage) => {
+          const date = message.date
+          const time = [date.getHours(), date.getMinutes(), date.getSeconds()]
+            .map((value) => String(value).padStart(2, '0'))
+            .join(':')
+          const scope = message.scope || 'system'
+          const category =
+            scope === 'business' || scope.startsWith('business:') ? 'business' : 'system'
+          const text = formatWithOptions({ depth: 5, colors: false }, ...message.data)
+          files.write(
+            category,
+            `[${localLogDate(date)} ${time}.${String(date.getMilliseconds()).padStart(3, '0')}] [${message.level}] [${scope}] [pid:${process.pid}] ${text}`,
+          )
+        },
+        { level: 'info' as const, transforms: [] },
+      )
+    } catch (error) {
+      console.error('初始化日志文件失败:', error)
     }
   }
 
@@ -85,7 +86,7 @@ class LoggerManager {
    */
   private configureConsoleTransport(): void {
     log.transports.console.level = SysTemUtils.getEnv() === 'development' ? 'debug' : 'info'
-    log.transports.console.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}'
+    log.transports.console.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}]{scope} {text}'
   }
 
   /**
@@ -94,18 +95,6 @@ class LoggerManager {
   private setupErrorHandler(): void {
     log.errorHandler.startCatching({
       showDialog: false,
-      onError: (error) => {
-        log.error('未捕获的异常:', error)
-      },
-    })
-  }
-
-  /**
-   * 设置未处理的 Promise 拒绝处理器
-   */
-  private setupUnhandledRejectionHandler(): void {
-    process.on('unhandledRejection', (reason, promise) => {
-      log.error('未处理的 Promise 拒绝:', reason)
     })
   }
 
@@ -123,6 +112,7 @@ class LoggerManager {
     log.info(`工作目录: ${process.cwd()}`)
     log.info(`安装目录: ${this.installDir}`)
     log.info(`日志目录: ${this.logPath}`)
+    log.info('日志保留策略:', LOG_POLICIES)
     log.info(`环境: ${SysTemUtils.getEnv() || 'production'}`)
     log.info('='.repeat(80))
     log.info('设备信息')
@@ -138,36 +128,6 @@ class LoggerManager {
     log.info(`用户目录: ${os.homedir()}`)
     log.info(`临时目录: ${os.tmpdir()}`)
     log.info('='.repeat(80))
-  }
-
-  /**
-   * 清理超过5天的日志文件
-   */
-  private cleanupOldLogs(): void {
-    try {
-      const files = fs.readdirSync(this.logPath)
-
-      // 提取日期并排序
-      const logFilesWithDate = files
-        .filter((file) => /^\d{4}-\d{2}-\d{2}\.log$/.test(file)) // 匹配 YYYY-MM-DD.log 格式
-        .map((file) => {
-          const dateStr = file.split('.')[0] // 移除 .log 后缀
-          return {
-            file,
-            date: new Date(dateStr),
-            fullPath: path.join(this.logPath, file),
-          }
-        })
-        .sort((a, b) => b.date.getTime() - a.date.getTime()) // 按日期降序排列
-
-      // 删除超过5天的旧日志
-      for (let i = 5; i < logFilesWithDate.length; i++) {
-        fs.unlinkSync(logFilesWithDate[i].fullPath)
-        console.log(`删除旧日志文件: ${logFilesWithDate[i].file}`)
-      }
-    } catch (error) {
-      console.error('清理旧日志文件时出错:', error)
-    }
   }
 }
 

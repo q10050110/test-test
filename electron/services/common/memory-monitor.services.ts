@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import log from '../../log/index.js'
+import businessLog from '../../log/business.js'
 
 /**
  * 内存监控服务
@@ -267,7 +268,7 @@ export class MemoryMonitorService {
       .map(([k, v]) => `${k}: ${v}`)
       .join(', ')
 
-    log.info(`[MemoryMonitor] 业务指标 - ${items}`)
+    businessLog.info(`[MemoryMonitor] 业务指标 - ${items}`)
   }
 
   /**

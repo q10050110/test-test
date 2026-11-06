@@ -174,6 +174,10 @@ export class InspectionServices {
     })
   }
   outputLog(taskLog: string) {
+    this.deps.log.info('巡查进度:', {
+      taskId: this.inspection._id, taskName: this.inspection.shopName,
+      phase: this.getTaskInfo().phase, message: taskLog, progress: { ...this.progress },
+    })
     try {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send('inspection-progress', {
         inspectionTask: this.getTaskInfo(), log: { date: new Date().toISOString(), taskLog },

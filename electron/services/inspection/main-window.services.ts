@@ -1,5 +1,5 @@
 import { OzonWindowService } from '../ozon/main-window.services.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 
 export class MainWindowService extends OzonWindowService {
   async createCollectionWindow(url: string, signal?: AbortSignal) {

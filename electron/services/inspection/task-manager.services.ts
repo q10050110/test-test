@@ -6,7 +6,7 @@ import { inspectionDependencies } from './inspection-runtime.services.js'
 import type { BrowserWindow } from 'electron'
 import { CronServices } from '../common/cron.services.js'
 import { TaskScope } from '../common/task-scope.services.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 
 interface ManagerDependencies {
   api: typeof api

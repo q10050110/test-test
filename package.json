@@ -20,6 +20,7 @@
     "type-check": "vue-tsc --build",
     "test:collection": "tsx --test tests/collection/*.test.ts",
     "test:inspection": "tsx --test tests/inspection/*.test.ts",
+    "test:logging": "tsx --test tests/logging/*.test.ts",
     "format": "prettier --write src/ electron/"
   },
   "dependencies": {

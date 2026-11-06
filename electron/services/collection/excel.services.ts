@@ -1,7 +1,7 @@
 import { ExcelWriter } from '../../utils/excel.js'
 import { join } from 'path'
 import { SysTemUtils } from '../../utils/system.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 const excelDir = join(SysTemUtils.getAppInfo().userDataPath, 'excel')
 export class ExcelService {
   private excel: ExcelWriter | null = null

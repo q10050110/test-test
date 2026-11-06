@@ -48,7 +48,7 @@ const ipc = new EventEmitter()
 const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (specifier === 'electron') return { url: 'test:electron', shortCircuit: true }
-    if (specifier === '../../log/index.js') return { url: 'test:log', shortCircuit: true }
+    if ((specifier === '../../log/index.js' || specifier === '../../log/business.js')) return { url: 'test:log', shortCircuit: true }
     return next(specifier, context)
   },
   load(url, context, next) {

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TaskScope, abortableDelay } from './task-scope.services.js'
-import log from '../../log/index.js'
+import log from '../../log/business.js'
 
 export const MAX_SLIDER_ATTEMPTS = 3
 const directory = path.dirname(fileURLToPath(import.meta.url))

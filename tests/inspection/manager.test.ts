@@ -6,14 +6,14 @@ import type { Inspection } from '../../electron/services/inspection/type.js'
 const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL?.endsWith('/inspection/task-manager.services.ts') || context.parentURL?.endsWith('/inspection/task-manager.services.js')) {
-      if (specifier === './api.services.js' || specifier === './inspection-runtime.services.js' || specifier === '../../log/index.js') return { url: 'test:manager:' + specifier, shortCircuit: true }
+      if (specifier === './api.services.js' || specifier === './inspection-runtime.services.js' || (specifier === '../../log/index.js' || specifier === '../../log/business.js')) return { url: 'test:manager:' + specifier, shortCircuit: true }
     }
     return next(specifier, context)
   },
   load(url, context, next) {
     if (url === 'test:manager:./api.services.js') return { format: 'module', shortCircuit: true, source: 'export {};' }
     if (url === 'test:manager:./inspection-runtime.services.js') return { format: 'module', shortCircuit: true, source: 'export const inspectionDependencies = {};' }
-    if (url === 'test:manager:../../log/index.js') return { format: 'module', shortCircuit: true, source: 'export default { info() {}, warn() {}, error() {} };' }
+    if ((url === 'test:manager:../../log/index.js' || url === 'test:manager:../../log/business.js')) return { format: 'module', shortCircuit: true, source: 'export default { info() {}, warn() {}, error() {} };' }
     return next(url, context)
   },
 })

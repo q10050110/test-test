@@ -632,6 +632,10 @@ export class Collection {
       total: this.discovered,
       totalCount: this.targetData,
     }
+    this.deps.log.info('采集进度:', {
+      taskId: this.task._id, taskName: this.task.taskName, phase: this.getPhase(),
+      message, progress: { ...this.task.progress },
+    })
     try {
       if (this.mainWindow && !this.mainWindow.isDestroyed())
         this.mainWindow.webContents.send('task-progress', {
