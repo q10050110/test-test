@@ -148,6 +148,7 @@ export const createWindow = () => {
   })
 
   mainWindow.on('close', (event) => {
+    if (UpdaterManager.getInstance().isInstalling) return
     event.preventDefault()
     mainWindow?.webContents.send('window-close')
   })

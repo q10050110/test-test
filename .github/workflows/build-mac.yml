@@ -1,4 +1,4 @@
-name: Build macOS DMG
+name: Build signed macOS updates
 
 on:
   workflow_dispatch:
@@ -42,9 +42,18 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Check environment
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          echo "APP_ENV=$APP_ENV"
-          node -e "console.log('APP_ENV:', process.env.APP_ENV)"
+          node --input-type=module -e '
+            for (const name of ["CSC_LINK", "CSC_KEY_PASSWORD", "APPLE_ID", "APPLE_APP_SPECIFIC_PASSWORD", "APPLE_TEAM_ID"]) {
+              if (!process.env[name]) throw new Error(`Missing required secret: ${name}`)
+            }
+          '
 
       - name: Build frontend
         run: yarn build-only --mode ${{ inputs.app_env == 'development' && 'development' || 'prod' }}
@@ -53,16 +62,29 @@ jobs:
         run: yarn build:electron
 
       - name: Package macOS
-        run: yarn electron-builder --mac dmg zip
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: yarn electron-builder --config build.config.js --mac --publish never
 
       - name: Check macOS artifacts
         run: |
-          echo "===== Build output ====="
-          find release -maxdepth 3 -type f -print
-          echo "===== Update metadata ====="
-          find release -name "app-update.yml" -o -name "latest-mac.yml"
-          echo "===== Packaged update config ====="
-          find release -name "app-update.yml" -exec cat {} \;
+          set -euo pipefail
+          test -s release/latest-mac.yml
+          for arch in x64 arm64; do
+            test -n "$(find release -maxdepth 1 -name "*-${arch}.zip" -print -quit)"
+            test -n "$(find release -maxdepth 1 -name "*-${arch}.dmg" -print -quit)"
+            grep -q -- "-${arch}.zip" release/latest-mac.yml
+          done
+          while IFS= read -r -d '' app_path; do
+            codesign --verify --deep --strict --verbose=2 "$app_path"
+            spctl --assess --type execute --verbose=2 "$app_path"
+            xcrun stapler validate "$app_path"
+            test -s "$app_path/Contents/Resources/app-update.yml"
+          done < <(find release -maxdepth 2 -name '*.app' -print0)
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

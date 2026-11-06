@@ -6,6 +6,7 @@ import { globalBroadcast } from './ipc/broadcast.js'
 import { operationStore } from './store/index.js'
 import { memoryMonitor } from './services/common/memory-monitor.services.js'
 import { StartProcessService } from './services/startProcess.services.js'
+import { UpdaterManager } from './services/update.services.js'
 app.commandLine.appendSwitch('disable-logging')
 app.commandLine.appendSwitch('log-level', '3')
 
@@ -20,7 +21,16 @@ class ElectronApp {
   constructor() {
     // 初始化日志系统
     initLogger()
+    UpdaterManager.getInstance().setBeforeInstall(() => this.prepareForQuit())
     this.setupEventHandlers()
+  }
+
+  private async prepareForQuit() {
+    memoryMonitor.stop()
+    globalBroadcast.broadcast('app-ready-quit', '退出清理等待')
+    const closeProcessService = new CloseProcessService()
+    await closeProcessService.deleteFolder()
+    await closeProcessService.run()
   }
 
   /**
@@ -184,17 +194,17 @@ class ElectronApp {
      */
     app.on('before-quit', async (event) => {
       memoryMonitor.stop()
+      // 更新安装已提前完成清理，让 Squirrel.Mac 正常退出并接管重启。
+      if (UpdaterManager.getInstance().isInstalling) return
       if (IS_EXITING || IS_RESTARTING) return
       IS_EXITING = true
 
       event.preventDefault()
       try {
-        globalBroadcast.broadcast('app-ready-quit', '退出清理等待')
-        const closeProcessService = new CloseProcessService()
-        await closeProcessService.deleteFolder()
-        await closeProcessService.run()
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        app.exit(0)
+        await this.prepareForQuit()
+        // 清理完成后关闭窗口并正常退出，保留 macOS 更新器的退出安装事件。
+        BrowserWindow.getAllWindows().forEach((win) => win.destroy())
+        app.quit()
       } catch (error) {
         log.error('退出清理失败！', error)
         app.exit(1)

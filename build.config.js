@@ -1,3 +1,9 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import path from 'node:path'
+
+const execFileAsync = promisify(execFile)
+
 /**
  * Electron Builder 配置文件 (ESM)
  * 可以使用 import/export 和注释
@@ -61,9 +67,20 @@ export default {
 
   // macOS 配置
   mac: {
-    target: ['dmg', 'zip'], // DMG 和 ZIP 格式
+    // 一次构建两种架构，electron-builder 会合并到同一份 latest-mac.yml。
+    target: [
+      { target: 'dmg', arch: ['x64', 'arm64'] },
+      { target: 'zip', arch: ['x64', 'arm64'] },
+    ],
+    artifactName: '${productName}-${version}-${arch}.${ext}',
     icon: 'build/icons/mac/icon.icns', // mac 图标
     category: 'public.app-category.utilities',
+    type: 'distribution',
+    forceCodeSigning: true,
+    hardenedRuntime: true,
+    entitlements: 'build/entitlements.mac.plist',
+    entitlementsInherit: 'build/entitlements.mac.plist',
+    notarize: true,
   },
 
   // Linux 配置
@@ -83,6 +100,42 @@ export default {
           : 'https://shopbang.cn/version/',
     },
   ],
+
+  beforePack: async (context) => {
+    if (context.electronPlatformName !== 'darwin') return
+    if (process.platform !== 'darwin') {
+      throw new Error('macOS 自动更新发布包必须在 macOS 主机上签名、公证和构建。')
+    }
+    // v26 的 notarize: true 在没有凭据时仍会跳过公证，发布包必须提前检查。
+    const env = process.env
+    const hasAppleId = env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID
+    const hasApiKey = env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER
+    if (!hasAppleId && !hasApiKey && !env.APPLE_KEYCHAIN_PROFILE) {
+      throw new Error(
+        'macOS 发布包需要公证凭据：APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID，' +
+          '或 APPLE_API_KEY / APPLE_API_KEY_ID / APPLE_API_ISSUER，或 APPLE_KEYCHAIN_PROFILE。',
+      )
+    }
+  },
+
+  afterSign: async (context) => {
+    if (context.electronPlatformName !== 'darwin') return
+    const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+    await execFileAsync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath])
+    const { stderr } = await execFileAsync('codesign', ['--display', '--verbose=4', appPath])
+    // arm64 在找不到证书时可能退回 ad-hoc 签名；这种包不能用于自动更新。
+    if (!/^Authority=Developer ID Application:/m.test(stderr)) {
+      throw new Error(
+        'macOS 自动更新需要 Developer ID Application 签名，不能发布未签名或 ad-hoc 签名包。',
+      )
+    }
+    if (
+      process.env.APPLE_TEAM_ID &&
+      !stderr.includes(`TeamIdentifier=${process.env.APPLE_TEAM_ID}\n`)
+    ) {
+      throw new Error('macOS 签名的 TeamIdentifier 与 APPLE_TEAM_ID 不一致。')
+    }
+  },
 
   // 打包后钩子，可执行自定义逻辑
   afterPack: async (context) => {

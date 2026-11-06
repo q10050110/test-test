@@ -46,7 +46,11 @@ window.electronAPI.on('update-available', async () => {
   console.log('发现新版本啦~~')
   await nextTick()
   if (appStore.updateStatus !== 'isInstall') await appStore.initAppInfo()
-  if (appStore.updateStatus !== 'downloaded' && appStore.updateStatus !== 'isInstall')
+  if (
+    appStore.updateStatus !== 'downloaded' &&
+    appStore.updateStatus !== 'isInstall' &&
+    appStore.updateStatus !== 'download'
+  )
     appStore.setUpdate('hasUpdate')
   if (appStore.updateStatus !== 'isInstall') cModalRef.value && cModalRef.value.openHandle()
 })
@@ -57,6 +61,7 @@ window.electronAPI.on('update-not-available', () => {
 })
 
 window.electronAPI.on('update-download-progress', (data: Progress) => {
+  if (appStore.updateStatus !== 'isInstall') appStore.setUpdate('download')
   progress.value = data
 })
 
@@ -69,10 +74,14 @@ window.electronAPI.on('update-downloaded', async () => {
   }
 })
 
-window.electronAPI.on('update-error', async (error) => {
+window.electronAPI.on('update-error', async (error: { message?: string }) => {
+  appStore.setLoading(false)
+  await appStore.initAppInfo()
+  // initAppInfo 会保留 isInstall；失败后应恢复实际可重试状态。
+  appStore.setUpdate((await window.electronStore.get('update-status')) || 'hasUpdate')
   await nextTick()
-  appStore.setUpdate('hasUpdate')
   cModalRef.value && cModalRef.value?.closeHandle()
+  feedback.error(error?.message || '更新失败，请稍后重试')
 })
 
 window.electronAPI.on('window-close', () => {

@@ -12,8 +12,8 @@
     "dev": "chcp 65001 > nul && yarn build:electron && cross-env NODE_OPTIONS='--max-old-space-size=4096' NODE_ENV=development npm-run-all -p vite:dev \"electron --js-flags=--expose-gc\"",
     "vite:dev": "vite",
     "clean": "rimraf dist dist-electron release",
-    "build": "yarn clean && vite build --mode development && yarn build-only && yarn build:electron && cross-env APP_ENV=development electron-builder",
-    "build:prod": "yarn clean && vite build --mode prod && yarn build-only && yarn build:electron && cross-env APP_ENV=prod electron-builder",
+    "build": "yarn clean && vite build --mode development && yarn build:electron && cross-env APP_ENV=development electron-builder --config build.config.js",
+    "build:prod": "yarn clean && vite build --mode prod && yarn build:electron && cross-env APP_ENV=prod electron-builder --config build.config.js",
     "build-only": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",
@@ -21,6 +21,7 @@
     "test:collection": "tsx --test tests/collection/*.test.ts",
     "test:inspection": "tsx --test tests/inspection/*.test.ts",
     "test:logging": "tsx --test tests/logging/*.test.ts",
+    "test:updater": "tsx --test tests/updater/*.test.ts",
     "format": "prettier --write src/ electron/"
   },
   "dependencies": {

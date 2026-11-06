@@ -79,7 +79,7 @@ defineExpose({
     <div class="update-tips" v-if="store.updateStatus === 'hasUpdate'">
       <img src="@/assets/window/new-version.png" alt="" class="bg" />
       <div class="title">
-        <div>发现最新版本 for Windows V{{ store.updateInfo?.version }}</div>
+        <div>发现最新版本 V{{ store.updateInfo?.version }}</div>
         <div>当前版本 V{{ store.appInfo?.version }}</div>
       </div>
       <div class="content">
