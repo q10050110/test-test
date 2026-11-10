@@ -33,55 +33,82 @@ test('collection and inspection share DOM parsing and seller prices while keepin
   collection.destroy(); inspection.destroy()
 })
 
-test('collection seller requests overlap with a limit of three and preserve card order', async () => {
+test('collection seller requests start without a concurrency cap and preserve card order', async () => {
   const ids = ['1', '2', '3', '4', '5']
   const gates = ids.map(() => Promise.withResolvers<any>())
-  const entered = Promise.withResolvers<void>(), fourth = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
   const started: string[] = []
   let active = 0, peak = 0
   const parser = new CollectionParser({ getSellingData: async url => {
     const id = new URLSearchParams(new URL(url).search).get('url')!.match(/product_id=(\d+)/)![1]!
     started.push(id)
     peak = Math.max(peak, ++active)
-    if (started.length === 3) entered.resolve()
-    if (started.length === 4) fourth.resolve()
+    if (started.length === ids.length) entered.resolve()
     try { return await gates[ids.indexOf(id)]!.promise }
     finally { active-- }
   } })
   const parsing = parser.ozonListParser(`<div id="contentScrollPaginator">${ids.map(card).join('')}</div>`, domain)
   try {
     await entered.promise
-    assert.deepEqual(started, ['1', '2', '3'])
+    assert.deepEqual(started, ids)
+    assert.equal(parser.getDataCount(), 5)
     gates[1]!.resolve(sellers)
-    await fourth.promise
-    assert.equal(parser.getDataCount(), 0)
+    assert.equal(parser.getDataCount(), 5)
     for (const gate of gates) gate.resolve(sellers)
     const result = await parsing
     assert.deepEqual(result.map(goods => goods.id), ids)
-    assert.equal(peak, 3)
+    assert.equal(peak, 5)
     assert.equal(parser.getDataCount(), 5)
   } finally { for (const gate of gates) gate.resolve(sellers); parser.destroy(); await parsing.catch(() => undefined) }
 })
 
-test('failed collection seller batches cancel peers without committing partial IDs', async () => {
+test('failed collection batches count discovered cards but leave every undelivered product available for retry', async () => {
   const entered = Promise.withResolvers<void>(), failure = Promise.withResolvers<any>()
-  let calls = 0, aborted = 0
+  let calls = 0, aborted = 0, fail = true
   const parser = new CollectionParser({ getSellingData: async (_url, signal) => {
     const index = calls++
-    if (calls === 3) entered.resolve()
+    if (!fail) return sellers
+    if (calls === 4) entered.resolve()
     if (index === 0) return failure.promise
     signal!.addEventListener('abort', () => { aborted++ }, { once: true })
     return new Promise(() => {})
   } })
-  const parsing = parser.ozonListParser(`<div id="contentScrollPaginator">${['1', '2', '3', '4'].map(card).join('')}</div>`, domain)
+  const page = `<div id="contentScrollPaginator">${['1', '2', '3', '4'].map(card).join('')}</div>`
+  const parsing = parser.ozonListParser(page, domain)
   const rejected = assert.rejects(parsing, /verification failed/)
   await entered.promise
   failure.reject(new Error('verification failed'))
   await rejected
-  assert.equal(calls, 3)
-  assert.equal(aborted, 2)
-  assert.equal(parser.getDataCount(), 0)
+  assert.equal(calls, 4)
+  assert.equal(aborted, 3)
+  assert.equal(parser.getDataCount(), 4)
+  fail = false
+  assert.deepEqual((await parser.ozonListParser(page, domain)).map(goods => goods.id), ['1', '2', '3', '4'])
+  assert.equal(calls, 8)
+  assert.equal(parser.getDataCount(), 4)
   parser.destroy()
+})
+
+test('overlapping page snapshots launch new seller requests while deduplicating in-flight IDs', { timeout: 2000 }, async () => {
+  const gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>()
+  const started: string[] = []
+  const parser = new CollectionParser({ getSellingData: async url => {
+    started.push(decodeURIComponent(url).match(/product_id=(\d+)/)![1]!)
+    if (started.length === 4) entered.resolve()
+    await gate.promise
+    return sellers
+  } })
+  const page = (ids: string[]) => `<div id="contentScrollPaginator">${ids.map(card).join('')}</div>`
+  const first = parser.ozonListParser(page(['1', '2', '3']), domain)
+  const second = parser.ozonListParser(page(['2', '3', '4']), domain)
+  try {
+    await entered.promise
+    assert.deepEqual(started, ['1', '2', '3', '4'])
+    assert.equal(parser.getDataCount(), 4)
+    gate.resolve()
+    assert.deepEqual((await first).map(goods => goods.id), ['1', '2', '3'])
+    assert.deepEqual((await second).map(goods => goods.id), ['4'])
+  } finally { gate.resolve(); await Promise.allSettled([first, second]); parser.destroy() }
 })
 
 test('streamed products are consumed before the page drains and retries skip only delivered IDs', async () => {
@@ -96,14 +123,15 @@ test('streamed products are consumed before the page drains and retries skip onl
   const parsing = parser.ozonListParser(html, domain, undefined, consume)
   const rejected = assert.rejects(parsing, /verification failed/)
   await delivered.promise
-  // 消费回调完成后，解析器才提交这一件的去重记录。
+  // 累计数已按整批登记；交付去重仍只提交已被下游接收的商品。
   await new Promise(setImmediate)
-  assert.equal(parser.getDataCount(), 1)
+  assert.equal(parser.getDataCount(), 2)
   failure.reject(new Error('verification failed'))
   await rejected
   fail = false
   assert.deepEqual((await parser.ozonListParser(html, domain, undefined, consume)).map(goods => goods.id), ['2'])
   assert.deepEqual(received, ['1', '2'])
+  assert.equal(parser.getDataCount(), 2)
   parser.destroy()
 })
 
@@ -112,9 +140,26 @@ test('a rejected streaming consumer cancels peers and leaves the product availab
   await assert.rejects(parser.ozonListParser(html, domain, undefined, async () => {
     throw new Error('consumer failed')
   }), /consumer failed/)
-  assert.equal(parser.getDataCount(), 0)
+  assert.equal(parser.getDataCount(), 2)
   assert.equal((await parser.ozonListParser(html, domain)).length, 2)
   parser.destroy()
+})
+
+test('collection cumulative count adds unique IDs per batch and deduplicates across page and category batches', async () => {
+  const parser = new CollectionParser({ getSellingData: async () => sellers })
+  const totals: number[] = [], batches: string[][] = []
+  const observe = (goods: readonly any[]) => { totals.push(parser.getDataCount()); batches.push(goods.map(item => item.id)) }
+  const page = (ids: string[]) => `<div id="contentScrollPaginator">${ids.map(card).join('')}</div>`
+  await parser.ozonListParser(page(['1', '1', '2', '3']), domain, undefined, undefined, observe)
+  await parser.ozonListParser(page(['2', '3', '4', '4']), domain, undefined, undefined, observe)
+  await parser.ozonListParser(page(['1', '2', '3', '4']), domain, undefined, undefined, observe)
+  assert.deepEqual(totals, [3, 4])
+  assert.deepEqual(batches, [['1', '2', '3'], ['4']])
+  const unique = await parser.ozonDetailListParser([{ _id: '4' }, { _id: '5' }, { _id: '5' }])
+  assert.deepEqual(unique.map(item => item._id), ['5'])
+  assert.equal(parser.getDataCount(), 5)
+  parser.destroy()
+  assert.equal(parser.getDataCount(), 0)
 })
 
 test('failed batches do not poison deduplication or lose the earlier successful product', async () => {

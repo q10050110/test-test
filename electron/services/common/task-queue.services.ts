@@ -14,11 +14,12 @@ import {
 import { TaskCancelledError, TaskScope } from './task-scope.services.js'
 
 export type TaskHandler<T = any> = (task: T, signal: AbortSignal) => Promise<unknown>
-export interface QueueOptions {
+export interface QueueOptions<T = any> {
   parent?: AbortSignal
   timeoutMs?: number
   label?: string
-  onError?: (error: unknown) => void
+  onError?: (error: unknown, task: T) => void
+  onSettled?: (task: T) => void
 }
 
 /** mergeMap 管理并发；退订丢弃缓冲任务，并终止活跃任务。完成项只保留计数。 */
@@ -33,9 +34,9 @@ export class TaskQueueService<T extends { id: string } = any> {
   private completed = 0
   private failed = 0
 
-  constructor(handler: TaskHandler<T>, concurrency = 3, options: QueueOptions = {}) {
-    if (!Number.isInteger(concurrency) || concurrency < 1)
-      throw new Error('队列并发数必须为正整数')
+  constructor(handler: TaskHandler<T>, concurrency = 3, options: QueueOptions<T> = {}) {
+    if (concurrency !== Infinity && (!Number.isInteger(concurrency) || concurrency < 1))
+      throw new Error('队列并发数必须为正整数或 Infinity')
     this.scope = new TaskScope(options.parent)
     this.subscription = this.input$
       .pipe(
@@ -55,13 +56,14 @@ export class TaskQueueService<T extends { id: string } = any> {
               catchError((error) => {
                 if (!this.scope.signal.aborted) {
                   this.failed++
-                  options.onError?.(error)
+                  options.onError?.(error, task)
                 }
                 return EMPTY
               }),
               finalize(() => {
                 this.active.delete(task.id)
-                this.publish()
+                try { options.onSettled?.(task) }
+                finally { this.publish() }
               }),
             ),
           concurrency,

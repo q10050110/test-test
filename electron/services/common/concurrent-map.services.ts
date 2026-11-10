@@ -1,13 +1,13 @@
 import { TaskScope } from './task-scope.services.js'
 
-/** 有界并发且保持结果顺序；失败或取消时中止同批操作，不再领取后续项。 */
+/** 保持结果顺序；Infinity 直接派发全部项，失败或取消时中止同批操作。 */
 export async function mapConcurrent<T, R>(
   items: readonly T[],
   concurrency: number,
   operation: (item: T, index: number, signal: AbortSignal) => Promise<R>,
   signal?: AbortSignal,
 ): Promise<R[]> {
-  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('并发数必须为正整数')
+  if (concurrency !== Infinity && (!Number.isInteger(concurrency) || concurrency < 1)) throw new Error('并发数必须为正整数或 Infinity')
   const scope = new TaskScope(signal)
   const results = new Array<R>(items.length)
   let next = 0

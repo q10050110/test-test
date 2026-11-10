@@ -14,11 +14,11 @@
 | --- | --- | --- | --- |
 | 多个采集任务 | `TaskManager` | 用户创建的任务、排队、启动、停止、结果缓存 | 默认同时运行 4 个任务，可配置 |
 | 一次采集运行 | `Collection` | 从打开 OZON 到采集、拓店、上架、清理的完整流程 | 一个实例只负责一次运行 |
-| 一个商品的处理/保存 | `TaskQueueService` | 找 1688 货源、补全详情，以及提交保存 | 商品处理并发 3；保存并发 1 |
+| 一个商品的处理/保存 | `TaskQueueService` | 找 1688 货源、补全详情，以及提交保存 | 仅每个任务的 1688 图搜并发 3；其他阶段直接并发 |
 
-所以，管理器的 `taskQueue` 与 `Collection.items` 不是同一个队列：前者存采集任务 ID，后者处理商品。`Collection.writes` 则是另一个商品队列，专门串行保存。
+管理器的 `taskQueue` 与 `Collection.items` 不是同一个队列：前者存采集任务 ID，后者仅调度本任务的 1688 图搜。图搜结束即释放名额，后续筛选、翻译和保存不占用这 3 个名额。`Collection.writes` 使用 `Infinity` 直接启动保存，仅在剩余目标数量不足时预留额度，避免并发超采。
 
-页面采集另有 `Collection.batches`，最多并行补充 2 批基础数据。跟卖请求完成一件便投递一件，让基础数据、图搜、保存与其余跟卖请求重叠；它不是商品处理队列。批量启动通过并发 IPC 提交任务，实际运行数仍由管理器限制。
+页面采集另有 `Collection.batches`，已发现的页面批次直接启动。每页的基础数据一次整批请求，跟卖接口就绪的商品进入该页缓冲，与基础数据合并后继续筛选、图搜和保存。下一次滚动或分类分页前，当前任务“正在处理”总数超过 20 就等待，降到 20 或以下恢复；整批计数允许跨过 20，当前批次和下游必须继续处理。`producers/otherWork/writes` 负责完成和取消，不设固定并发上限。各任务拥有独立实例、计数及等待者，一个任务暂停生产不会暂停其他任务。批量启动通过并发 IPC 提交任务，实际运行数仍由管理器配置决定。
 
 ```mermaid
 flowchart TD
@@ -31,10 +31,10 @@ flowchart TD
     Collection --> Main[MainWindowService：OZON 页面]
     Main --> Parse[ParseService：结构解析与去重]
     Parse --> Filter[DataProcessService：补数据与筛选]
-    Filter --> Items[items：商品处理并发 3]
+    Filter --> Items[items：本任务1688图搜并发 3]
     Items --> Source[WindowService：1688 货源窗口]
     Source --> Detail[补全详情与利润等信息]
-    Detail --> Writes[writes：保存并发 1]
+    Detail --> Writes[writes：直接并发保存]
     Writes --> Save[autoSaveData：服务端保存]
     Save --> Saved[saved：已确认保存的商品]
     Saved --> Upload[可选 autoUpGoods]
@@ -56,7 +56,7 @@ flowchart TD
 | 1 | [type.ts](./type.ts)：`Task`、`CollectionResult`、`CollectionPhase` | 输入配置、运行阶段和最终结果分别长什么样？ |
 | 2 | [collection.services.ts](./collection.services.ts)：`run → execute → workflow` | 一次任务有哪些步骤？成功和异常最终走到哪里？ |
 | 3 | [collection-runtime.services.ts](./collection-runtime.services.ts)：`collectionDependencies` | `runtime.main/source/parse/data` 实际绑定哪个类？`deps.save/upload` 实际调用谁？ |
-| 4 | [collection.services.ts](./collection.services.ts)：`getHtmlData → processData → enqueue → taskHandle → saveGoods` | 一个商品怎样从页面进入队列，并成为已保存结果？ |
+| 4 | [collection.services.ts](./collection.services.ts)：`getHtmlData → producePage → processPageBatch → processData → sourceHandle → processGoods → saveGoods` | 一个商品怎样从页面进入队列，并成为已保存结果？ |
 | 5 | [task-manager.services.ts](./task-manager.services.ts)：`startTaskById → executeTask` | 谁决定何时启动任务、何时释放并发名额？ |
 | 6 | [collection.ipc.ts](../../ipc/collection.ipc.ts) 与 [页面 index.vue](../../../src/views/selectGoods/index.vue) | 用户的点击如何进入主进程？主进程如何更新页面？ |
 
@@ -135,7 +135,7 @@ collection/
 | --- | --- |
 | 生命周期入口 | `run`、`execute`、`workflow` |
 | 商品生产 | `categoryMode`、`getHtmlData`、`processData`、`enqueue` |
-| 商品消费 | `taskHandle`、`saveGoods`、`waitForAllTasks` |
+| 商品消费 | `sourceHandle`、`processGoods`、`saveGoods`、`waitForAllTasks` |
 | 额外采集 | `expendShop` |
 | 异常与清理 | `fail`、`closeHandle`、`cancel`、`cleanup`、`clearStatus` |
 | 状态和界面事件 | `getPhase`、`getTaskInfo`、`setStatus`、`outputLog`、`emitLifecycleState` |
@@ -143,7 +143,7 @@ collection/
 
 `run()` 重复调用返回同一个执行 Promise。这个 Promise 在本实例的清理和状态同步结束后才完成；管理器的结果落盘是更外层的另一段工作。
 
-`execute()` 创建服务和两个队列，运行 `workflow`，并在 `finally` 中统一构造结果、清理资源、进入终态。失败或取消时抛出带结果的 `CollectionRunError`，使管理器仍有机会保存已经成功采集的商品。
+`execute()` 创建服务及各阶段的工作容器，运行 `workflow`，并在 `finally` 中统一构造结果、清理资源、进入终态。只有 `items` 限制本任务的 1688 图搜并发为 3；其他工作使用 `Infinity` 立即启动。失败或取消时抛出带结果的 `CollectionRunError`，使管理器仍有机会保存已经成功采集的商品。
 
 ### 3.3 `collection-runtime.services.ts`：真实实现的组装点
 
@@ -232,13 +232,15 @@ IPC 通知是结果提示，不是唯一完成条件。上传搜索返回后会�
 | `ozonDetailParse` | 解析详情接口结构并合并商品信息 |
 | `1688Parse` | 从 1688 页面提取货源信息 |
 | `aoXiaParse` | 文件中的另一种页面解析实现，是否生效要继续查调用方 |
-| `getDataCount` | 返回解析器去重集合的规模，不是保存成功数量 |
+| `getDataCount` | 返回整批发现的去重 SKU 累计数，不随单件接口完成而递增，不是保存成功数量 |
 | `guessLikeList` | 留给拓店流程继续查询的候选链接 |
 | `destroy` | 清空集合并解除窗口服务引用 |
 
 注意：该解析器并非纯函数集合。`ozonListParser/ozonDetailParse` 会通过注入的窗口服务请求卖家数据，因此它们也有异步等待和取消边界。
 
-链接／店铺采集的 `ozonListParser` 最多同时补充 3 件商品的卖家信息。采集流程传入 `onGoods`，每件就绪后立即交付下游并提交该件的去重记录，不等待整页响应。未传回调的数组模式仍保持页面顺序，整批成功后提交去重记录。失败或取消会中止同批请求；流式模式已交付的商品不会在重试时重复派发。巡查仍沿用逐件请求和原有间隔。
+链接／店铺采集的 `ozonListParser` 直接并发补充本页所有商品的卖家信息。采集流程传入 `onGoods`，每件就绪后立即交付下游并提交该件的去重记录，不等待整页响应。多个页面快照可同时处理，`inFlightGoods` 防止尚未返回的 SKU 被重复请求；失败后未交付项仍可重试。未传回调的数组模式仍保持页面顺序，整批成功后提交去重记录。失败或取消会中止同批请求；流式模式已交付的商品不会在重试时重复派发。巡查仍沿用逐件请求和原有间隔。
+
+累计发现记录 `discoveredGoods` 与上述交付去重集合独立：列表解析完成时先一次登记整批新 SKU，再启动卖家请求。因此未交付商品仍可重试，重试和重复页面也不会重复增加累计数；某件请求失败不会把已经发现的商品从累计数中扣除。
 
 ### 3.10 `data-filter.services.ts`：数据补全与筛选
 
@@ -315,7 +317,7 @@ Electron userData/
 3. `startTaskById` 分配名额或加入等待队列。
 4. `executeTask` 登记活跃任务和执行 Promise，等待 `Collection.run()`。
 5. `run` 发送 `START`，标记业务状态 `running`，进入 `execute`。
-6. `execute` 延迟创建服务，创建 `batches/items/writes` 队列，调用 `workflow`。
+6. `execute` 延迟创建服务，创建 `producers/batches/otherWork/items/writes`，调用 `workflow`。
 
 `workflow` 的顺序为：初始化旧表格文件 → 创建 OZON 窗口 → 首轮采集 → 排空队列 → 可选拓店并排空 → 可选自动上架。
 
@@ -326,39 +328,42 @@ Electron userData/
 ```text
 getHtmlData
   └─ main.getHTML
-      └─ parse.ozonListParser：解析、去重、补卖家信息
-          └─ batches.addTask → processData（最多同时 2 批）
-              ├─ data.getBaseData：补基础数据
-              ├─ aiFilterData 或 filterData：筛选
+      └─ producers → producePage → parse.ozonListParser：快照发现后即可继续滚动
+          └─ onBatch/onGoods → processPageBatch（所有页面直接并发）
+              ├─ data.getBaseData：每页一次整批获取，与跟卖请求重叠
+              ├─ 流式就绪商品合并基础数据 → processData → 筛选
               └─ enqueue → items.addTask
-                  └─ taskHandle（队列回调，最多同时 3 个）
-                      ├─ source.createWindow：1688 搜图
-                      ├─ data.getDetailData：补货源后的详情与筛选
-                      └─ writes.addTask
-                          └─ saveGoods（队列回调，串行）
-                              ├─ deps.save → autoSaveData
-                              └─ 确认 count > 0 后更新 saved/targetData
+                  └─ sourceHandle（仅本任务图搜最多同时 3 个）
+                      └─ source.createWindow：1688 搜图，完成即释放名额
+                          └─ otherWork → processGoods → data.getDetailData：直接并发筛选及翻译
+                              └─ writes → saveGoods（直接并发，预留剩余目标数）
+                                  ├─ deps.save → autoSaveData
+                                  └─ 确认 count > 0 后更新 saved/targetData
 ```
 
-这里的 `items.addTask` 只是投递任务，`taskHandle` 由队列消费时调用；它完成后也只是把结果交给保存队列，不表示已经保存成功。
+`items.addTask` 投递本任务的图搜，`sourceHandle` 完成后交给独立的后续工作，不表示已经保存成功，也不会因筛选或翻译未返回而占住图搜名额。
 
 页面循环会滚动、等待和重新解析。达到目标、连续 10 次无新增，或连续 3 次未滚动时结束循环；触底后仍会解析，以接住延迟加载的最后一批商品。
 
-基础数据接口在批次队列内执行，一件商品不再被同页其他商品的慢跟卖请求阻塞。页面循环仍等待当前页解析结束再滚动；达到目标时会取消本页未完成请求。1688 图搜在入口页 `dom-ready` 后开始准备，不等待 `loadURL` 的整页资源加载完成；源图通过该窗口的 `Session.fetch` 下载，限 10 秒并响应取消，与入口等待重叠，再将图片字节交给页面上传，避免页面直接跨域取图的限制。搜索、排序及结果解析流程保持原样。`采集阶段耗时` 记录各阶段耗时；`页面解析与商品派发（含背压等待）` 包含下游等待，不代表纯网络耗时。`1688 图搜阶段耗时` 记录入口 DOM 和结果通知的累计耗时，`1688 源图下载耗时` 单独记录图片下载。
+基础数据接口每页只调用一次，与卖家请求并发；就绪商品不必等其他商品跟卖响应才能处理。下一次滚动前检查本任务 `processing.size`：超过 20 暂停，降至 20 或以下恢复，再按原有 3～5 秒间隔与 3 秒动画滚动。等待只作用于生产循环，当前页的接口、筛选、图搜及保存继续执行；不要求所有商品排空。达到目标时取消未完成的生产及图搜请求。`页面基础数据整批获取` 日志记录批次和数量。
+
+1688 图搜在入口页 `dom-ready` 后开始准备，不等待 `loadURL` 的整页资源加载完成；源图通过该窗口的 `Session.fetch` 下载，限 10 秒并响应取消，与入口等待重叠，再将图片字节交给页面上传。`采集阶段耗时` 记录各阶段耗时；`1688 图搜阶段耗时` 记录入口 DOM 和结果通知的累计耗时，`1688 源图下载耗时` 单独记录图片下载。
 
 ### 4.3 分类选品分支
 
 只有 `isUseCategorySelect === 0` 时进入 `categoryMode`，不要根据变量名反推枚举含义。
 
-这条路线通过分类接口分页获取列表，更新查询游标，经过 `ozonDetailListParser → filterData(base)`，每隔 1～4 秒尝试启动下一件详情链路，同时最多保留 3 件在途。间隔与在途请求重叠，已有链路释放位置后才继续领取商品，避免慢响应或背压期间仍派发整页 Promise。每件详情完成后即经过 `filterData(detail)` 进入 `items → writes` 流水线，不等待整页详情完成；达到保存目标时中止剩余详情请求。任一请求失败时立即停止继续派发并取消同批操作，已启动的 Promise 都会被等待。
+这条路线通过分类接口分页获取列表，更新查询游标，经过 `ozonDetailListParser → filterData(base)`，整批登记待处理商品，再每隔至少 1 秒启动下一件详情请求。下一页列表请求前检查本任务正在处理的总数，超过 20 暂停、降到 20 或以下恢复；当前已登记批次的详情派发不在这个计数上等待，避免未派发商品自己占住计数而无法排空。列表分页也遵守 1 秒启动间隔；间隔和积压等待只属于当前采集任务，等待响应的请求仍可并行。测试可通过 `timing.detail` 缩短间隔。每件详情完成后即经过 `filterData(detail)` 进入图搜、筛选翻译及保存流水线；达到目标时中止剩余生产。
+
+分类商品的 `Failed to fetch`、网络错误和请求超时只跳过该件，并记录任务与商品 ID，不取消已启动的其他商品。验证恢复失败、业务窗口关闭、程序错误及保存失败仍使整个任务失败。基础筛选接受数、详情无有效价格、服务端筛选无结果各有日志，不将网络失败归为商品被筛掉。
 
 分页生产者本身也必须被等待；只等待商品队列为空，不能证明分类接口已经停止生产商品。
 
 ### 4.4 首轮结束后的拓店与上架
 
-`waitForAllTasks` 依次等待 `batches → items → writes`，因为前一个阶段仍可能向后一个队列投递任务。
+生产结束后，`waitForAllTasks` 等待 `producers → batches → otherWork → items → otherWork → writes`。筛选先向图搜派发，图搜又向后续筛选翻译派发，因此 `otherWork` 需要在图搜前后各等待一次。这些等待用于确认全部完成，不在商品生产期间形成批次屏障。
 
-开启 `expendType` 且目标尚未达到时，`expendShop` 从已保存商品的卖家与 `guessLikeList` 中选取店铺，过滤评分、排序并去重，复用 OZON 窗口进入店铺继续采集。每次访问后等待队列排空，避免拓店生产者提前结束。
+开启 `expendType` 且目标尚未达到时，`expendShop` 从已保存商品的卖家与 `guessLikeList` 中选取店铺，过滤评分、排序并去重，复用 OZON 窗口进入店铺继续采集。上一店铺的处理可与下一店铺的采集重叠，全部拓店生产结束后统一等待所有工作完成，再允许上架。
 
 开启自动上架且 `saved` 非空时，才调用 `deps.upload`。上架数据来自已确认保存的商品，而不是所有已解析或已匹配货源的商品。
 
@@ -423,7 +428,7 @@ stateDiagram-v2
 | 资源 | 直接所有者 | 释放入口 |
 | --- | --- | --- |
 | 单次任务的服务引用、`saved` | `Collection` | 幂等 `cleanup` |
-| 商品处理和保存队列 | `Collection` 创建，队列管理内部订阅 | `items/writes.destroy` |
+| 各阶段工作容器 | `Collection` 创建，管理内部订阅 | `producers/batches/otherWork/items/writes.destroy` |
 | 根取消信号与延迟 | `TaskScope` | `stop`、RxJS 退订 |
 | OZON 窗口、加载监听 | `MainWindowService` | 操作结束的清理与 `destroy` |
 | 1688 窗口、回包 IPC、窗口监听 | `WindowService` | 每次调用的清理与 `destroy` |
@@ -474,18 +479,24 @@ stateDiagram-v2
 
 | 字段/容器 | 实际含义 |
 | --- | --- |
-| `discovered` / 进度 `total` | 解析器记录的去重商品数量，并非过滤后数量 |
-| 进度 `current` | 商品队列和保存队列的待处理项、活跃项之和，并非已经处理的数量 |
+| `discovered` / 进度 `total` | 整批发现的去重商品累计数，在过滤和单件接口请求之前更新；重复 SKU 不累加 |
+| 进度 `current` | 本批及之前批次尚未结束处理的去重商品数。整批一次加入；筛掉、失败、超时或保存结束后逐件扣减；跨阶段不重复增加 |
 | `targetData` / 进度 `totalCount` | 累计服务端确认的新增数量，来自保存返回的 `count` |
 | `saved` | 服务端确认新增后保留的商品，按商品 ID 存储，供结果与上架使用 |
 | 队列 `completed/failed` | 该队列处理完成/失败次数，不等于选品新增数量 |
-| `ParseService` 去重集合 | 当前解析实例见过的商品，生命周期属于本次运行 |
+| `ParseService` ID 集合 | 累计发现记录与交付去重记录各自独立，生命周期均属于本次运行 |
 | `DataProcessService.data` | 当前运行补全后的基础数据缓存 |
 | 管理器 `filePathList` | 最多 200 条结果摘要，不持有历史任务完整商品数组 |
 
 `totalCount` 和 `saved.size` 的计量来源不同，不宜直接当作永远相等。最终结果里的 `current` 为 0，表示本次执行结束后的结果快照。
 
-达到目标后会销毁剩余基础数据批次及商品处理队列；保存队列仍按顺序检查目标，避免继续新增。商品、保存和基础数据队列的活跃项与等待项合计达到 12，或基础数据有 2 批正在排队时，只暂停该任务继续生产，不暂停其他任务的处理。记录 `采集背压等待/恢复` 日志，队列下降后继续；已在途的最多 3 件详情仍可能完成，所以 12 是背压阈值，不是所有内存或商品数的绝对硬上限。共享 OZON 委托请求不设普通请求队列或全局并发上限，详见 [OZON 请求说明](../ozon/README.md)。
+“正在处理中商品”使用独立的商品 ID 记录，不再随逐件派发从 1 开始累加。分类模式在基础筛选完成后一次登记本批商品，页面模式在解析出去重卡片后一次登记，后续仍然流式派发。例如本批 30 件，先显示 30，随后 29、28……；下一批到来时把整批数量加到当前剩余数。等待详情、图搜和保存的同一商品只计一次；保存返回新增数为 0、筛选无结果、单件失败或超时也会扣减。取消、失败清理或达到目标后，丢弃的待处理项清零。
+
+这个显示数包含尚未派发的本批商品，不等于真实并发数。它是新分页/滚动的暂停依据，不能用于阻止当前已登记批次继续处理。等待以商品完成事件唤醒，且响应取消，不进行跨任务排队。`采集进度` 日志另带 `work.sourceActive/sourcePending/producerActive/otherActive/saveActive`，区分图搜活跃/等待、生产、筛选翻译和实际保存请求数。
+
+启动时的 `采集调度配置` 记录图搜并发、分类启动间隔及 20 件积压阈值；主进程修改需要重启后加载。`采集背压等待/恢复` 记录任务 ID、正在处理总数及等待耗时。`页面采集停止` 记录达到目标、连续 3 次触底或连续 10 次无新增的具体原因，附带尚待处理数；页面生产结束后仍会等待这些商品完成。
+
+达到目标后取消其余生产、基础数据、筛选翻译和图搜工作，同时结束积压等待。保存请求按剩余目标数预留名额，返回新增数为 0 时释放名额供其他商品使用，避免并发超采；该结果会记录为“服务端返回新增数量为0”，不会误报新增保存成功。保存不设固定并发上限。共享 OZON 委托请求不设普通请求队列或全局并发上限；积压只暂停所属采集任务的新分页/滚动，详见 [OZON 请求说明](../ozon/README.md)。
 
 ## 9. 超时与失败策略
 
@@ -493,9 +504,9 @@ stateDiagram-v2
 
 | 边界 | 默认期限/策略 | 位置 |
 | --- | --- | --- |
-| 普通 `step`、保存队列单项 | 30 秒 | `Collection` 的 `timing.operation` |
+| 普通 `step`、基础数据、筛选翻译、实际保存请求 | 30 秒；保存目标名额等待独立于网络超时 | `Collection` 的 `timing.operation` |
 | 页面接口及验证等待 `pageStep` | 支持整项任务取消；内部网络/窗口加载各限 30 秒，验证最多 3 轮 | `OzonRequestWindowService` |
-| 商品处理单项 | 120 秒 | `timing.item` |
+| 1688 图搜单项 | 120 秒 | `timing.item` |
 | 整项任务、排空等待 | 默认不设总时限，仍支持取消 | `timing.run ?? 0` |
 | 创建 OZON 窗口 | 100 秒 | `workflow` 与窗口加载逻辑 |
 | 进入其他页面 | 窗口加载内层 60 秒，还受外层 `step` 限制 | `changeUrl` 调用链 |
@@ -531,7 +542,7 @@ stateDiagram-v2
 | 保存成功但进度不增加 | `saveGoods` 的 `code/count`，确认是否为服务端认定的新增商品 |
 | 完成后手动上架找不到数据 | `CollectionResultStore` 的账号目录、商品/摘要文件和落盘错误 |
 | 任务完成但没有 Excel | 核实 `saveExcel` 是否存在真实调用，区分 JSON 与 Excel |
-| 长时间运行后内存持续增加 | 检查窗口/IPC/监听/订阅所有权，再看缓存增长和队列背压；结合实际指标定位 |
+| 长时间运行后内存持续增加 | 检查窗口/IPC/监听/订阅所有权，再看缓存增长及图搜积压；结合实际指标定位 |
 
 ## 11. 修改代码时保留的约定
 

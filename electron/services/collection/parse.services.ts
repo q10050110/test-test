@@ -1,13 +1,15 @@
 import * as cheerio from 'cheerio'
 import { VerificationFailedError } from '../common/verification-coordinator.services.js'
-import { OzonParseService, type SellerSummary, type SellerDataSource, type GoodsConsumer } from '../common/ozon-parse.services.js'
+import { OzonParseService, type SellerSummary, type SellerDataSource, type GoodsConsumer, type GoodsBatchObserver } from '../common/ozon-parse.services.js'
 
 export class ParseService extends OzonParseService {
-  protected override readonly requestConcurrency = 3
+  protected override readonly requestConcurrency = Infinity
+  // 累计爬取按整批发现的 SKU 统计，不复用逐件成功交付后的去重集合。
+  private readonly discoveredGoods = new Set<string>()
   constructor(source: SellerDataSource, private readonly log: Pick<Console, 'error'> = console) { super(source) }
   readonly guessLikeList = new Set<string>()
 
-  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer) {
+  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver) {
     signal?.throwIfAborted()
     if (html && !this.guessLikeList.size) {
       const $ = cheerio.load(html)
@@ -16,7 +18,10 @@ export class ParseService extends OzonParseService {
         if (id) this.guessLikeList.add(this.offersUrl(id, domain))
       })
     }
-    return super.ozonListParser(html, domain, signal, onGoods)
+    return super.ozonListParser(html, domain, signal, onGoods, goods => {
+      for (const item of goods) this.discoveredGoods.add(String(item.id))
+      onBatch?.(goods)
+    })
   }
 
   protected override mapGoods(goods: any, sellers: SellerSummary) {
@@ -33,6 +38,7 @@ export class ParseService extends OzonParseService {
       const id = String(item._id ?? '')
       if (!id || this.ozonGoodsData.has(id)) continue
       this.ozonGoodsData.add(id)
+      this.discoveredGoods.add(id)
       result.push(item)
     }
     return result
@@ -83,7 +89,7 @@ export class ParseService extends OzonParseService {
     } catch (error) {
       signal?.throwIfAborted()
       if (error instanceof VerificationFailedError) throw error
-      this.log.error('解析数据失败~~~')
+      this.log.error('分类商品详情解析失败:', { goodsId: goods._id, error })
       return {}
     }
   }
@@ -136,5 +142,6 @@ export class ParseService extends OzonParseService {
   /**
    * 获取商品数量
    */
-  override destroy() { this.guessLikeList.clear(); super.destroy() }
+  override getDataCount() { return this.discoveredGoods.size }
+  override destroy() { this.discoveredGoods.clear(); this.guessLikeList.clear(); super.destroy() }
 }
