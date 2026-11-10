@@ -139,6 +139,53 @@ test('manager starts four tasks together and queues the fifth until a slot is re
   } finally { await manager.stopAllTasks() }
 })
 
+test('raising the task count to eight starts the other four while the first four remain unfinished', async () => {
+  const { manager, add } = setup(4)
+  const ids = Array.from({ length: 8 }, (_, index) => `task-${index}`)
+  const tasks = ids.map(add)
+  try {
+    await Promise.all(ids.map(id => manager.startTaskById(id)))
+    assert.deepEqual(tasks.map(task => task.started), [1, 1, 1, 1, 0, 0, 0, 0])
+    manager.setMaxConcurrentTasks(8)
+    assert.deepEqual(tasks.map(task => task.started), Array(8).fill(1))
+    assert.equal(manager.activeTasks.size, 8)
+    assert.equal(manager.taskQueue.length, 0)
+  } finally { await manager.stopAllTasks() }
+})
+
+test('queue refresh skips missing entries and fills every available task slot', async () => {
+  const { manager, add } = setup(8)
+  const ids = Array.from({ length: 8 }, (_, index) => `task-${index}`)
+  const tasks = ids.map(add)
+  manager.taskQueue.push('missing-task', ...ids)
+  try {
+    manager.refreshTaskQueue()
+    assert.deepEqual(tasks.map(task => task.started), Array(8).fill(1))
+    assert.equal(manager.activeTasks.size, 8)
+  } finally { await manager.stopAllTasks() }
+})
+
+test('late pending status synchronization cannot overwrite a task that has already started', async () => {
+  const { manager, add } = setup()
+  const a = add('a'), b = add('b'), gate = Promise.withResolvers<void>()
+  const events: any[] = []
+  manager.setMainWindow({ isDestroyed: () => false, webContents: { send: (channel: string, data: any) => {
+    if (channel === 'task-status-update') events.push(data)
+  } } })
+  b.updateStatus = (status: string) => { b.info.taskStatus = status; return gate.promise }
+  try {
+    await manager.startTaskById('a')
+    const startingB = manager.startTaskById('b')
+    const finished = manager.executions.get('a')
+    a.complete()
+    await finished
+    assert.equal(b.started, 1)
+    gate.resolve()
+    await startingB
+    assert.equal(events.filter(event => event.task._id === 'b').at(-1)?.status, 'running')
+  } finally { gate.resolve(); await manager.stopAllTasks() }
+})
+
 test('manager retains concurrency slot until result persistence and cleanup finish', async () => {
   const { manager, add } = setup()
   const a = add('a'),

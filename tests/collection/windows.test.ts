@@ -277,3 +277,71 @@ test('unexpected image-search window close rejects without accessing destroyed w
   assert.equal(ipc.listenerCount('result-page-' + id), 0)
   source.destroy()
 })
+
+test('image search reads ready cards even when the preload result notification never arrives', { timeout: 2000 }, async () => {
+  const result = { link1688: 'https://detail.1688.com/offer/1.html', sourcePrice: 10 }
+  const source = new WindowService({ '1688Parse': async () => result } as any, { resultTimeoutMs: 500, pollMs: 1 })
+  ;(source as any).startSearch = async () => {}
+  const stages: string[] = []
+  const running = source.createWindow('0', 'cover', undefined, { taskId: 'task', goodsId: 'one', onStage: stage => stages.push(stage) })
+  await new Promise(setImmediate)
+  const win = FakeWindow.instances.at(-1)!
+  ;(win.contents as any).executeJavaScript = async (script: string) => script.includes('const layout') ? true : '<html>ready</html>'
+  win.contents.emit('dom-ready')
+  assert.deepEqual(await running, result)
+  assert.ok(stages.includes('等待结果商品'))
+  assert.ok(stages.includes('排序并读取结果'))
+  assert.equal(win.destroyed, true)
+  const id = win.options.webPreferences.additionalArguments[0].slice('--winId='.length)
+  assert.equal(ipc.listenerCount('result-page-' + id), 0)
+  source.destroy()
+})
+
+test('entry, image and upload stage stalls release their windows without waiting for the whole item deadline', { timeout: 2000 }, async () => {
+  for (const stage of ['entry', 'image', 'upload']) {
+    const source = new WindowService({} as any, { entryTimeoutMs: 30, imageTimeoutMs: 30, uploadTimeoutMs: 30 })
+    ;(source as any).startSearch = async (_win: unknown, _cover: string, _signal: AbortSignal, onUpload: () => void) => {
+      if (stage === 'upload') onUpload()
+      return new Promise(() => {})
+    }
+    const running = source.createWindow('0', 'cover')
+    const rejected = assert.rejects(running, stage === 'entry' ? /加载入口页超时/ : stage === 'image' ? /下载源图超时/ : /上传图片并搜索超时/)
+    await new Promise(setImmediate)
+    const win = FakeWindow.instances.at(-1)!
+    if (stage !== 'entry') win.contents.emit('dom-ready')
+    await rejected
+    assert.equal(win.destroyed, true)
+    const id = win.options.webPreferences.additionalArguments[0].slice('--winId='.length)
+    assert.equal(ipc.listenerCount('result-page-' + id), 0)
+    source.destroy()
+  }
+})
+
+test('one stalled 1688 task cannot block the other seven and can process another item after timeout', { timeout: 3000 }, async () => {
+  const sources = Array.from({ length: 8 }, () => new WindowService({ '1688Parse': async () => ({ sourcePrice: 1 }) } as any,
+    { entryTimeoutMs: 1000, resultTimeoutMs: 500, pollMs: 1 }))
+  for (const source of sources) (source as any).startSearch = async () => {}
+  const firstWindow = FakeWindow.instances.length
+  const running = sources.map((source, index) => source.createWindow('0', 'cover', undefined, { taskId: `task-${index}` }))
+  let stalledFinished = false
+  const failed = assert.rejects(running[0]!, /等待结果商品超时/).finally(() => { stalledFinished = true })
+  try {
+    await new Promise(setImmediate)
+    const windows = FakeWindow.instances.slice(firstWindow)
+    assert.equal(windows.length, 8)
+    windows.forEach((win, index) => {
+      ;(win.contents as any).executeJavaScript = async (script: string) => script.includes('const layout') ? index > 0 : '<html>ready</html>'
+      win.contents.emit('dom-ready')
+    })
+    assert.equal((await Promise.all(running.slice(1))).length, 7)
+    assert.equal(stalledFinished, false)
+    await failed
+    assert.ok(windows.every(win => win.destroyed))
+    const retry = sources[0]!.createWindow('0', 'next-cover')
+    await new Promise(setImmediate)
+    const next = FakeWindow.instances.at(-1)!
+    ;(next.contents as any).executeJavaScript = async (script: string) => script.includes('const layout') ? true : '<html>ready</html>'
+    next.contents.emit('dom-ready')
+    assert.equal((await retry).sourcePrice, 1)
+  } finally { sources.forEach(source => source.destroy()); await Promise.allSettled(running) }
+})

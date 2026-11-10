@@ -13,6 +13,9 @@ import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-sc
 import { mapPaced } from '../common/concurrent-map.services.js'
 import type { VerificationState } from '../ozon/request-window.services.js'
 
+const DETAIL_CONCURRENCY = 3
+const PIPELINE_HIGH_WATERMARK = 12
+
 interface CollectionServices {
   main: Pick<
     MainWindowService,
@@ -260,16 +263,33 @@ export class Collection {
       (kind === 'scroll' ? 3000 + Math.random() * 2000 : 1000 + Math.random() * 3000)
     return abortableDelay(ms, signal)
   }
+  private pipelineLoad() {
+    const load = {
+      activeItems: this.items?.getActiveCount() ?? 0, pendingItems: this.items?.getTaskCount() ?? 0,
+      activeWrites: this.writes?.getActiveCount() ?? 0, pendingWrites: this.writes?.getTaskCount() ?? 0,
+      activeBatches: this.batches?.getActiveCount() ?? 0, pendingBatches: this.batches?.getTaskCount() ?? 0,
+    }
+    return { ...load, total: Object.values(load).reduce((sum, count) => sum + count, 0) }
+  }
   private async backpressure(signal = this.scope.signal) {
+    let started: number | undefined
+    let load = this.pipelineLoad()
     while (
       !this.targetReached &&
-      ((this.items?.getTaskCount() ?? 0) + (this.writes?.getTaskCount() ?? 0) > 20 ||
-        (this.batches?.getTaskCount() ?? 0) >= 2)
+      (load.total >= PIPELINE_HIGH_WATERMARK || load.pendingBatches >= 2)
     ) {
+      if (started === undefined) {
+        started = performance.now()
+        this.deps.log.info('采集背压等待:', { taskId: this.task._id, limit: PIPELINE_HIGH_WATERMARK, ...load })
+      }
       await abortableDelay(250, signal)
+      load = this.pipelineLoad()
     }
     signal.throwIfAborted()
     this.scope.check()
+    if (started !== undefined) this.deps.log.info('采集背压恢复:', {
+      taskId: this.task._id, waitMs: Math.round(performance.now() - started), ...load,
+    })
   }
 
   private async categoryMode() {
@@ -297,11 +317,11 @@ export class Collection {
         goods.clickRate = (((goods.qtyViewPdp || 0) / (goods.views || 1)) * 100).toFixed(2)
       }
       const filtered: any[] = await this.runtime.data.filterData(unique, this.task, 'base')
-      // 沿用重构前按间隔启动的节奏，发下一件不等待前一件响应。
+      // 保留启动间隔，同时限制整件详情链路的在途数量，避免慢响应堆积。
       const detailScope = new TaskScope(this.scope.signal)
       this.detailScope = detailScope
       await mapPaced(filtered, async (goods, _index, signal) => {
-        await this.backpressure()
+        await this.backpressure(signal)
         signal.throwIfAborted()
         if (this.targetReached) return
         const response = await this.measure('OZON详情接口', () => this.runtime.main.getDataByApi(goods._id, signal), goods._id)
@@ -317,7 +337,7 @@ export class Collection {
           signal.throwIfAborted()
           this.enqueue(goods)
         }
-      }, signal => this.pause('detail', signal), detailScope.signal).catch(error => {
+      }, signal => this.pause('detail', signal), detailScope.signal, DETAIL_CONCURRENCY).catch(error => {
         this.scope.check()
         if (!this.targetReached || !detailScope.signal.aborted) throw error
       }).finally(() => {
@@ -340,7 +360,7 @@ export class Collection {
         const { html, domain } = await pageScope.run(
           (signal) => this.runtime.main.getHTML(signal), 0, '读取页面',
         )
-        await this.measure('页面解析及跟卖接口', () => pageScope.run(
+        await this.measure('页面解析与商品派发（含背压等待）', () => pageScope.run(
           (signal) => this.runtime.parse.ozonListParser(html, domain, signal, async (goods, signal) => {
             await this.backpressure(signal)
             if (this.targetReached) return
@@ -400,6 +420,9 @@ export class Collection {
       this.task.sourceType,
       goods.cover,
       signal,
+      { taskId: this.task._id, goodsId: goods.id, onStage: stage => {
+        if (!signal.aborted) this.outputLog(`商品 ${goods.id}：1688${stage}`)
+      } },
     ), goods.id)
     signal.throwIfAborted()
     if (this.targetReached) return

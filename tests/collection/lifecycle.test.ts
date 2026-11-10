@@ -142,6 +142,21 @@ test('normal completion saves before uploading, releases all services and does n
   assertReleased(f.calls)
 })
 
+test('1688 stage progress carries the current task and product into the existing progress output', async () => {
+  const f = fixture()
+  const messages: any[] = []
+  f.deps.log.info = (label: string, data: any) => { if (label === '采集进度:') messages.push(data) }
+  f.services.source.createWindow = async (_type: string, _cover: string, _signal: AbortSignal, context: any) => {
+    assert.equal(context.taskId, 'task-1')
+    assert.equal(context.goodsId, '1')
+    context.onStage('等待结果商品')
+    return { sourcePrice: 1 }
+  }
+  await f.collection.run()
+  assert.ok(messages.some(data => data.taskId === 'task-1' && data.message === '商品 1：1688等待结果商品'))
+  assertReleased(f.calls)
+})
+
 test('producer requests are awaited before deciding queues are empty', async () => {
   const f = fixture()
   const gate = Promise.withResolvers<any[]>()
@@ -157,11 +172,12 @@ test('producer requests are awaited before deciding queues are empty', async () 
   assertReleased(f.calls)
 })
 
-test('category launches the next detail without waiting for the previous three and saves before the page drains', async () => {
+test('category limits in-flight details to three and saves before the page drains', { timeout: 2000 }, async () => {
   const f = fixture({ isUseCategorySelect: 0 })
   const ids = ['1', '2', '3', '4']
   const gates = ids.map(() => Promise.withResolvers<void>())
   const entered = Promise.withResolvers<void>(), saved = Promise.withResolvers<void>()
+  const fourth = Promise.withResolvers<void>()
   const started: string[] = []
   let active = 0, peak = 0
   f.deps.request = async config => config.url?.includes('getReMaiData')
@@ -169,7 +185,8 @@ test('category launches the next detail without waiting for the previous three a
   f.services.main.getDataByApi = async (id: string) => {
     started.push(id)
     peak = Math.max(peak, ++active)
-    if (started.length === 4) entered.resolve()
+    if (started.length === 3) entered.resolve()
+    if (started.length === 4) fourth.resolve()
     await gates[ids.indexOf(id)]!.promise
     active--
     return {}
@@ -180,15 +197,16 @@ test('category launches the next detail without waiting for the previous three a
   const running = f.collection.run()
   try {
     await entered.promise
-    assert.deepEqual(started, ids)
+    assert.deepEqual(started, ids.slice(0, 3))
     gates[0]!.resolve()
     await saved.promise
+    await fourth.promise
     assert.equal(f.saved[0].id, '1')
     assert.equal(active >= 2, true)
     for (const gate of gates) gate.resolve()
     const result = await running
     assert.equal(result.upGoodsList.length, 4)
-    assert.equal(peak, 4)
+    assert.equal(peak, 3)
     assertReleased(f.calls)
   } finally { for (const gate of gates) gate.resolve(); await f.collection.cancel(); await running.catch(() => undefined) }
 })
@@ -292,6 +310,55 @@ test('a paced detail failure stops the launch interval and aborts already starte
   assert.equal(intervalAborted, true)
 })
 
+test('a slow consumer stops page production at the pipeline watermark and resumes without losing goods', { timeout: 6000 }, async () => {
+  const f = fixture({ targetCount: 100 })
+  f.deps.timing!.item = 2000
+  f.deps.timing!.run = 5000
+  const gate = Promise.withResolvers<void>(), blocked = Promise.withResolvers<void>()
+  let delivered = 0, sourceStarted = 0, parsed = false, resumed = false
+  const goods = Array.from({ length: 40 }, (_, index) => ({ id: String(index), cover: String(index) }))
+  f.deps.log.info = (label: string) => {
+    if (label === '采集背压等待:') blocked.resolve()
+    if (label === '采集背压恢复:') resumed = true
+  }
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods: GoodsConsumer) => {
+    if (parsed) return []
+    parsed = true
+    for (const item of goods) { await onGoods(item, signal); delivered++ }
+    return goods
+  }
+  f.services.source.createWindow = async () => { sourceStarted++; await gate.promise; return {} }
+  const running = f.collection.run()
+  try {
+    await blocked.promise
+    await new Promise(setImmediate)
+    assert.equal(sourceStarted, 3)
+    assert.ok(delivered <= 15)
+    assert.ok(delivered < goods.length)
+    gate.resolve()
+    assert.equal((await running).upGoodsList.length, 40)
+    assert.equal(resumed, true)
+    assertReleased(f.calls)
+  } finally { gate.resolve(); await f.collection.cancel(); await running.catch(() => undefined) }
+})
+
+test('cancelling while page production waits for capacity stops promptly and cannot save late goods', { timeout: 2000 }, async () => {
+  const f = fixture({ targetCount: 100 })
+  const blocked = Promise.withResolvers<void>()
+  f.deps.timing!.item = 2000
+  f.deps.log.info = (label: string) => { if (label === '采集背压等待:') blocked.resolve() }
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods: GoodsConsumer) =>
+    parsedGoods(Array.from({ length: 40 }, (_, index) => ({ id: String(index), cover: 'cover' })), signal, onGoods)
+  f.services.source.createWindow = async () => new Promise(() => {})
+  const running = f.collection.run()
+  const rejected = assert.rejects(running, (error: any) => error instanceof CollectionRunError && error.result.status === 'cancelled')
+  await blocked.promise
+  await f.collection.cancel()
+  await rejected
+  assert.equal(f.saved.length, 0)
+  assertReleased(f.calls)
+})
+
 test('a failed concurrent detail cancels its peers and never launches the rest of the batch', async () => {
   const entered = Promise.withResolvers<void>(), failure = Promise.withResolvers<void>()
   const started: number[] = []
@@ -320,7 +387,7 @@ test('reaching the category target aborts outstanding detail requests and comple
     ? { data: { list: ['1', '2', '3', '4'].map(_id => ({ _id })), total: 4 } } : {}
   f.services.main.getDataByApi = async (id: string, signal: AbortSignal) => {
     started.push(id)
-    if (started.length === 4) entered.resolve()
+    if (started.length === 3) entered.resolve()
     if (id === '1') { await entered.promise; return {} }
     signal.addEventListener('abort', () => { aborted++ }, { once: true })
     return new Promise(() => {})
@@ -329,8 +396,8 @@ test('reaching the category target aborts outstanding detail requests and comple
   const result = await f.collection.run()
   assert.equal(result.status, 'completed')
   assert.equal(result.upGoodsList.length, 1)
-  assert.equal(aborted, 3)
-  assert.deepEqual(started, ['1', '2', '3', '4'])
+  assert.equal(aborted, 2)
+  assert.deepEqual(started, ['1', '2', '3'])
   assertReleased(f.calls)
 })
 

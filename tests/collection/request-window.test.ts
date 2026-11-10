@@ -117,6 +117,45 @@ test('normal requests run concurrently in one window after shared initialization
   } finally { release.resolve(good()); f.worker.destroy(); await Promise.allSettled(pending) }
 })
 
+test('eight shared owners dispatch all requests directly without a global or per-owner queue', { timeout: 5000 }, async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  const leases = Array.from({ length: 8 }, () => acquireOzonRequests(f.session, entry))
+  respond = () => { if (requests.length === 48) entered.resolve(); return release.promise }
+  const pending = leases.flatMap((lease, owner) => Array.from({ length: 6 }, (_, index) => lease.request(`${api}?owner=${owner}&item=${index}`)))
+  try {
+    await entered.promise
+    await new Promise(setImmediate)
+    assert.equal(requests.length, 48)
+    assert.equal(FakeWindow.instances.length, 1)
+    assert.equal(leases[0]!.getStats().active, 48)
+    assert.ok(leases.every(lease => lease.getStats().ownerActive === 6))
+    release.resolve(good())
+    await Promise.all(pending)
+    assert.equal(requests.length, 48)
+    assert.equal(leases[0]!.getStats().active, 0)
+  } finally { release.resolve(good()); leases.forEach(lease => lease.release()); f.worker.destroy(); await Promise.allSettled(pending) }
+})
+
+test('releasing a shared owner cancels all of its requests and preserves other owners in flight', { timeout: 5000 }, async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<PageResponse>()
+  const a = acquireOzonRequests(f.session, entry), b = acquireOzonRequests(f.session, entry)
+  respond = () => { if (requests.length === 12) entered.resolve(); return release.promise }
+  const first = Array.from({ length: 8 }, (_, index) => a.request(`${api}?owner=a&item=${index}`))
+  const settled = Promise.allSettled(first)
+  const second = Array.from({ length: 4 }, (_, index) => b.request(`${api}?owner=b&item=${index}`))
+  try {
+    await entered.promise
+    a.release()
+    assert.ok((await settled).every(result => result.status === 'rejected'))
+    assert.equal(FakeWindow.instances[0]!.destroyed, false)
+    assert.equal(requests.filter(url => url.includes('owner=a')).length, 8)
+    assert.equal(b.getStats().ownerActive, 4)
+    release.resolve(good())
+    assert.ok((await Promise.all(second)).every(result => result.success))
+    assert.equal(requests.filter(url => url.includes('owner=b')).length, 4)
+  } finally { release.resolve(good()); a.release(); b.release(); f.worker.destroy(); await Promise.allSettled([...first, ...second]) }
+})
+
 test('cancelling the first caller during initialization leaves the shared load available to peers', async () => {
   const f = fixture(), entered = Promise.withResolvers<void>(), controller = new AbortController()
   onLoad = () => { entered.resolve(); return false }

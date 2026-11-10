@@ -107,8 +107,16 @@ export class OzonRequestWindowService extends BrowserWindowService {
 
   private async fetch(url: string, signal: AbortSignal) {
     const scope = new TaskScope(signal)
-    try { return await scope.run(inner => this.fetchPage(url, inner), this.options.requestTimeoutMs ?? 30_000, 'OZON 接口请求') }
-    finally { scope.stop() }
+    const started = performance.now()
+    let status: number | undefined
+    try {
+      const response = await scope.run(inner => this.fetchPage(url, inner), this.options.requestTimeoutMs ?? 30_000, 'OZON 接口请求')
+      status = response.status
+      return response
+    } finally {
+      scope.stop()
+      log.info('OZON 网络请求耗时:', { url, status, elapsedMs: Math.round(performance.now() - started) })
+    }
   }
 
   private isData(response: PageResponse) {

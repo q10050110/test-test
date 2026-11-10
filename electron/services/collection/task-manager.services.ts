@@ -57,8 +57,8 @@ export class TaskManager {
   setMaxConcurrentTasks(max: number) {
     if (!Number.isInteger(max) || max < 1) throw new Error('并发任务数必须为正整数')
     this.maxConcurrentTasks = max
-    while (this.activeTasks.size < this.maxConcurrentTasks && this.taskQueue.length)
-      this.processNextTask()
+    log.info('采集任务并发设置:', { max, active: this.activeTasks.size, pending: this.taskQueue.length })
+    this.processNextTask()
   }
   /**
    * 添加任务（仅创建任务，不立即执行）
@@ -165,8 +165,12 @@ export class TaskManager {
     if (this.activeTasks.size < this.maxConcurrentTasks) void this.executeTask(taskId)
     else {
       this.taskQueue.push(taskId)
+      log.info('采集任务等待执行名额:', {
+        taskId, max: this.maxConcurrentTasks, active: this.activeTasks.size, pending: this.taskQueue.length,
+      })
       await task.updateStatus('pending')
-      this.notifyTaskUpdate(taskId, 'pending')
+      // 云端 pending 同步期间可能已经释放名额并启动，不能再推送过时状态。
+      if (this.taskQueue.includes(taskId) && !this.activeTasks.has(taskId)) this.notifyTaskUpdate(taskId, 'pending')
     }
     return true
   }
@@ -180,6 +184,9 @@ export class TaskManager {
     const task = this.tasks.get(taskId)
     if (!task || this.stopping) return Promise.resolve()
     this.activeTasks.add(taskId)
+    log.info('采集任务开始执行:', {
+      taskId, max: this.maxConcurrentTasks, active: this.activeTasks.size, pending: this.taskQueue.length,
+    })
     this.notifyTaskUpdate(taskId, 'running')
     const store = this.resultStore
     const execution = (async () => {
@@ -241,13 +248,12 @@ export class TaskManager {
   /**
    * 处理下一个待执行任务
    */
-  private async processNextTask() {
+  private processNextTask() {
     if (this.stopping) return
-    if (this.taskQueue.length > 0 && this.activeTasks.size < this.maxConcurrentTasks) {
+    while (this.taskQueue.length > 0 && this.activeTasks.size < this.maxConcurrentTasks) {
       const nextTaskId = this.taskQueue.shift()
-      if (nextTaskId) {
-        this.executeTask(nextTaskId)
-      }
+      if (!nextTaskId || !this.tasks.has(nextTaskId) || this.activeTasks.has(nextTaskId) || this.executions.has(nextTaskId)) continue
+      void this.executeTask(nextTaskId)
     }
   }
 
