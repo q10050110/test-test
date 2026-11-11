@@ -9,8 +9,8 @@ import type { ParseService } from './parse.services.js'
 import type { Task, TaskStatus, Query, CollectionResult, CollectionPhase } from './type.js'
 import { createCollectionActor } from './collection-machine.services.js'
 import { TaskQueueService } from '../common/task-queue.services.js'
-import { TaskCancelledError, TaskTimeoutError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
-import { VerificationFailedError } from '../common/verification-coordinator.services.js'
+import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
+import { isProductNetworkError } from '../common/ozon-parse.services.js'
 import type { VerificationState } from '../ozon/request-window.services.js'
 
 const PROCESSING_HIGH_WATERMARK = 20
@@ -209,7 +209,7 @@ export class Collection {
         label: '采集生产', parent: this.productionScope.signal, timeoutMs: 0,
         onError: (error, job) => {
           // 商品网络异常只结束这一件；验证失败、窗口关闭和程序错误仍明确失败。
-          if (job.kind === 'detail' && this.isProductNetworkError(error)) {
+          if (job.kind === 'detail' && isProductNetworkError(error)) {
             this.deps.log.warn('分类商品请求失败，跳过该商品:', {
               taskId: this.task._id, goodsId: job.goods._id, error,
             })
@@ -431,11 +431,6 @@ export class Collection {
     }
   }
 
-  private isProductNetworkError(error: unknown) {
-    if (error instanceof VerificationFailedError) return false
-    return error instanceof TaskTimeoutError || /^(?:Failed to fetch|fetch failed|NetworkError\b)/i.test(this.errorMessage(error))
-  }
-
   private async produceDetail(goods: any, signal: AbortSignal) {
     let handedOff = false
     try {
@@ -477,6 +472,11 @@ export class Collection {
           this.batches?.addTask([batch])
           // 已取得页面快照中的新 SKU，滚动无需等待本页接口全部返回。
           job.announce(goods.length)
+        }, (goods, error) => {
+          this.deps.log.warn('页面商品跟卖请求失败，跳过该商品:', {
+            taskId: this.task._id, goodsId: goods.id, error,
+          })
+          this.finishProcessing(goods.id)
         }))
     } finally {
       if (batch) { batch.finished = true; batch.wake?.() }

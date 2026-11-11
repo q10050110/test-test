@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ParseService as CollectionParser } from '../../electron/services/collection/parse.services.js'
 import { ParseService as InspectionParser } from '../../electron/services/inspection/parse.services.js'
+import { TaskTimeoutError } from '../../electron/services/common/task-scope.services.js'
+import { VerificationFailedError } from '../../electron/services/common/verification-coordinator.services.js'
 
 const domain = 'https://www.ozon.ru'
 const card = (id: string) => `<article><a href="/product/item-${id}/"><img src="${id}.png"><div><span>商品${id}</span></div></a><span class="tsHeadline500Medium">1 200 ₽</span><span class="tsBodyControl400Small">原价 1 500 ₽</span><span class="tsBodyMBold">4.9100</span></article>`
@@ -109,6 +111,40 @@ test('overlapping page snapshots launch new seller requests while deduplicating 
     assert.deepEqual((await first).map(goods => goods.id), ['1', '2', '3'])
     assert.deepEqual((await second).map(goods => goods.id), ['4'])
   } finally { gate.resolve(); await Promise.allSettled([first, second]); parser.destroy() }
+})
+
+test('a collection seller timeout skips only that product and leaves it available for retry', async () => {
+  const gate = Promise.withResolvers<void>(), failed = Promise.withResolvers<void>()
+  const received: string[] = [], failures: string[] = [], requests: string[] = []
+  let fail = true, aborted = false
+  const parser = new CollectionParser({ getSellingData: async (url, signal) => {
+    const id = decodeURIComponent(url).match(/product_id=(\d+)/)![1]!
+    requests.push(id)
+    if (id === '1' && fail) throw new TaskTimeoutError('OZON 接口请求')
+    signal!.addEventListener('abort', () => { aborted = true }, { once: true })
+    await gate.promise
+    return sellers
+  } }, { error() {} })
+  const parsing = parser.ozonListParser(html, domain, undefined, async goods => { received.push(goods.id) }, undefined,
+    (goods, error) => { assert.ok(error instanceof TaskTimeoutError); failures.push(goods.id); failed.resolve() })
+  try {
+    await failed.promise
+    assert.equal(aborted, false)
+    assert.deepEqual(failures, ['1'])
+    gate.resolve()
+    assert.deepEqual((await parsing).map(goods => goods.id), ['2'])
+    assert.deepEqual(received, ['2'])
+    fail = false
+    assert.deepEqual((await parser.ozonListParser(html, domain)).map(goods => goods.id), ['1'])
+    assert.deepEqual(requests, ['1', '2', '1'])
+    assert.equal(parser.getDataCount(), 2)
+  } finally { gate.resolve(); await parsing.catch(() => undefined); parser.destroy() }
+})
+
+test('collection seller verification failure still rejects the page', async () => {
+  const parser = new CollectionParser({ getSellingData: async () => { throw new VerificationFailedError('verification exhausted') } })
+  try { await assert.rejects(parser.ozonListParser(html, domain), /verification exhausted/) }
+  finally { parser.destroy() }
 })
 
 test('streamed products are consumed before the page drains and retries skip only delivered IDs', async () => {

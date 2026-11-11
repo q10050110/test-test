@@ -556,6 +556,51 @@ const pageCards = `<div id="contentScrollPaginator">${['1', '2', '3'].map(id =>
 ).join('')}</div>`
 const sellerResponse = { success: true, data: { widgetStates: {} } }
 
+test('page seller timeouts deduct failed products, release backpressure and allow peers to save', { timeout: 3000 }, async () => {
+  const f = fixture({ targetCount: 100 })
+  const gate = Promise.withResolvers<void>(), skipped = Promise.withResolvers<void>()
+  const snapshots: number[] = []
+  let reads = 0, failures = 0, scrolls = 0, peerAborted = false
+  const page = `<div id="contentScrollPaginator">${Array.from({ length: 24 }, (_, index) =>
+    `<article><a href="/product/item-${index + 1}/"><img src="cover.png"></a><span class="tsHeadline500Medium">100 ₽</span></article>`,
+  ).join('')}</div>`
+  f.services.main.getHTML = async () => ({ html: reads++ ? '' : page, domain: 'https://www.ozon.ru' })
+  f.services.main.scrollPage = async () => { scrolls++; return false }
+  f.services.parse = new ParseService({ getSellingData: async (url, signal) => {
+    const id = Number(decodeURIComponent(url).match(/product_id=(\d+)/)![1])
+    if (id <= 21) throw new TaskTimeoutError('OZON 接口请求')
+    signal!.addEventListener('abort', () => { peerAborted = true }, { once: true })
+    await gate.promise
+    return sellerResponse
+  } }, { error() {} })
+  const destroy = f.services.parse.destroy.bind(f.services.parse)
+  f.services.parse.destroy = () => { f.calls.push('parse.destroy'); destroy() }
+  f.deps.log.warn = (label: string, data: any) => {
+    if (label === '页面商品跟卖请求失败，跳过该商品:') {
+      assert.equal(data.taskId, f.task._id)
+      if (++failures === 21) skipped.resolve()
+    }
+  }
+  f.deps.log.info = (label: string, data: any) => { if (label === '采集进度:') snapshots.push(data.progress.current) }
+  const running = f.collection.run()
+  try {
+    await skipped.promise
+    await new Promise(setImmediate)
+    assert.equal(f.collection.getTaskInfo().progress.current, 3)
+    assert.equal(f.collection.getTaskInfo().progress.total, 24)
+    assert.equal(peerAborted, false)
+    gate.resolve()
+    const result = await running
+    assert.equal(result.status, 'completed')
+    assert.equal(result.progress.totalCount, 3)
+    assert.deepEqual(result.upGoodsList.map(goods => goods.id), ['22', '23', '24'])
+    assert.equal(f.collection.getTaskInfo().progress.current, 0)
+    assert.ok(snapshots.includes(24) && snapshots.includes(20) && snapshots.includes(3))
+    assert.ok(scrolls > 0)
+    assertReleased(f.calls)
+  } finally { gate.resolve(); await f.collection.cancel(); await running.catch(() => undefined) }
+})
+
 test('a ready page product reaches saving while other seller requests are still pending', { timeout: 2000 }, async () => {
   const f = fixture()
   const entered = Promise.withResolvers<void>(), saved = Promise.withResolvers<void>()

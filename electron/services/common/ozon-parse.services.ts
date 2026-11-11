@@ -1,11 +1,20 @@
 import * as cheerio from 'cheerio'
 import { mapConcurrent } from './concurrent-map.services.js'
+import { TaskTimeoutError } from './task-scope.services.js'
+import { VerificationFailedError } from './verification-coordinator.services.js'
 
 export interface SellerDataSource {
   getSellingData(url: string, signal?: AbortSignal): Promise<any>
 }
 export type GoodsConsumer = (goods: any, signal: AbortSignal) => Promise<void>
 export type GoodsBatchObserver = (goods: readonly any[]) => void
+export type GoodsFailureObserver = (goods: any, error: unknown) => void
+
+export function isProductNetworkError(error: unknown) {
+  if (error instanceof VerificationFailedError) return false
+  const message = error instanceof Error ? error.message : String(error)
+  return error instanceof TaskTimeoutError || /^(?:Failed to fetch|fetch failed|NetworkError\b)/i.test(message)
+}
 export interface SellerSummary {
   available: boolean
   count: number
@@ -89,7 +98,9 @@ export class OzonParseService {
 
   protected async afterItem(_signal?: AbortSignal) {}
 
-  async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver) {
+  protected skipSellerRequestError(_error: unknown, _goods: any) { return false }
+
+  async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver, onFailure?: GoodsFailureObserver) {
     signal = signal ? AbortSignal.any([signal, this.lifetime.signal]) : this.lifetime.signal
     signal?.throwIfAborted()
     const batch = new Set<string>()
@@ -104,7 +115,15 @@ export class OzonParseService {
       const result = await mapConcurrent(candidates, this.requestConcurrency, async (goods, _index, signal) => {
         signal.throwIfAborted()
         if (!this.windowService) throw new Error('解析服务已释放')
-        const response = await this.windowService.getSellingData(goods.requestUrl, signal)
+        let response: any
+        try {
+          response = await this.windowService.getSellingData(goods.requestUrl, signal)
+        } catch (error) {
+          signal.throwIfAborted()
+          if (!this.skipSellerRequestError(error, goods)) throw error
+          onFailure?.(goods, error)
+          return undefined
+        }
         signal.throwIfAborted()
         const mapped = this.mapGoods(goods, this.sellers(response, goods.price))
         await this.afterItem(signal)
@@ -119,8 +138,9 @@ export class OzonParseService {
       }, signal)
       signal?.throwIfAborted()
       // 数组模式整批提交；流式模式逐件提交已交付的商品。
-      for (const goods of result) this.ozonGoodsData.add(goods.id)
-      return result
+      const delivered = result.filter(goods => goods !== undefined)
+      for (const goods of delivered) this.ozonGoodsData.add(goods.id)
+      return delivered
     } finally {
       for (const goods of candidates) this.inFlightGoods.delete(goods.id)
     }

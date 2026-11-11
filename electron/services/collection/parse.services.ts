@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio'
 import { VerificationFailedError } from '../common/verification-coordinator.services.js'
-import { OzonParseService, type SellerSummary, type SellerDataSource, type GoodsConsumer, type GoodsBatchObserver } from '../common/ozon-parse.services.js'
+import { OzonParseService, isProductNetworkError, type SellerSummary, type SellerDataSource, type GoodsConsumer, type GoodsBatchObserver, type GoodsFailureObserver } from '../common/ozon-parse.services.js'
 
 export class ParseService extends OzonParseService {
   protected override readonly requestConcurrency = Infinity
@@ -9,7 +9,7 @@ export class ParseService extends OzonParseService {
   constructor(source: SellerDataSource, private readonly log: Pick<Console, 'error'> = console) { super(source) }
   readonly guessLikeList = new Set<string>()
 
-  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver) {
+  override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver, onFailure?: GoodsFailureObserver) {
     signal?.throwIfAborted()
     if (html && !this.guessLikeList.size) {
       const $ = cheerio.load(html)
@@ -21,7 +21,13 @@ export class ParseService extends OzonParseService {
     return super.ozonListParser(html, domain, signal, onGoods, goods => {
       for (const item of goods) this.discoveredGoods.add(String(item.id))
       onBatch?.(goods)
-    })
+    }, onFailure)
+  }
+
+  protected override skipSellerRequestError(error: unknown, goods: any) {
+    if (!isProductNetworkError(error)) return false
+    this.log.error('商品跟卖请求失败，跳过该商品:', { goodsId: goods.id, url: goods.requestUrl, error })
+    return true
   }
 
   protected override mapGoods(goods: any, sellers: SellerSummary) {
