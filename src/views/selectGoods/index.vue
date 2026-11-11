@@ -244,7 +244,7 @@ const getProgress = async (data?: any) => {
   const { collectionTask, log } = data
   let obj = tableData.value?.find((item) => item._id === collectionTask._id)
   if (obj) Object.assign(obj, collectionTask)
-  tabsRef.value?.writeLog(collectionTask._id, log)
+  if (log) tabsRef.value?.writeLog(collectionTask._id, log)
 }
 // 列表行也订阅状态事件，不能只依赖进度日志或刷新接口。
 const getTaskStatus = (data?: { task?: Task; status?: Task['taskStatus'] }) => {

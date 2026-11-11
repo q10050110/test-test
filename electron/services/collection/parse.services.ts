@@ -6,7 +6,7 @@ export class ParseService extends OzonParseService {
   protected override readonly requestConcurrency = Infinity
   // 累计爬取按整批发现的 SKU 统计，不复用逐件成功交付后的去重集合。
   private readonly discoveredGoods = new Set<string>()
-  constructor(source: SellerDataSource, private readonly log: Pick<Console, 'error'> = console) { super(source) }
+  constructor(source: SellerDataSource, _log: Pick<Console, 'error'> & Partial<Pick<Console, 'debug'>> = console) { super(source) }
   readonly guessLikeList = new Set<string>()
 
   override async ozonListParser(html: string | undefined, domain: string, signal?: AbortSignal, onGoods?: GoodsConsumer, onBatch?: GoodsBatchObserver, onFailure?: GoodsFailureObserver) {
@@ -26,7 +26,7 @@ export class ParseService extends OzonParseService {
 
   protected override skipSellerRequestError(error: unknown, goods: any) {
     if (!isProductNetworkError(error)) return false
-    this.log.error('商品跟卖请求失败，跳过该商品:', { goodsId: goods.id, url: goods.requestUrl, error })
+
     return true
   }
 
@@ -95,8 +95,8 @@ export class ParseService extends OzonParseService {
     } catch (error) {
       signal?.throwIfAborted()
       if (error instanceof VerificationFailedError) throw error
-      this.log.error('分类商品详情解析失败:', { goodsId: goods._id, error })
-      return {}
+
+      return { failureReason: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -123,7 +123,7 @@ export class ParseService extends OzonParseService {
       const sourcePrice = isNaN(Number(price)) ? 0 : price
       return { link1688, sourcePrice, cover2 }
     } catch (error) {
-      this.log.error('解析数据失败~~~')
+
       return { link1688: '', sourcePrice: '', cover2: '' }
     }
   }

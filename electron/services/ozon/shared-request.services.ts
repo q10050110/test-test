@@ -1,9 +1,6 @@
 import type { Session } from 'electron'
 import { OzonRequestWindowService, type VerificationState } from './request-window.services.js'
 import { TaskCancelledError } from '../common/task-scope.services.js'
-import log from '../../log/business.js'
-
-let nextOwnerId = 0
 
 interface SharedRequests {
   worker: OzonRequestWindowService
@@ -29,13 +26,11 @@ export function acquireOzonRequests(session: Session, entryUrl: string, onState?
   const owners = sites
   const controller = new AbortController()
   let ownerActive = 0
-  const ownerId = ++nextOwnerId
   entry.users++
   return {
     request(url: string, signal?: AbortSignal) {
       controller.signal.throwIfAborted()
       const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
-      const started = performance.now()
       entry.active++
       ownerActive++
       return (async () => {
@@ -49,10 +44,7 @@ export function acquireOzonRequests(session: Session, entryUrl: string, onState?
         } finally {
           entry.active--
           ownerActive--
-          log.info('OZON 委托请求耗时:', {
-            ownerId, origin, url, elapsedMs: Math.round(performance.now() - started),
-            active: entry.active, ownerActive,
-          })
+
         }
       })()
     },

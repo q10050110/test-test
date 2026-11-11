@@ -23,6 +23,23 @@ interface PageBatch {
   wake?: () => void
 }
 
+interface ProductOutcome {
+  status: '成功' | '失败'
+  message: string
+  newCount?: number
+}
+
+interface ProductLogContext {
+  started: number
+  stage: string
+  waitingSince?: number
+  queueWaitMs: number
+  operations: Record<string, number>
+  activeOperations: Map<string, number>
+  name?: string
+  url?: string
+}
+
 type ProducerJob =
   | { id: string; kind: 'page'; html: string | undefined; domain: string; announce: (count: number) => void }
   | { id: string; kind: 'detail'; goods: any }
@@ -67,7 +84,7 @@ export interface CollectionDependencies {
     signal?: AbortSignal,
   ): Promise<{ code: number; count: number; message?: unknown }>
   upload(task: Task, goods: Map<string, any>, signal?: AbortSignal): Promise<string>
-  log: { info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void }
+  log: { info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void; debug?(...args: any[]): void }
   metrics(data: any): void
   timing?: {
     operation?: number
@@ -106,12 +123,14 @@ export class Collection {
   private readonly saveWaiters = new Set<() => void>()
   private readonly capacityWaiters = new Set<() => void>()
   private execution?: Promise<CollectionResult>
+  private startedAt = 0
   private cleanupPromise?: Promise<void>
   private statusSync = Promise.resolve()
   private disposed = false
   private saved = new Map<string, any>()
   // 显示计数独立于执行队列：整批登记，跨阶段不重复计数，结束后逐件移除。
   private processing = new Map<string, 'pending' | 'downstream' | 'saving'>()
+  private readonly productLogs = new Map<string, ProductLogContext>()
   private targetData = 0
   private expendShopCount = 0
   private hasUpLimit = false
@@ -160,6 +179,7 @@ export class Collection {
     if (this.execution) return this.execution
     if (this.disposed) return Promise.reject(new Error('任务已释放，请创建新的采集任务'))
     this.actor.send({ type: 'START' })
+    this.startedAt = performance.now()
     this.setStatus('running')
     this.execution = this.execute()
     return this.execution
@@ -182,9 +202,7 @@ export class Collection {
         label: '1688图搜',
         parent: this.productionScope.signal,
         timeoutMs: this.deps.timing?.item ?? 120_000,
-        onError: (error, goods) => this.deps.log.warn('单个商品1688图搜失败:', {
-          taskId: this.task._id, goodsId: goods.id, error,
-        }),
+        onError: (error, goods) => this.finishProcessing(goods.id, true, { status: '失败', message: this.errorMessage(error) }),
         onSettled: goods => {
           if (this.processing.get(String(goods.id)) === 'pending') this.finishProcessing(goods.id)
         },
@@ -194,7 +212,10 @@ export class Collection {
         parent: this.scope.signal,
         // 目标数边界的预留等待不计入网络超时；保存请求自身单独计时。
         timeoutMs: 0,
-        onError: (error) => this.fail(error),
+        onError: (error, goods) => {
+          this.finishProcessing(goods.id, true, { status: '失败', message: this.errorMessage(error) })
+          this.fail(error)
+        },
         onSettled: goods => this.finishProcessing(goods.id),
       })
       this.batches = new TaskQueueService((batch, signal) => this.processPageBatch(batch, signal), Infinity, {
@@ -210,9 +231,6 @@ export class Collection {
         onError: (error, job) => {
           // 商品网络异常只结束这一件；验证失败、窗口关闭和程序错误仍明确失败。
           if (job.kind === 'detail' && isProductNetworkError(error)) {
-            this.deps.log.warn('分类商品请求失败，跳过该商品:', {
-              taskId: this.task._id, goodsId: job.goods._id, error,
-            })
             this.outputLog(`商品 ${job.goods._id}：详情请求失败，继续处理其他商品`)
           } else this.fail(error)
         },
@@ -221,24 +239,20 @@ export class Collection {
         label: '商品后续处理', parent: this.productionScope.signal, timeoutMs: 0,
         onError: (error, job) => {
           if (job.kind === 'filter') this.fail(error)
-          else this.deps.log.warn('单个商品处理失败:', error)
+          else this.finishProcessing(job.goods.id, true, { status: '失败', message: this.errorMessage(error) })
         },
         onSettled: job => {
           if (job.kind === 'detail' && this.processing.get(String(job.goods.id)) !== 'saving')
             this.finishProcessing(job.goods.id)
         },
       })
-      this.deps.log.info('采集调度配置:', {
-        taskId: this.task._id, sourceConcurrency: 3, categoryIntervalMs: this.deps.timing?.detail ?? 1000,
-        pendingThreshold: PROCESSING_HIGH_WATERMARK, pageRequestsWaitForResponses: false,
-      })
+
       this.deps.metrics({ taskId: this.task._id, taskName: this.task.taskName, phase: 'start' })
       await this.scope.run(() => this.workflow(), this.deps.timing?.run ?? 0, '采集任务')
       this.scope.check()
       this.actor.send({ type: 'FINISH' })
     } catch (error) {
       this.fail(error)
-      this.deps.log.error('采集任务结束:', { taskId: this.task._id, taskName: this.task.taskName, error })
     } finally {
       result = this.buildResult()
       await this.cleanup()
@@ -249,6 +263,16 @@ export class Collection {
       if (this.failure) result.error = this.errorMessage(this.failure)
       await this.statusSync
       this.actor.stop()
+      this.deps.log.info('采集任务状态变更:', {
+        taskId: this.task._id,
+        taskName: this.task.taskName,
+        taskStatus: status,
+        status: status === 'completed' ? '成功' : status === 'cancelled' ? '已取消' : '失败',
+        phase: status,
+        message: result.error ?? '采集任务完成',
+        elapsedMs: Math.round(performance.now() - this.startedAt),
+        progress: { ...result.progress },
+      })
       this.deps.metrics({ taskId: this.task._id, phase: 'cleanup', goodsDataSize: this.saved.size })
     }
     if (result.status !== 'completed')
@@ -304,14 +328,33 @@ export class Collection {
   private pageStep<T>(operation: (signal: AbortSignal) => PromiseLike<T> | T, label: string) {
     return this.scope.run(operation, 0, label)
   }
-  private async measure<T>(stage: string, operation: () => PromiseLike<T> | T, goodsId?: string): Promise<T> {
-    const started = performance.now()
+  private startProductOperation(id: string, stage: string) {
+    const context = this.productLogs.get(id)
+    if (!context) return
+    const now = performance.now()
+    if (context.waitingSince !== undefined) {
+      context.queueWaitMs += now - context.waitingSince
+      context.waitingSince = undefined
+    }
+    context.stage = stage
+    context.activeOperations.set(stage, now)
+    return context
+  }
+
+  private finishProductOperation(context: ProductLogContext, stage: string, now = performance.now()) {
+    const started = context.activeOperations.get(stage)
+    if (started === undefined) return
+    context.operations[stage] = (context.operations[stage] ?? 0) + now - started
+    context.activeOperations.delete(stage)
+    if (!context.activeOperations.size) context.waitingSince = now
+  }
+
+  private async runProductStage<T>(stage: string, operation: () => PromiseLike<T> | T, goodsId?: string | readonly string[]): Promise<T> {
+    const ids = Array.isArray(goodsId) ? goodsId : goodsId === undefined ? [] : [String(goodsId)]
+    const contexts = ids.map(id => this.startProductOperation(String(id), stage)).filter(context => context !== undefined)
     try { return await operation() }
     finally {
-      this.deps.log.info('采集阶段耗时:', {
-        taskId: this.task._id, stage, goodsId, elapsedMs: Math.round(performance.now() - started),
-        activeItems: this.items?.getActiveCount() ?? 0, pendingItems: this.items?.getTaskCount() ?? 0,
-      })
+      for (const context of contexts) this.finishProductOperation(context, stage)
     }
   }
   private pause(_kind: 'scroll', signal = this.productionScope.signal) {
@@ -333,30 +376,70 @@ export class Collection {
       const id = String(item.id ?? item._id ?? '')
       if (!id || this.processing.has(id)) continue
       this.processing.set(id, 'pending')
+      this.startProductLog(id, item)
       added++
     }
     if (added) this.outputLog(`本批新增 ${added} 个待处理商品`)
   }
 
-  private finishProcessing(id: unknown, notify = true) {
-    if (!this.processing.delete(String(id))) return
+  private startProductLog(id: string, goods: any) {
+    if (this.productLogs.has(id)) return
+    const now = performance.now()
+    this.productLogs.set(id, {
+      started: now, stage: '等待商品处理', waitingSince: now, queueWaitMs: 0,
+      operations: {}, activeOperations: new Map(), name: goods.nameLabel ?? goods.name,
+      url: goods.href ?? goods.link ?? `https://www.ozon.ru/product/${id}`,
+    })
+  }
+
+  private finishProcessing(id: unknown, notify = true, outcome?: ProductOutcome) {
+    const goodsId = String(id)
+    const tracked = this.processing.delete(goodsId)
+    if (!tracked && !this.productLogs.has(goodsId)) return
+    const context = this.productLogs.get(goodsId)
+    this.productLogs.delete(goodsId)
+    const now = performance.now()
+    const elapsedMs = context ? Math.round(now - context.started) : 0
+    const result = outcome ?? { status: '失败', message: this.errorMessage(this.failure ?? this.productionScope.signal.reason ?? '商品处理结束，未产生可保存结果') }
+    if (context) {
+      // 超时或取消时，底层 Promise 可能还未退出，也要计入已经消耗的时间。
+      for (const stage of context.activeOperations.keys()) this.finishProductOperation(context, stage, now)
+      if (context.waitingSince !== undefined) context.queueWaitMs += now - context.waitingSince
+      context.waitingSince = undefined
+      const operations = Object.entries(context.operations)
+      const slowest = operations.reduce<[string, number] | undefined>((longest, entry) =>
+        !longest || entry[1] > longest[1] ? entry : longest, undefined)
+      this.deps.log.info('商品采集进度:', {
+        taskId: this.task._id, taskName: this.task.taskName, goodsId,
+        status: result.status, message: result.message,
+        elapsedMs,
+        queueWaitMs: Math.round(context.queueWaitMs),
+        slowestOperation: slowest ? { name: slowest[0], elapsedMs: Math.round(slowest[1]) } : null,
+        stage: context.stage, ...(context.name ? { goodsName: context.name } : {}), url: context.url,
+        ...(result.newCount === undefined ? {} : { newCount: result.newCount }),
+        phase: this.getPhase(),
+        progress: { current: this.processing.size, total: this.discovered, totalCount: this.targetData },
+      })
+    }
     if (this.processing.size <= PROCESSING_HIGH_WATERMARK) {
       for (const wake of this.capacityWaiters) wake()
       this.capacityWaiters.clear()
     }
-    if (notify) this.outputLog('商品处理结束')
+    if (context) this.outputLog(`商品 ${goodsId} 采集${result.status}：${result.message}，处理耗时 ${elapsedMs}ms`, true)
+    else if (notify) this.outputLog('商品处理结束')
+  }
+
+  private finishRemainingProducts(message: string) {
+    for (const id of this.productLogs.keys()) this.finishProcessing(id, false, { status: '失败', message })
   }
 
   /** 只暂停本任务的新分页/滚动；已登记批次及下游必须继续消费，才能降到阈值。 */
   private async waitForProducerCapacity() {
     this.productionScope.check()
     if (this.targetReached || this.processing.size <= PROCESSING_HIGH_WATERMARK) return
-    const started = performance.now()
     const scope = new TaskScope(this.productionScope.signal)
     let wake: (() => void) | undefined
-    this.deps.log.info('采集背压等待:', {
-      taskId: this.task._id, current: this.processing.size, limit: PROCESSING_HIGH_WATERMARK,
-    })
+
     this.outputLog(`正在处理 ${this.processing.size} 个商品，暂停加载新商品，降至20个后恢复`)
     try {
       while (!this.targetReached && this.processing.size > PROCESSING_HIGH_WATERMARK) {
@@ -371,10 +454,7 @@ export class Collection {
         }
       }
       scope.check()
-      this.deps.log.info('采集背压恢复:', {
-        taskId: this.task._id, current: this.processing.size, limit: PROCESSING_HIGH_WATERMARK,
-        waitMs: Math.round(performance.now() - started),
-      })
+
       this.outputLog(`待处理商品降至 ${this.processing.size} 个，恢复加载新商品`)
     } finally { scope.stop() }
   }
@@ -415,11 +495,15 @@ export class Collection {
         goods.releaseDate = dayjs().diff(dayjs(goods.nullableCreateDate), 'day')
         goods.clickRate = (((goods.qtyViewPdp || 0) / (goods.views || 1)) * 100).toFixed(2)
       }
-      const filtered: any[] = await this.runtime.data.filterData(unique, this.task, 'base')
-      this.deps.log.info('分类基础筛选结果:', {
-        taskId: this.task._id, pageNo: this.query.pageNo, discovered: unique.length, accepted: filtered.length,
-      })
-      this.trackProcessing(filtered.map(goods => ({ id: goods._id })))
+      for (const goods of unique) this.startProductLog(String(goods._id), goods)
+      const filtered: any[] = await this.runProductStage('基础数据筛选',
+        () => this.runtime.data.filterData(unique, this.task, 'base'), unique.map(goods => String(goods._id)))
+      const accepted = new Set(filtered.map(goods => String(goods._id)))
+      for (const goods of unique) {
+        if (!accepted.has(String(goods._id))) this.finishProcessing(goods._id, false, { status: '失败', message: '未通过商品基础筛选' })
+      }
+
+      this.trackProcessing(filtered.map(goods => ({ ...goods, id: goods._id })))
       // 当前批次已经整批计入 processing，必须继续派发，不能在这里按同一计数等待。
       for (const goods of filtered) {
         await pace()
@@ -433,50 +517,56 @@ export class Collection {
 
   private async produceDetail(goods: any, signal: AbortSignal) {
     let handedOff = false
+    let message = '商品详情无有效价格'
     try {
       signal.throwIfAborted()
       if (this.targetReached) return
-      const response = await this.measure('OZON详情接口', () => this.runtime.main.getDataByApi(goods._id, signal), goods._id)
+      const response = await this.runProductStage('OZON详情接口', () => this.runtime.main.getDataByApi(goods._id, signal), goods._id)
       signal.throwIfAborted()
       const domain = await this.runtime.main.getDomain()
       signal.throwIfAborted()
-      const detail = await this.measure('详情解析及跟卖接口', () => this.runtime.parse.ozonDetailParse(response, domain, goods, signal), goods._id)
+      const detail = await this.runProductStage('详情解析及跟卖接口', () => this.runtime.parse.ozonDetailParse(response, domain, goods, signal), goods._id)
       signal.throwIfAborted()
+      message = detail?.failureReason ?? message
       if (detail?.price && !this.targetReached) {
-        const filtered = await this.runtime.data.filterData(
+        const filtered = await this.runProductStage('商品详情筛选', () => this.runtime.data.filterData(
           [{ href: `https://www.ozon.ru/product/${detail.id}`, ...detail }], this.task, 'detail',
-        )
+        ), goods._id)
         signal.throwIfAborted()
+        message = '未通过商品详情筛选'
         this.enqueue(filtered)
         handedOff = filtered.length > 0
-      } else if (!this.targetReached) {
-        this.deps.log.info('分类商品无有效价格:', { taskId: this.task._id, goodsId: goods._id })
       }
-    } finally { if (!handedOff) this.finishProcessing(goods._id) }
+    } catch (error) {
+      message = this.errorMessage(error)
+      throw error
+    } finally { if (!handedOff) this.finishProcessing(goods._id, true, { status: '失败', message }) }
   }
 
   private async producePage(job: Extract<ProducerJob, { kind: 'page' }>, signal: AbortSignal) {
     let batch: PageBatch | undefined
     try {
-      await this.measure('页面解析及跟卖接口', () => this.runtime.parse.ozonListParser(job.html, job.domain, signal,
+      await this.runProductStage('页面解析及跟卖接口', () => this.runtime.parse.ozonListParser(job.html, job.domain, signal,
         async (goods, inner) => {
           inner.throwIfAborted()
           if (this.targetReached) return
           if (!batch) throw new Error('页面批次尚未初始化')
+          const context = this.productLogs.get(String(goods.id))
+          if (context) this.finishProductOperation(context, '页面跟卖接口')
           batch.ready.push(goods)
           batch.wake?.()
         }, goods => {
           this.discovered = this.runtime.parse.getDataCount()
           this.trackProcessing(goods)
+          for (const item of goods) this.startProductOperation(String(item.id), '页面跟卖接口')
           batch = { id: job.id, candidates: goods, ready: [], finished: false }
           this.batches?.addTask([batch])
           // 已取得页面快照中的新 SKU，滚动无需等待本页接口全部返回。
           job.announce(goods.length)
         }, (goods, error) => {
-          this.deps.log.warn('页面商品跟卖请求失败，跳过该商品:', {
-            taskId: this.task._id, goodsId: goods.id, error,
-          })
-          this.finishProcessing(goods.id)
+          const context = this.productLogs.get(String(goods.id))
+          if (context) context.stage = '页面跟卖接口'
+          this.finishProcessing(goods.id, true, { status: '失败', message: this.errorMessage(error) })
         }))
     } finally {
       if (batch) { batch.finished = true; batch.wake?.() }
@@ -510,10 +600,7 @@ export class Collection {
       this.outputLog(`加载商品中，连续无新增 ${emptyScrolls}/10`)
     }
     const reason = this.targetReached ? '已达到目标' : bottomCount >= 3 ? '连续3次触底' : '连续10次没有新商品'
-    this.deps.log.info('页面采集停止:', {
-      taskId: this.task._id, reason, emptyScrolls, bottomCount,
-      processing: this.processing.size, sourcePending: this.items?.getTaskCount() ?? 0,
-    })
+
     if (!this.targetReached) this.outputLog(`页面加载结束：${reason}，继续处理剩余商品`)
   }
 
@@ -521,13 +608,11 @@ export class Collection {
     const scope = new TaskScope(signal)
     try {
       // 一页只请求一次基础数据，与本页跟卖请求、后续滚动同时推进。
-      this.deps.log.info('页面基础数据整批获取:', {
-        taskId: this.task._id, batchId: batch.id, count: batch.candidates.length,
-      })
-      const base = await this.measure('基础数据接口', () => scope.run(
+
+      const base = await this.runProductStage('基础数据接口', () => scope.run(
         inner => this.runtime.data.getBaseData([...batch.candidates], inner),
         this.deps.timing?.operation ?? 30_000, '获取基础数据',
-      ))
+      ), batch.candidates.map(goods => String(goods.id)))
       scope.check()
       const lookup = new Map(base.map(item => [String(item.productId ?? item.id), item]))
       while (batch.ready.length || !batch.finished) {
@@ -554,7 +639,7 @@ export class Collection {
     signal.throwIfAborted()
     const accepted = new Set(filtered.map(item => String(item.id)))
     for (const item of base) {
-      if (!accepted.has(String(item.id))) this.finishProcessing(item.id)
+      if (!accepted.has(String(item.id))) this.finishProcessing(item.id, true, { status: '失败', message: '未通过商品基础筛选' })
     }
     this.enqueue(filtered)
   }
@@ -569,7 +654,8 @@ export class Collection {
   private async processOtherWork(job: OtherWork, signal: AbortSignal) {
     const scope = new TaskScope(signal)
     try {
-      await scope.run(inner => job.kind === 'filter' ? this.processData(job.goods, inner)
+      await scope.run(inner => job.kind === 'filter' ? this.runProductStage('基础数据筛选',
+        () => this.processData(job.goods, inner), job.goods.map(goods => String(goods.id)))
         : this.processGoods(job.goods, job.source, inner), this.deps.timing?.operation ?? 30_000,
       job.kind === 'filter' ? '筛选基础数据' : '商品筛选及翻译')
     } finally { scope.stop() }
@@ -578,11 +664,13 @@ export class Collection {
   private sourceHandle = async (goods: any, signal: AbortSignal) => {
     signal.throwIfAborted()
     if (this.targetReached) return
-    const source = await this.measure('1688图搜', () => this.runtime.source.createWindow(
+    const source = await this.runProductStage('1688图搜', () => this.runtime.source.createWindow(
       this.task.sourceType,
       goods.cover,
       signal,
       { taskId: this.task._id, goodsId: goods.id, onStage: stage => {
+        const context = this.productLogs.get(String(goods.id))
+        if (context) context.stage = `1688${stage}`
         if (!signal.aborted) this.outputLog(`商品 ${goods.id}：1688${stage}`)
       } },
     ), goods.id)
@@ -596,7 +684,7 @@ export class Collection {
   private async processGoods(goods: any, { link1688, sourcePrice, cover2 }: any, signal: AbortSignal) {
     signal.throwIfAborted()
     if (this.targetReached) return
-    const detail = await this.measure('商品筛选及翻译接口', () => this.runtime.data.getDetailData(
+    const detail = await this.runProductStage('商品筛选及翻译接口', () => this.runtime.data.getDetailData(
       {
         taskId: this.task._id,
         upMode: this.task.upMode,
@@ -615,7 +703,7 @@ export class Collection {
       signal,
     ), goods.id)
     signal.throwIfAborted()
-    if (!detail.length) this.deps.log.info('商品服务端筛选无结果:', { taskId: this.task._id, goodsId: goods.id })
+    if (!detail.length) this.finishProcessing(goods.id, true, { status: '失败', message: '服务端商品筛选无结果' })
     if (!this.targetReached) {
       for (const item of detail) {
         const id = String(item.id)
@@ -652,7 +740,7 @@ export class Collection {
       // 仅预留剩余目标数量，防止并发请求超采；这不是固定并发或串行保存限制。
       reservation = await this.reserveSave(scope)
       if (!reservation) return
-      const { code, count, message } = await this.measure('商品保存接口', () => scope.run(inner => this.deps.save(
+      const { code, count, message } = await this.runProductStage('商品保存接口', () => scope.run(inner => this.deps.save(
         { taskId: this.task._id, datas: [goods] }, inner,
       ), this.deps.timing?.operation ?? 30_000, '商品保存'), goods.id)
       signal.throwIfAborted()
@@ -665,13 +753,16 @@ export class Collection {
       if (count > 0) {
         this.saved.set(goods.id, goods)
         this.targetData += count
-        if (this.targetReached) {
-          this.productionScope.stop(new TaskCancelledError('已达到采集目标'))
-          this.processing.clear()
-        }
       }
-      this.finishProcessing(goods.id, false)
-      this.deps.log.info('商品保存结果:', { taskId: this.task._id, goodsId: goods.id, count })
+      this.finishProcessing(goods.id, false, {
+        status: count > 0 ? '成功' : '失败',
+        message: count > 0 ? '商品处理完成' : '服务端返回新增数量为0', newCount: count,
+      })
+      if (this.targetReached) {
+        this.productionScope.stop(new TaskCancelledError('已达到采集目标'))
+        this.finishRemainingProducts('已达到采集目标，停止处理剩余商品')
+      }
+
       this.outputLog(count > 0 ? '商品已保存' : '商品处理完成：服务端返回新增数量为0')
     } finally {
       scope.stop()
@@ -806,7 +897,8 @@ export class Collection {
         }
       }
       this.saved.clear()
-      this.processing.clear()
+      this.finishRemainingProducts(this.errorMessage(this.failure ?? this.productionScope.signal.reason ?? '任务已结束'))
+      this.productLogs.clear()
       this.saveReservations.clear()
       this.saveWaiters.clear()
       this.capacityWaiters.clear()
@@ -863,28 +955,18 @@ export class Collection {
       }
     })
   }
-  outputLog(message: string) {
+  outputLog(message: string, record = false) {
     this.task.progress = {
       current: this.processing.size,
       total: this.discovered,
       totalCount: this.targetData,
     }
-    this.deps.log.info('采集进度:', {
-      taskId: this.task._id, taskName: this.task.taskName, phase: this.getPhase(),
-      message, progress: { ...this.task.progress },
-      work: {
-        sourceActive: this.items?.getActiveCount() ?? 0,
-        sourcePending: this.items?.getTaskCount() ?? 0,
-        producerActive: this.producers?.getActiveCount() ?? 0,
-        otherActive: this.otherWork?.getActiveCount() ?? 0,
-        saveActive: this.saveReservations.size,
-      },
-    })
+
     try {
       if (this.mainWindow && !this.mainWindow.isDestroyed())
         this.mainWindow.webContents.send('task-progress', {
           collectionTask: { ...this.task, hasUpLimit: this.hasUpLimit, phase: this.getPhase() },
-          log: { date: `[${dayjs().format('YYYY/MM/DD HH:mm:ss')}]`, taskLog: message },
+          ...(record ? { log: { date: `[${dayjs().format('YYYY/MM/DD HH:mm:ss')}]`, taskLog: message } } : {}),
         })
     } catch (error) {
       this.deps.log.warn('发送采集进度失败:', error)

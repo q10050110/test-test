@@ -107,15 +107,10 @@ export class OzonRequestWindowService extends BrowserWindowService {
 
   private async fetch(url: string, signal: AbortSignal) {
     const scope = new TaskScope(signal)
-    const started = performance.now()
-    let status: number | undefined
     try {
-      const response = await scope.run(inner => this.fetchPage(url, inner), this.options.requestTimeoutMs ?? 30_000, 'OZON 接口请求')
-      status = response.status
-      return response
+      return await scope.run(inner => this.fetchPage(url, inner), this.options.requestTimeoutMs ?? 30_000, 'OZON 接口请求')
     } finally {
       scope.stop()
-      log.info('OZON 网络请求耗时:', { url, status, elapsedMs: Math.round(performance.now() - started) })
     }
   }
 
@@ -143,7 +138,7 @@ export class OzonRequestWindowService extends BrowserWindowService {
         await this.slider.prepare(wc, signal)
         if (await this.slider.hasChallenge(wc, signal)) {
           const result = await this.slider.verify(wc, signal)
-          log.info('请求窗口滑块拖动结果:', { attempt, ...result })
+
           await abortableDelay(this.options.settleMs ?? 1000, signal)
         }
         emit({ phase: 'retrying', attempt })
@@ -152,7 +147,6 @@ export class OzonRequestWindowService extends BrowserWindowService {
         if (!this.needsRecovery(response)) throw new Error(`OZON 接口返回 HTTP ${response.status}`)
       } catch (error) {
         signal.throwIfAborted()
-        log.warn('OZON 验证恢复尝试失败:', { attempt, error })
       }
     }
     throw new OzonVerificationError()

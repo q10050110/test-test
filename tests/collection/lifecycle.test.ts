@@ -25,7 +25,7 @@ async function parsedGoods(goods: any[], signal: AbortSignal, onGoods?: GoodsCon
   return goods
 }
 
-function fixture(options: Partial<Task> = {}) {
+function fixture(options: Partial<Task> = {}, observeProgress = true) {
   const task = {
     _id: 'task-1',
     taskStatus: 'noExecuted',
@@ -109,6 +109,17 @@ function fixture(options: Partial<Task> = {}) {
     timing: { scroll: 0, detail: 0, operation: 300, item: 200, run: 2000, status: 50 },
   }
   const collection = new Collection(task, null, deps)
+  // 调度测试观察进度方法，运行代码只负责进度通知和商品终态日志。
+  if (observeProgress) {
+    const outputProgress = collection.outputLog.bind(collection)
+    collection.outputLog = (message, record) => {
+      outputProgress(message, record)
+      deps.log.info('采集进度:', { ...collection.getTaskInfo(), taskId: task._id, message })
+      if (message.includes('暂停加载新商品')) deps.log.info('采集背压等待:', {})
+      if (message.includes('恢复加载新商品')) deps.log.info('采集背压恢复:', {})
+      if (message.startsWith('页面加载结束：')) deps.log.info('页面采集停止:', { reason: message.split('：')[1]!.split('，')[0] })
+    }
+  }
   return { collection, task, deps, services, calls, saved }
 }
 
@@ -141,6 +152,112 @@ test('normal completion saves before uploading, releases all services and does n
   assert.ok(f.calls.indexOf('save:1') < f.calls.indexOf('upload:1'))
   assertReleased(f.calls)
   await f.collection.clearStatus()
+  assertReleased(f.calls)
+})
+
+test('business logs contain exactly one terminal result per product and UI progress updates stay separate', async () => {
+  const f = fixture({ targetCount: 100 }, false)
+  const records: any[] = [], events: any[] = []
+  f.deps.log.debug = () => assert.fail('商品过程不应调用 debug 输出')
+  f.deps.log.info = (label: string, data: any) => records.push({ label, ...data })
+  ;(f.collection as any).mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (event: string, payload: any) => { if (event === 'task-progress') events.push(payload) } },
+  }
+  let parsed = false
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods: GoodsConsumer, onBatch: GoodsBatchObserver) => {
+    if (parsed) return []
+    parsed = true
+    return parsedGoods(['1', '2', '3', '4', '5', '6'].map(id => ({ id, cover: id })), signal, onGoods, onBatch)
+  }
+  f.services.data.filterData = async (goods: any[]) => goods.filter(goods => goods.id !== '2')
+  f.services.source.createWindow = async (_type: string, cover: string) => {
+    if (cover === '3') throw new Error('1688结果等待超时')
+    return {}
+  }
+  f.services.data.getDetailData = async ({ reqDatas }: any) => reqDatas[0].id === '4' ? [] : reqDatas
+  const save = f.deps.save
+  f.deps.save = async (...args) => args[0].datas[0].id === '5' ? { code: 0, count: 0 } : save(...args)
+  await f.collection.run()
+  const products = records.filter(record => record.label === '商品采集进度:')
+  const tasks = records.filter(record => record.label === '采集任务状态变更:')
+  assert.equal(records.length, 7)
+  assert.equal(tasks.length, 1)
+  assert.equal(tasks[0].taskStatus, 'completed')
+  assert.equal(tasks[0].goodsId, undefined)
+  assert.equal(products.length, 6)
+  assert.equal(new Set(products.map(record => record.goodsId)).size, 6)
+  assert.ok(products.every(record => record.elapsedMs >= 0 && record.taskId === f.task._id))
+  assert.deepEqual(products.filter(record => record.status === '成功').map(record => record.goodsId).sort(), ['1', '6'])
+  assert.equal(records.find(record => record.goodsId === '3').message, '1688结果等待超时')
+  assert.equal(records.find(record => record.goodsId === '4').message, '服务端商品筛选无结果')
+  assert.equal(records.find(record => record.goodsId === '5').newCount, 0)
+  assert.equal(events.filter(event => event.log).length, 6)
+  assert.ok(events.some(event => !event.log && event.collectionTask.progress.current === 6))
+  await f.collection.clearStatus()
+  assert.equal(records.filter(record => record.label === '采集任务状态变更:').length, 1)
+  assertReleased(f.calls)
+})
+
+test('target completion records its success once and terminal failures for every remaining product', async () => {
+  const f = fixture({ targetCount: 1 })
+  const records: any[] = []
+  f.deps.log.info = (label: string, data: any) => { if (label === '商品采集进度:') records.push(data) }
+  let parsed = false
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods: GoodsConsumer, onBatch: GoodsBatchObserver) => {
+    if (parsed) return []
+    parsed = true
+    return parsedGoods(Array.from({ length: 24 }, (_, index) => ({ id: String(index + 1), cover: String(index + 1) })), signal, onGoods, onBatch)
+  }
+  f.services.source.createWindow = async (_type: string, cover: string) => cover === '1' ? {} : new Promise(() => {})
+  await f.collection.run()
+  assert.equal(records.length, 24)
+  assert.equal(new Set(records.map(record => record.goodsId)).size, 24)
+  assert.equal(records.filter(record => record.status === '成功').length, 1)
+  assert.equal(records.find(record => record.goodsId === '1').message, '商品处理完成')
+  assert.ok(records.filter(record => record.status === '失败').every(record => record.message.includes('目标')))
+  assertReleased(f.calls)
+})
+
+test('product results report total time, queue waiting and the slowest operation without intermediate logs', async () => {
+  const f = fixture({ targetCount: 100 }, false)
+  const records: any[] = []
+  let parsed = false
+  f.deps.log.info = (label: string, data: any) => { if (label === '商品采集进度:') records.push(data) }
+  f.services.parse.ozonListParser = async (_html: unknown, _domain: string, signal: AbortSignal, onGoods: GoodsConsumer, onBatch: GoodsBatchObserver) => {
+    if (parsed) return []
+    parsed = true
+    return parsedGoods(['1', '2', '3', '4'].map(id => ({ id, cover: id })), signal, onGoods, onBatch)
+  }
+  f.services.source.createWindow = async (_type: string, cover: string) => {
+    await delay(cover === '4' ? 1 : 50)
+    return {}
+  }
+  await f.collection.run()
+  assert.equal(records.length, 4)
+  const first = records.find(record => record.goodsId === '1')
+  assert.equal(first.slowestOperation.name, '1688图搜')
+  assert.ok(first.slowestOperation.elapsedMs >= 40)
+  assert.ok(first.elapsedMs >= first.slowestOperation.elapsedMs)
+  const queued = records.find(record => record.goodsId === '4')
+  assert.ok(queued.queueWaitMs >= 40)
+  assert.ok(queued.elapsedMs >= queued.queueWaitMs)
+  assert.ok(records.every(record => record.slowestOperation.elapsedMs >= 0))
+  assertReleased(f.calls)
+})
+
+test('a hung operation contributes its elapsed time when its item scope times out', async () => {
+  const f = fixture({}, false)
+  f.deps.timing!.item = 30
+  const records: any[] = []
+  f.deps.log.info = (label: string, data: any) => { if (label === '商品采集进度:') records.push(data) }
+  f.services.source.createWindow = async () => new Promise(() => {})
+  await f.collection.run()
+  assert.equal(records.length, 1)
+  assert.equal(records[0].status, '失败')
+  assert.equal(records[0].slowestOperation.name, '1688图搜')
+  assert.ok(records[0].slowestOperation.elapsedMs >= 20)
+  assert.ok(records[0].elapsedMs >= records[0].slowestOperation.elapsedMs)
   assertReleased(f.calls)
 })
 
@@ -386,8 +503,8 @@ test('category defaults to one second between launches while earlier detail requ
 
 test('one category Failed to fetch does not cancel other products or prevent successful saving', async () => {
   const f = fixture({ isUseCategorySelect: 0 })
-  const warnings: any[] = []
-  f.deps.log.warn = (...args) => warnings.push(args)
+  const records: any[] = []
+  f.deps.log.info = (label: string, data: any) => { if (label === '商品采集进度:') records.push(data) }
   f.deps.request = async config => config.url?.includes('getReMaiData')
     ? { data: { list: ['1', '2', '3'].map(_id => ({ _id })), total: 3 } } : {}
   f.services.main.getDataByApi = async (id: string) => {
@@ -399,7 +516,7 @@ test('one category Failed to fetch does not cancel other products or prevent suc
   assert.equal(result.status, 'completed')
   assert.deepEqual(result.upGoodsList.map(goods => goods.id), ['2', '3'])
   assert.equal(f.collection.getTaskInfo().progress.current, 0)
-  assert.ok(warnings.some(([label, data]) => label === '分类商品请求失败，跳过该商品:' && data.goodsId === '1' && data.taskId === f.task._id))
+  assert.ok(records.some(data => data.goodsId === '1' && data.taskId === f.task._id && data.status === '失败' && data.message === 'Failed to fetch'))
   assertReleased(f.calls)
 })
 
@@ -556,6 +673,26 @@ const pageCards = `<div id="contentScrollPaginator">${['1', '2', '3'].map(id =>
 ).join('')}</div>`
 const sellerResponse = { success: true, data: { widgetStates: {} } }
 
+test('page products report the slower shared base-data request when it overlaps seller requests', async () => {
+  const f = fixture({}, false)
+  const records: any[] = []
+  let reads = 0
+  f.deps.log.info = (label: string, data: any) => { if (label === '商品采集进度:') records.push(data) }
+  f.services.main.getHTML = async () => ({ html: reads++ ? '' : pageCards, domain: 'https://www.ozon.ru' })
+  f.services.parse = new ParseService({ getSellingData: async () => { await delay(20); return sellerResponse } })
+  const destroy = f.services.parse.destroy.bind(f.services.parse)
+  f.services.parse.destroy = () => { f.calls.push('parse.destroy'); destroy() }
+  f.services.data.getBaseData = async (goods: any[]) => { await delay(65); return goods }
+  await f.collection.run()
+  assert.equal(records.length, 3)
+  for (const record of records) {
+    assert.equal(record.slowestOperation.name, '基础数据接口')
+    assert.ok(record.slowestOperation.elapsedMs >= 50)
+    assert.ok(record.elapsedMs + 2 >= record.queueWaitMs + record.slowestOperation.elapsedMs)
+  }
+  assertReleased(f.calls)
+})
+
 test('page seller timeouts deduct failed products, release backpressure and allow peers to save', { timeout: 3000 }, async () => {
   const f = fixture({ targetCount: 100 })
   const gate = Promise.withResolvers<void>(), skipped = Promise.withResolvers<void>()
@@ -575,13 +712,13 @@ test('page seller timeouts deduct failed products, release backpressure and allo
   } }, { error() {} })
   const destroy = f.services.parse.destroy.bind(f.services.parse)
   f.services.parse.destroy = () => { f.calls.push('parse.destroy'); destroy() }
-  f.deps.log.warn = (label: string, data: any) => {
-    if (label === '页面商品跟卖请求失败，跳过该商品:') {
+  f.deps.log.info = (label: string, data: any) => {
+    if (label === '商品采集进度:' && data.status === '失败') {
       assert.equal(data.taskId, f.task._id)
       if (++failures === 21) skipped.resolve()
     }
+    if (label === '采集进度:') snapshots.push(data.progress.current)
   }
-  f.deps.log.info = (label: string, data: any) => { if (label === '采集进度:') snapshots.push(data.progress.current) }
   const running = f.collection.run()
   try {
     await skipped.promise

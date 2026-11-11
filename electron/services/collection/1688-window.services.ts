@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { ParseService } from './parse.services.js'
 import { TaskCancelledError, TaskScope, abortableDelay } from '../common/task-scope.services.js'
-import log from '../../log/business.js'
 const directory = path.dirname(fileURLToPath(import.meta.url))
 
 interface SourceSearchContext {
@@ -57,9 +56,7 @@ export class WindowService {
       let settled = false
       let searchStarted = false
       let resultsStarted = false
-      let stage = ''
       let stageTimer: NodeJS.Timeout | undefined
-      const started = performance.now()
       const cleanup = () => {
         clearTimeout(stageTimer)
         signal.removeEventListener('abort', abort)
@@ -75,10 +72,7 @@ export class WindowService {
       const finish = (error?: unknown, value?: any) => {
         if (settled) return
         settled = true
-        if (error) log.warn('1688 图搜失败:', {
-          taskId: context?.taskId, goodsId: context?.goodsId, windowId: id, stage,
-          elapsedMs: Math.round(performance.now() - started), error,
-        })
+
         try {
           cleanup()
         } catch (cleanupError) {
@@ -90,14 +84,10 @@ export class WindowService {
       const setStage = (next: string, timeoutMs: number) => {
         if (settled) return
         clearTimeout(stageTimer)
-        stage = next
-        log.info('1688 图搜阶段:', {
-          taskId: context?.taskId, goodsId: context?.goodsId, windowId: id, stage,
-          elapsedMs: Math.round(performance.now() - started),
-        })
-        try { context?.onStage?.(stage) }
-        catch (error) { log.warn('通知1688图搜阶段失败:', error) }
-        if (!settled) stageTimer = setTimeout(() => finish(new Error(`1688 ${stage}超时`)), timeoutMs)
+
+        try { context?.onStage?.(next) }
+        catch { /* 进度通知异常不影响图搜完成。 */ }
+        if (!settled) stageTimer = setTimeout(() => finish(new Error(`1688 ${next}超时`)), timeoutMs)
       }
       const readResults = () => {
         if (settled || resultsStarted) return
@@ -132,7 +122,7 @@ export class WindowService {
         if (settled || searchStarted) return
         searchStarted = true
         wc.removeListener('dom-ready', ready)
-        log.info('1688 图搜阶段耗时:', { windowId: id, stage: '入口DOM就绪', elapsedMs: Math.round(performance.now() - started) })
+
         setStage('下载源图', this.options.imageTimeoutMs ?? 12_000)
         void this.startSearch(win, cover, signal, () => {
           setStage('上传图片并搜索', this.options.uploadTimeoutMs ?? 15_000)
@@ -143,7 +133,7 @@ export class WindowService {
       }
       const received = (event: Electron.IpcMainEvent) => {
         if (event.sender !== wc || settled) return
-        log.info('1688 图搜阶段耗时:', { windowId: id, stage: '收到搜索结果', elapsedMs: Math.round(performance.now() - started) })
+
         readResults()
       }
       this.windows.set(id, () => finish(new TaskCancelledError('1688 窗口已回收')))
@@ -185,7 +175,6 @@ export class WindowService {
 
   private async loadSourceImage(win: BrowserWindow, cover: string, signal: AbortSignal) {
     const scope = new TaskScope(signal)
-    const started = performance.now()
     try {
       return await scope.run(async inner => {
         const response = await win.webContents.session.fetch(cover, { signal: inner, credentials: 'include' })
@@ -199,7 +188,7 @@ export class WindowService {
       }, 10_000, '读取1688图搜源图')
     } finally {
       scope.stop()
-      log.info('1688 源图下载耗时:', { elapsedMs: Math.round(performance.now() - started) })
+
     }
   }
 
@@ -226,7 +215,6 @@ export class WindowService {
                                  );
 
               if (!uploadInput) {
-                console.error('未找到文件上传输入框');
                 reject(new Error('未找到上传输入框'));
                 return;
               }
@@ -257,7 +245,6 @@ export class WindowService {
                                   );
 
               if (!searchButton) {
-                console.error('未找到搜索按钮');
                 reject(new Error('未找到搜索按钮'));
                 return;
               }
