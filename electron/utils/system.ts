@@ -25,7 +25,7 @@ import {
   copyFileSync,
 } from 'fs'
 import log from '../log/index.js'
-import { listLogFiles } from '../log/file-store.js'
+import { listLogFiles, localLogDate, logFileInfo } from '../log/file-store.js'
 import dayjs from 'dayjs'
 /**
  * Electron 系统级能力封装
@@ -233,13 +233,12 @@ export class SysTemUtils {
       try {
         const allLogFiles = SysTemUtils.logOperations.getLogFiles()
         const cutoffDate = new Date()
-        cutoffDate.setDate(cutoffDate.getDate() - days)
+        cutoffDate.setDate(cutoffDate.getDate() - days + 1)
+        const cutoff = localLogDate(cutoffDate)
 
         const recentLogFiles = allLogFiles.filter((filePath) => {
-          const fileName = basename(filePath)
-          const dateStr = fileName.split('.')[0] // 移除 .log 后缀
-          const fileDate = new Date(dateStr)
-          return fileDate >= cutoffDate
+          const date = logFileInfo(basename(filePath))?.date ?? localLogDate(statSync(filePath).mtime)
+          return date >= cutoff
         })
 
         if (recentLogFiles.length === 0) {

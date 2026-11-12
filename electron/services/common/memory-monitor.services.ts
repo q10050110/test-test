@@ -263,12 +263,7 @@ export class MemoryMonitorService {
     cacheSize?: number
     [key: string]: any
   }) {
-    const items = Object.entries(metrics)
-      .filter(([_, v]) => v !== undefined)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ')
-
-    businessLog.info(`[MemoryMonitor] 业务指标 - ${items}`)
+    businessLog.info('[MemoryMonitor] 业务指标', metrics)
   }
 
   /**

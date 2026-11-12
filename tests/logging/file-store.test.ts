@@ -1,205 +1,131 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import {
-  LogFileStore,
-  listLogFiles,
-  logFileInfo,
-  type LogPolicy,
-  type LogCategory,
-} from '../../electron/log/file-store.js'
+import { LogFileStore, LOG_POLICIES, listLogFiles, logFileInfo, localLogDate } from '../../electron/log/file-store.js'
 
-const policy = (maxFileBytes = 32, maxTotalBytes = 4096, retentionDays = 7): LogPolicy => ({
-  maxFileBytes,
-  maxTotalBytes,
-  retentionDays,
-})
-function fixture(t: TestContext, policies = { system: policy(), business: policy() }) {
-  const prefix = join(tmpdir(), 'shopbang-log-tests-')
-  const directory = mkdtempSync(prefix)
-  t.after(() => {
-    assert.ok(directory.startsWith(prefix))
-    rmSync(directory, { recursive: true, force: true })
-  })
+function fixture(t: TestContext) {
+  const directory = mkdtempSync(join(tmpdir(), 'shopbang-log-tests-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
   let date = new Date(2026, 10, 6, 10)
   const errors: unknown[] = []
-  const create = () =>
-    new LogFileStore(
-      directory,
-      policies,
-      () => date,
-      (error) => errors.push(error),
-    )
-  const files = (category: LogCategory) =>
-    listLogFiles(directory)
-      .filter((path) => logFileInfo(basename(path))?.category === category)
-      .sort()
-  const content = (category: LogCategory) =>
-    files(category)
-      .map((path) => readFileSync(path, 'utf8'))
-      .join('')
-  const size = (category: LogCategory) =>
-    files(category).reduce((sum, path) => sum + statSync(path).size, 0)
-  return {
-    directory,
-    create,
-    files,
-    content,
-    size,
-    errors,
-    setDate: (value: Date) => {
-      date = value
-    },
+  const create = () => new LogFileStore(directory, LOG_POLICIES, () => date, error => errors.push(error))
+  const files = (category: 'system' | 'business') => listLogFiles(directory)
+    .filter(file => logFileInfo(basename(file))?.category === category).sort()
+  const write = (store: LogFileStore, category: 'system' | 'business', text: string, taskId?: string) => {
+    const result = store.write(category, text, taskId)
+    // 使用测试时钟同步业务文件的修改时间，模拟文件系统的真实写入时间。
+    if (result && category === 'business' && taskId && /^[a-zA-Z0-9_-]+$/.test(taskId))
+      utimesSync(join(directory, 'business.' + taskId + '.txt'), date, date)
+    return result
   }
+  return { directory, create, files, write, errors, setDate: (value: Date) => { date = value } }
 }
 
-test('appending and repeated rotation preserve every record without overwriting previous volumes', (t) => {
+test('system writes and restarts append to one file per local day without size rotation', t => {
   const f = fixture(t)
-  const store = f.create()
-  const records = Array.from(
-    { length: 30 },
-    (_, index) => `record-${String(index).padStart(2, '0')}\n`,
-  )
-  records.forEach((record) => assert.equal(store.write('business', record), true))
-  assert.equal(f.content('business'), records.join(''))
-  assert.ok(f.files('business').length > 2)
-  for (const file of f.files('business')) assert.ok(statSync(file).size <= 32)
+  const first = f.create()
+  const record = '日志😀'.repeat(1024 * 1024)
+  assert.equal(f.write(first, 'system', 'before-restart'), true)
+  assert.equal(f.write(first, 'system', record), true)
+  assert.equal(f.write(f.create(), 'system', 'after-restart'), true)
+  assert.equal(f.files('system').length, 1)
+  assert.equal(basename(f.files('system')[0]!), '2026-11-06.system.txt')
+  assert.equal(readFileSync(f.files('system')[0]!, 'utf8'), 'before-restart\n' + record + '\nafter-restart\n')
+  f.setDate(new Date(2026, 10, 7))
+  f.write(first, 'system', 'next-day')
+  assert.equal(f.files('system').length, 2)
   assert.deepEqual(f.errors, [])
 })
 
-test('normal records stay in one file when the previous volume has insufficient space', (t) => {
-  const f = fixture(t)
-  const store = f.create()
-  store.write('system', 'a'.repeat(20))
-  store.write('system', 'b'.repeat(20))
-  assert.deepEqual(
-    f.files('system').map((file) => readFileSync(file, 'utf8')),
-    ['a'.repeat(20) + '\n', 'b'.repeat(20) + '\n'],
-  )
-})
-
-test('oversized Chinese and emoji messages are split losslessly into valid UTF-8 volumes', (t) => {
-  const f = fixture(t)
-  const store = f.create()
-  const record = '日志😀'.repeat(30)
-  store.write('system', 'prefix')
-  assert.equal(store.write('system', record), true)
-  const decoder = new TextDecoder('utf-8', { fatal: true })
-  for (const file of f.files('system')) {
-    const bytes = readFileSync(file)
-    assert.ok(bytes.length <= 32)
-    assert.doesNotThrow(() => decoder.decode(bytes))
-  }
-  assert.equal(f.content('system'), `prefix\n${record}\n`)
-})
-
-test('each category has an independent hard quota and removes its oldest volumes first', (t) => {
-  const f = fixture(t, { system: policy(32, 64), business: policy(32, 64) })
-  const store = f.create()
-  store.write('system', 'keep-system')
-  for (let i = 0; i < 20; i++) {
-    store.write('business', `record-${i}:` + 'x'.repeat(20))
-    assert.ok(f.size('business') <= 64)
-    assert.ok(f.size('system') <= 64)
-  }
-  assert.equal(f.content('system'), 'keep-system\n')
-  assert.ok(f.content('business').includes('record-19:'))
-  assert.equal(f.content('business').includes('record-0:'), false)
-})
-
-test('restarting at the same time creates unique filenames and preserves existing content', (t) => {
-  const f = fixture(t)
-  f.create().write('system', 'before-restart')
-  f.create().write('system', 'after-restart')
-  assert.equal(f.files('system').length, 2)
-  assert.ok(f.content('system').includes('before-restart'))
-  assert.ok(f.content('system').includes('after-restart'))
-})
-
-test('retention uses local calendar dates, works across midnight and keeps category policies separate', (t) => {
-  const f = fixture(t, { system: policy(32, 4096, 2), business: policy(32, 4096, 3) })
-  const store = f.create()
-  store.write('system', 'day-6-system')
-  store.write('business', 'day-6-business')
+test('business files isolate task IDs and append to the same task across restarts and midnight', t => {
+  const f = fixture(t), first = f.create()
+  f.write(first, 'business', 'a-first', 'task-a')
+  f.write(first, 'business', 'b-only', 'task-b')
+  const restarted = f.create()
   f.setDate(new Date(2026, 10, 7, 0, 1))
-  store.write('system', 'day-7-system')
-  assert.ok(f.content('system').includes('day-6-system'))
-  f.setDate(new Date(2026, 10, 8, 0, 1))
-  store.write('system', 'day-8-system')
-  assert.equal(f.content('system').includes('day-6-system'), false)
-  assert.ok(f.content('system').includes('day-7-system'))
-  assert.ok(f.content('business').includes('day-6-business'))
-  f.setDate(new Date(2026, 10, 9))
-  store.write('business', 'day-9-business')
-  assert.equal(f.content('business').includes('day-6-business'), false)
+  f.write(restarted, 'business', 'a-restarted', 'task-a')
+  f.write(first, 'business', 'a-shared', 'task-a')
+  assert.equal(f.files('business').length, 2)
+  assert.equal(readFileSync(join(f.directory, 'business.task-a.txt'), 'utf8'), 'a-first\na-restarted\na-shared\n')
+  assert.equal(readFileSync(join(f.directory, 'business.task-b.txt'), 'utf8'), 'b-only\n')
 })
 
-test('startup accounts for legacy .log and .old.log files and exports every recognized volume', (t) => {
+test('system retains three calendar days and business retains two since its last write', t => {
+  const f = fixture(t), store = f.create()
+  f.write(store, 'system', 'day-6')
+  f.write(store, 'business', 'old-task', 'old')
+  f.write(store, 'business', 'active-task', 'active')
+  f.setDate(new Date(2026, 10, 7))
+  f.write(store, 'system', 'day-7')
+  f.write(store, 'business', 'active-updated', 'active')
+  f.setDate(new Date(2026, 10, 8))
+  store.cleanup()
+  assert.equal(f.files('system').length, 2)
+  assert.deepEqual(f.files('business').map(file => basename(file)), ['business.active.txt'])
+  f.write(store, 'system', 'day-8')
+  f.setDate(new Date(2026, 10, 9))
+  f.create()
+  assert.deepEqual(f.files('system').map(file => basename(file)), ['2026-11-07.system.txt', '2026-11-08.system.txt'])
+  assert.equal(f.files('business').length, 0)
+})
+
+test('active task keeps one file and refreshes retention over multiple days', t => {
+  const f = fixture(t), store = f.create()
+  for (let day = 6; day <= 12; day++) {
+    f.setDate(new Date(2026, 10, day))
+    f.write(store, 'business', 'day-' + day, 'active')
+    assert.equal(f.files('business').length, 1)
+  }
+  const content = readFileSync(f.files('business')[0]!, 'utf8')
+  assert.ok(content.includes('day-6') && content.includes('day-12'))
+})
+
+test('legacy files remain discoverable and expired files are cleaned without touching unrelated files', t => {
   const f = fixture(t)
-  writeFileSync(join(f.directory, '2026-11-05.log'), 'old\n')
-  writeFileSync(join(f.directory, '2026-11-05.old.log'), 'archive\n')
-  writeFileSync(join(f.directory, '2026-10-01.log'), 'expired\n')
+  writeFileSync(join(f.directory, '2026-11-05.log'), 'keep')
+  writeFileSync(join(f.directory, '2026-11-04.old.log'), 'keep')
+  writeFileSync(join(f.directory, '2026-11-03.system.old-run.000001.txt'), 'expired')
+  writeFileSync(join(f.directory, '2026-11-04.business.old-run.000002.txt'), 'expired')
   writeFileSync(join(f.directory, 'notes.txt'), 'unrelated')
-  mkdirSync(join(f.directory, '2026-11-06.log'))
-  f.create().write('business', 'new')
-  const names = listLogFiles(f.directory).map((file) => basename(file))
-  assert.equal(names.length, 3)
-  assert.ok(names.includes('2026-11-05.log'))
-  assert.ok(names.includes('2026-11-05.old.log'))
+  mkdirSync(join(f.directory, '2026-11-01.system.txt'))
+  f.create()
+  assert.equal(listLogFiles(f.directory).length, 2)
   assert.equal(readFileSync(join(f.directory, 'notes.txt'), 'utf8'), 'unrelated')
 })
 
-test('startup removes excess legacy bytes before accepting new records', (t) => {
-  const f = fixture(t, { system: policy(32, 64), business: policy(32, 64) })
-  writeFileSync(join(f.directory, '2026-11-04.log'), 'a'.repeat(40))
-  writeFileSync(join(f.directory, '2026-11-05.old.log'), 'b'.repeat(40))
-  const store = f.create()
-  assert.ok(f.size('system') <= 64)
-  assert.equal(store.write('system', 'newest'), true)
-  assert.ok(f.size('system') <= 64)
-  assert.ok(f.content('system').includes('newest'))
+test('task IDs cannot escape the directory or collide through filename sanitization', t => {
+  const f = fixture(t), store = f.create()
+  assert.equal(store.write('business', 'slash', '../a'), true)
+  assert.equal(store.write('business', 'backslash', '..\\a'), true)
+  assert.equal(f.files('business').length, 2)
+  assert.ok(f.files('business').every(file => /^business\.[a-f0-9]{64}\.txt$/.test(basename(file))))
 })
 
-test('an unavailable log path cannot throw into the business caller', (t) => {
-  const f = fixture(t)
-  const store = f.create()
-  // 使用同一测试目录内的同名文件模拟日志目录不可用。
-  const blocked = new LogFileStore(
-    f.directory,
-    { system: policy(), business: policy() },
-    undefined,
-    (error) => f.errors.push(error),
-  )
-  blocked.write('system', 'ready')
-  const file = listLogFiles(f.directory)[0]!
-  // 将卷路径换成目录，使下一次追加失败，不依赖 Windows ACL 权限。
-  rmSync(file)
-  mkdirSync(file)
-  assert.doesNotThrow(() => blocked.write('system', 'cannot append'))
+test('messages without a task ID use the daily system file', t => {
+  const f = fixture(t), store = f.create()
+  f.write(store, 'business', 'unscoped')
+  f.write(store, 'system', 'system')
+  assert.equal(f.files('business').length, 0)
+  assert.equal(f.files('system').length, 1)
+  assert.equal(readFileSync(f.files('system')[0]!, 'utf8'), 'unscoped\nsystem\n')
+})
+
+test('unavailable files cannot throw into business callers', t => {
+  const f = fixture(t), store = f.create()
+  mkdirSync(join(f.directory, '2026-11-06.system.txt'))
+  assert.equal(store.write('system', 'blocked'), false)
   assert.equal(f.errors.length, 1)
-  assert.equal(store.write('business', 'business continues'), true)
+  assert.equal(store.write('business', 'continues', 'task-a'), true)
 })
 
-test('invalid limits are rejected and unknown files are excluded from log discovery', (t) => {
+test('retention configuration and file discovery validate their inputs', t => {
   const f = fixture(t)
-  assert.throws(
-    () => new LogFileStore(f.directory, { system: policy(32, 16), business: policy() }),
-    /配置无效/,
-  )
+  assert.throws(() => new LogFileStore(f.directory, { system: { retentionDays: 0 }, business: { retentionDays: 2 } }), /配置无效/)
   assert.equal(logFileInfo('arbitrary.txt'), undefined)
-  assert.deepEqual(logFileInfo('2026-11-06.business.run-1.000001.txt'), {
-    date: '2026-11-06',
-    category: 'business',
-  })
+  assert.deepEqual(logFileInfo('2026-11-06.system.txt'), { date: '2026-11-06', category: 'system' })
+  assert.deepEqual(logFileInfo('business.task-a.txt'), { category: 'business' })
+  assert.equal(localLogDate(new Date(2026, 10, 6, 23, 59)), '2026-11-06')
   assert.deepEqual(readdirSync(f.directory), [])
 })

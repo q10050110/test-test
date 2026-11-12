@@ -4,7 +4,7 @@ import { registerHooks } from 'node:module'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { listLogFiles, localLogDate } from '../../electron/log/file-store.js'
+import { listLogFiles, localLogDate, logFileInfo } from '../../electron/log/file-store.js'
 
 test('real electron-log routes categories, records errors once and exports all new and legacy files', async (t) => {
   const prefix = join(tmpdir(), 'shopbang-log-integration-')
@@ -62,7 +62,9 @@ test('real electron-log routes categories, records errors once and exports all n
   log.info('system-marker')
   businessLog.info('business-marker', { taskId: 'task-1', phase: 'collecting' })
   businessLog.debug('business-stage-debug-not-in-file')
-  businessLog.error('business-error', new Error('stack-marker'))
+  businessLog.error('business-error', { taskId: 'task-1' }, new Error('stack-marker'))
+  businessLog.info('second-task-marker', { taskId: 'task-2' })
+  businessLog.info('unscoped-marker')
   log.debug('debug-not-in-file')
   ;(log.errorHandler as any).handleError(new Error('uncaught-marker'))
   registerLogIpc()
@@ -71,11 +73,11 @@ test('real electron-log routes categories, records errors once and exports all n
   const logDirectory = join(directory, 'logs')
   const files = listLogFiles(logDirectory)
   const system = files
-    .filter((path) => path.includes('.system.'))
+    .filter((path) => logFileInfo(basename(path))?.category === 'system')
     .map((path) => readFileSync(path, 'utf8'))
     .join('')
   const business = files
-    .filter((path) => path.includes('.business.'))
+    .filter((path) => logFileInfo(basename(path))?.category === 'business')
     .map((path) => readFileSync(path, 'utf8'))
     .join('')
   assert.ok(system.includes('system-marker'))
@@ -90,6 +92,13 @@ test('real electron-log routes categories, records errors once and exports all n
   assert.ok(business.includes('integration.test.ts:'))
   assert.equal(business.includes('system-marker'), false)
   assert.equal(system.includes('debug-not-in-file'), false)
+  assert.ok(system.includes('unscoped-marker'))
+  assert.equal(files.filter(file => logFileInfo(basename(file))?.category === 'system').length, 1)
+  const firstTask = readFileSync(join(logDirectory, 'business.task-1.txt'), 'utf8')
+  const secondTask = readFileSync(join(logDirectory, 'business.task-2.txt'), 'utf8')
+  assert.ok(firstTask.includes('business-marker') && firstTask.includes('stack-marker'))
+  assert.equal(firstTask.includes('second-task-marker'), false)
+  assert.equal(secondTask.includes('stack-marker'), false)
 
   const today = localLogDate(new Date())
   writeFileSync(join(logDirectory, `${today}.log`), 'legacy')

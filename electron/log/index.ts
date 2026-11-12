@@ -59,6 +59,19 @@ class LoggerManager {
     log.transports.file.level = false
     try {
       const files = new LogFileStore(this.logPath)
+      let cleanupTimer: NodeJS.Timeout
+      const scheduleCleanup = () => {
+        const midnight = new Date()
+        midnight.setHours(24, 0, 0, 0)
+        cleanupTimer = setTimeout(() => {
+          try { files.cleanup() }
+          catch (error) { console.error('清理过期日志失败:', error) }
+          finally { scheduleCleanup() }
+        }, midnight.getTime() - Date.now())
+        cleanupTimer.unref()
+      }
+      scheduleCleanup()
+      app.once?.('will-quit', () => clearTimeout(cleanupTimer))
       log.transports.storage = Object.assign(
         (message: log.LogMessage) => {
           const date = message.date
@@ -68,10 +81,14 @@ class LoggerManager {
           const scope = message.scope || 'system'
           const category =
             scope === 'business' || scope.startsWith('business:') ? 'business' : 'system'
+          const context = message.data.find(value => value && typeof value === 'object' && 'taskId' in value)
+          const taskId = context && (typeof context.taskId === 'string' || typeof context.taskId === 'number')
+            ? String(context.taskId) : undefined
           const text = formatWithOptions({ depth: 5, colors: false }, ...message.data)
           files.write(
             category,
             `[${localLogDate(date)} ${time}.${String(date.getMilliseconds()).padStart(3, '0')}] [${message.level}] [${scope}] [pid:${process.pid}] ${text}`,
+            taskId,
           )
         },
         { level: 'info' as const, transforms: [] },
