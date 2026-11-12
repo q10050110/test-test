@@ -44,6 +44,7 @@ const getVipOption = async () => {
       },
       ...data,
     ]
+  else throw new Error('会员信息加载失败，请稍后重试')
 }
 
 // 获取支付信息
@@ -94,41 +95,48 @@ const getPayInfo = async () => {
   if (userStore.user?.auto_vip_type && selectedCard.value === 1)
     return feedback.warning('您已经是会员，不能开通体验卡会员')
   getPayLoading.value = true
-  const { data: VipInfo } = await window.electronAPI.invoke<Response<VipPayInfo>>(
-    'get-vip-pay-info',
-    {
-      auto_vip_type: selectedCard.value,
-    },
-  )
-  const contentVNode = h('div', {}, [
-    h(
-      'div',
-      { style: 'margin-bottom: 8px;' },
-      `即将开通自动化会员-${currentSelectVipInfo.value?.vip_name}${currentSelectVipInfo.value?.auto_vip_type === 0 ? '（每个账号只允许开通一次' : ''}`,
-    ),
-    VipInfo.exchangeDay > 0 ? h('div', {}, `原月卡剩余时长兑换天数：${VipInfo.exchangeDay}天`) : '',
+  try {
+    const { data: VipInfo } = await window.electronAPI.invoke<Response<VipPayInfo>>(
+      'get-vip-pay-info',
+      {
+        auto_vip_type: selectedCard.value,
+      },
+    )
+    const contentVNode = h('div', {}, [
+      h(
+        'div',
+        { style: 'margin-bottom: 8px;' },
+        `即将开通自动化会员-${currentSelectVipInfo.value?.vip_name}${currentSelectVipInfo.value?.auto_vip_type === 0 ? '（每个账号只允许开通一次' : ''}`,
+      ),
+      VipInfo.exchangeDay > 0
+        ? h('div', {}, `原月卡剩余时长兑换天数：${VipInfo.exchangeDay}天`)
+        : '',
 
-    h(
-      'div',
-      { style: 'margin-bottom: 8px;' },
-      `此次充值会员时长：${currentSelectVipInfo.value?.days}天`,
-    ),
-    h(
-      'div',
-      {},
-      `到期时间：${dayjs()
-        .add(selectedCard.value === 1 ? 1 : VipInfo.final_days, 'day')
-        .format('YYYY-MM-DD HH:mm:ss')}`,
-    ),
-  ])
-  getPayLoading.value = false
-  Modal.confirm({
-    title: '开通/续费确认',
-    content: contentVNode,
-    onOk: async () => {
-      await payHandle()
-    },
-  })
+      h(
+        'div',
+        { style: 'margin-bottom: 8px;' },
+        `此次充值会员时长：${currentSelectVipInfo.value?.days}天`,
+      ),
+      h(
+        'div',
+        {},
+        `到期时间：${dayjs()
+          .add(selectedCard.value === 1 ? 1 : VipInfo.final_days, 'day')
+          .format('YYYY-MM-DD HH:mm:ss')}`,
+      ),
+    ])
+    getPayLoading.value = false
+    Modal.confirm({
+      title: '开通/续费确认',
+      content: contentVNode,
+      onOk: async () => {
+        await payHandle()
+      },
+    })
+  } catch (error) {
+    getPayLoading.value = false
+    userStore.setShowVipModal(false)
+  }
 }
 
 // 刷新二维码
@@ -168,7 +176,7 @@ watch(
           )
         }
       } catch {
-        if (active) feedback.error('会员信息加载失败，请稍后重试')
+        userStore.setShowVipModal(false)
       } finally {
         if (active) loading.value = false
       }
