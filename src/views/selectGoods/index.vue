@@ -55,7 +55,7 @@ const taskBusy = (task: TaskViewState) => isTaskBusy(task, isCancelRequested(tas
 const taskViewStatus = (task: TaskViewState) => getTaskViewStatus(task, isCancelRequested(task))
 // 任务队列数量
 const taskQueueCount = ref(4)
-const taskNumberList = [4, 6, 8, 12]
+const taskNumberList = [4, 6, 8, 10, 12]
 // 表格数据&配置
 const tableData = ref<Task[]>()
 const total = ref(0)
@@ -167,12 +167,15 @@ const batchStartHandle = async () => {
   if (isRunning) return feedback.error('当前选中的任务中存在执行的任务，请稍后重试')
   isStart.value = true
   try {
-    const results = await Promise.allSettled(selectData.value.map(async (item) => {
-      const task = tableData.value?.find((task) => task._id === item)
-      if (!task || route.fullPath.includes('login')) return
-      await startTask(task)
-    }))
-    if (results.some(result => result.status === 'rejected')) feedback.error('部分任务启动失败，请检查任务状态')
+    const results = await Promise.allSettled(
+      selectData.value.map(async (item) => {
+        const task = tableData.value?.find((task) => task._id === item)
+        if (!task || route.fullPath.includes('login')) return
+        await startTask(task)
+      }),
+    )
+    if (results.some((result) => result.status === 'rejected'))
+      feedback.error('部分任务启动失败，请检查任务状态')
     selectData.value = []
   } finally {
     isStart.value = false

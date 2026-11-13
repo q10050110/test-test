@@ -25,6 +25,8 @@ const selectHandle = (type: number) => {
   timer.value = undefined
   clearInterval(resultTimer.value)
   resultTimer.value = undefined
+  clearInterval(payExpireTimer.value)
+  payExpireTimer.value = undefined
   selectedCard.value = type
 }
 
@@ -78,12 +80,27 @@ const queryPayResult = async () => {
     }
   }, 1000)
 }
+
+const payExpireTimer = ref<number | undefined>(undefined)
+const hasPayExpire = ref(false)
+const payExpire = (expireTime: string) => {
+  hasPayExpire.value = false
+  clearInterval(payExpireTimer.value)
+  payExpireTimer.value = setInterval(() => {
+    if (dayjs(expireTime).isBefore(dayjs())) {
+      clearInterval(payExpireTimer.value)
+      payExpireTimer.value = undefined
+      hasPayExpire.value = true
+    }
+  })
+}
 const payHandle = async () => {
   const { data, code, message } = await window.electronAPI.invoke<Response<VipResult>>('pay-vip', {
     auto_vip_type: selectedCard.value,
   })
   if (!code) {
     if (selectedCard.value === 1) return paySuccess()
+    payExpire(data.time_expire)
     hasPay.value = true
     payInfo.value = data
     queryPayResult()
@@ -185,6 +202,8 @@ watch(
       timer.value = undefined
       clearInterval(resultTimer.value)
       resultTimer.value = undefined
+      clearInterval(payExpireTimer.value)
+      payExpireTimer.value = undefined
     }
   },
 )
@@ -317,14 +336,20 @@ const formatData = (date: number | string) => {
               </div>
             </div>
             <div class="qr-code-container" v-else>
-              <VueQrcode
-                v-if="payInfo?.payInfo"
-                :value="payInfo?.payInfo"
-                alt="支付二维码"
-                class="qr-code"
-                :color="{ dark: '#000000', light: '#ffffff' }"
-                type="image/png"
-              />
+              <div style="position: relative; display: inline-block">
+                <VueQrcode
+                  v-if="payInfo?.payInfo"
+                  :value="payInfo?.payInfo"
+                  alt="支付二维码"
+                  class="qr-code"
+                  :color="{ dark: '#000000', light: '#ffffff' }"
+                  type="image/png"
+                />
+
+                <div v-show="hasPayExpire" class="qr-mask">
+                  <span class="mask-text">二维码已过期，请刷新</span>
+                </div>
+              </div>
               <div class="refresh-btn" @click="refreshQrcode">
                 <img
                   src="@/assets/view/vip-refresh.png"
@@ -555,6 +580,10 @@ const formatData = (date: number | string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+
+  > div {
+    position: relative;
+  }
 }
 
 .qr-code {
@@ -562,6 +591,28 @@ const formatData = (date: number | string) => {
   height: 212px;
   margin-bottom: 20px;
   border: 1px solid #ccc;
+  display: block;
+}
+
+.qr-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  border-radius: 4px;
+
+  .mask-text {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+  }
 }
 
 .refresh-btn {

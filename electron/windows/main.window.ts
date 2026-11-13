@@ -105,9 +105,8 @@ export const createWindow = () => {
   })
 
   // 捕获控制台消息
-  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    const levels = ['verbose', 'info', 'warn', 'error']
-    log.info(`[渲染进程控制台 - ${levels[level]}] ${message} (${sourceId}:${line})`)
+  mainWindow.webContents.on('console-message', (event) => {
+    log.info(`[渲染进程控制台 - ${event.level}] ${event.message} (${event.sourceId}:${event.lineNumber})`)
   })
 
   // 开发环境开启调试台
@@ -118,7 +117,7 @@ export const createWindow = () => {
 
   // 加载页面
   if (!app.isPackaged) {
-    const devUrl = 'http://localhost:3000/login'
+    const devUrl = new URL('login', `${(process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')}/`).href
     log.info(`本地开发环境：加载 URL - ${devUrl}`)
     mainWindow.loadURL(devUrl).catch((err) => {
       log.error('加载开发服务器失败:', err)

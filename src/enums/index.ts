@@ -21,7 +21,7 @@ const vipMap = {
   1: '体验会员',
   2: '月卡会员',
   3: '季卡会员',
-  4: '年费会员',
+  4: '年卡会员',
 } as const
 
 export const getVipName = (code: keyof typeof vipMap) => {
