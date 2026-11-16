@@ -45,7 +45,7 @@ export const accountIpc = (win: BrowserWindow) => {
    * 登出
     */
   ipcMain.handle('logout', async (event, data: any) => {
-    return await logout()
+    return await logout(data.token)
   })
 
   /** 

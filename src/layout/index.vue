@@ -3,6 +3,7 @@ import { useAppStore, useUserStore } from '@/stores'
 import LayoutHeader from './header.vue'
 import LayoutMenu from './menu.vue'
 import { getVipName } from '@/enums/index'
+import { ReadOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 const store = useUserStore()
 const appStore = useAppStore()
@@ -16,8 +17,8 @@ const downloadLog = () => {
 }
 
 // 跳转视频教程
-const openUrl = () => {
-  window.electronAPI.sendMessage('open-url', 'https://mp.weixin.qq.com/s/pmP_yl49F6I-wbyJKGdOxw')
+const openUrl = (url: string) => {
+  window.electronAPI.sendMessage('open-url', url)
 }
 </script>
 
@@ -38,7 +39,20 @@ const openUrl = () => {
             <div class="list">
               <div class="item">
                 <img src="@/assets/layout/video.png" class="item-icon" />
-                <span @click="openUrl">视频教程</span>
+                <span @click="openUrl('https://mp.weixin.qq.com/s/pmP_yl49F6I-wbyJKGdOxw')"
+                  >视频教程</span
+                >
+              </div>
+              <div class="item">
+                <ReadOutlined class="item-icon" />
+                <span
+                  @click="
+                    openUrl(
+                      'https://dcnriwxzg13b.feishu.cn/wiki/Cuf2wMC9ciCaw0ktoowclKOcnXh#part-D2Xydb5GUohhDxxmXlMcy8YYnIc',
+                    )
+                  "
+                  >文字教程</span
+                >
               </div>
               <div class="item">
                 <img src="@/assets/layout/export.png" class="item-icon" />

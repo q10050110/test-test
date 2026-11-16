@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAppStore, useUserStore } from '@/stores'
+import feedback from '@/utils/feedback'
 const store = useAppStore()
 const userStore = useUserStore()
 
@@ -7,6 +8,7 @@ const userStore = useUserStore()
 const clickHandle = () => {
   store.closeOpenHandle()
   store.closeType === 'quit' ? window.electronAPI.sendMessage('app-quit', '') : userStore.logout()
+  feedback.success('退出成功')
 }
 </script>
 

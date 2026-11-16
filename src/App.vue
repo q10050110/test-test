@@ -24,6 +24,7 @@ const logoutHandle = (data: any) => {
 }
 
 window.electronAPI.on('request', (data) => {
+  console.log('退出登录~~~')
   logoutHandle(data)
 })
 

@@ -60,7 +60,7 @@ export const getUserInfo = async (data: { token: string }) => {
   return { code: 0, message: '获取用户信息成功', data: { ...res.data, ...vipInfo.data } }
 }
 
-export const logout = async () => {
+export const logout = async (token: string) => {
   try {
     const taskInExecution = TaskManager.getInstance()
       .getAllTasksList()
@@ -75,6 +75,7 @@ export const logout = async () => {
     return await request<InterfaceResult<any>, InterfaceResult<any>>({
       url: '/api/user/userBase/logoutAuto',
       method: 'post',
+      data: { token }
     })
   } catch (error) {
     return {

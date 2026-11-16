@@ -43,9 +43,9 @@ export const useUserStore = defineStore('user', () => {
 
   const logout = async () => {
     try {
-      await removeToken()
-      router.push(`/login?redirect=${router.currentRoute.value.path}`)
       await logoutAPI({ token: token.value! })
+      router.push(`/login?redirect=${router.currentRoute.value.path}`)
+      await removeToken()
     } catch (error) {
       console.log(error)
     } finally {
