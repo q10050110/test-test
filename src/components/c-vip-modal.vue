@@ -95,6 +95,7 @@ const payExpire = (expireTime: string) => {
   })
 }
 const payHandle = async () => {
+  if (!userStore.checkVipPurchase()) return
   const { data, code, message } = await window.electronAPI.invoke<Response<VipResult>>('pay-vip', {
     auto_vip_type: selectedCard.value,
   })
@@ -104,21 +105,26 @@ const payHandle = async () => {
     hasPay.value = true
     payInfo.value = data
     queryPayResult()
+  } else if (code === 403) {
+    feedback.warning(message)
   } else {
     feedback.error(message)
   }
 }
 const getPayInfo = async () => {
+  if (!userStore.checkVipPurchase()) return
   if (userStore.user?.auto_vip_type && selectedCard.value === 1)
     return feedback.warning('您已经是会员，不能开通体验卡会员')
   getPayLoading.value = true
   try {
-    const { data: VipInfo } = await window.electronAPI.invoke<Response<VipPayInfo>>(
+    const { code, data: VipInfo, message } = await window.electronAPI.invoke<Response<VipPayInfo>>(
       'get-vip-pay-info',
       {
         auto_vip_type: selectedCard.value,
       },
     )
+    if (code === 403) return feedback.warning(message)
+    if (code !== 0) return feedback.error(message)
     const contentVNode = h('div', {}, [
       h(
         'div',
@@ -142,7 +148,6 @@ const getPayInfo = async () => {
           .format('YYYY-MM-DD HH:mm:ss')}`,
       ),
     ])
-    getPayLoading.value = false
     Modal.confirm({
       title: '开通/续费确认',
       content: contentVNode,
@@ -150,9 +155,10 @@ const getPayInfo = async () => {
         await payHandle()
       },
     })
-  } catch (error) {
-    getPayLoading.value = false
+  } catch {
     userStore.setShowVipModal(false)
+  } finally {
+    getPayLoading.value = false
   }
 }
 
@@ -187,6 +193,10 @@ watch(
         // 等待最新会员信息与套餐配置，避免沿用上一次打开时的选择。
         await Promise.all([userStore.getUser(), getVipOption()])
         if (active) {
+          if (!userStore.checkVipPurchase()) {
+            userStore.setShowVipModal(false)
+            return
+          }
           const currentType = userStore.user?.auto_vip_type || 1
           selectHandle(
             tableList.value.some((item) => item.auto_vip_type === currentType) ? currentType : 1,
@@ -310,7 +320,20 @@ const formatData = (date: number | string) => {
                   <div class="body-item">
                     {{ item.auto_vip_type == 99 ? '每日巡查店铺数' : '不限' }}
                   </div>
-                  <div class="body-item">{{ item.device_limit }}</div>
+                  <div class="body-item">
+                    <template v-if="item.auto_vip_type === 99">
+                      {{ item.device_limit }}
+                      <a-tooltip :trigger="['hover', 'focus']">
+                        <template #title>每个账号只允许登录一台设备</template>
+                        <QuestionCircleOutlined
+                          class="device-limit-help"
+                          tabindex="0"
+                          aria-label="每个账号只允许登录一台设备"
+                        />
+                      </a-tooltip>
+                    </template>
+                    <template v-else>1</template>
+                  </div>
                 </div>
               </div>
             </div>
@@ -549,6 +572,10 @@ const formatData = (date: number | string) => {
         font-weight: 500;
         font-size: 14px;
         color: #666666;
+      }
+      .device-limit-help {
+        margin-left: 4px;
+        cursor: help;
       }
     }
   }

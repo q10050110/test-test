@@ -4,12 +4,14 @@ import type { PageParams } from '../../types/index.js'
 import { InspectionServices } from './index.services.js'
 import { inspectionDependencies } from './inspection-runtime.services.js'
 import type { BrowserWindow } from 'electron'
+import { getAutoVipInfo } from '../account.services.js'
 import { CronServices } from '../common/cron.services.js'
 import { TaskScope } from '../common/task-scope.services.js'
 import log from '../../log/business.js'
 
 interface ManagerDependencies {
   api: typeof api
+  getAutoVipInfo: typeof getAutoVipInfo
   createTask(task: Inspection, window: BrowserWindow | null): InspectionServices
   cron: Pick<CronServices, 'register' | 'delete'>
 }
@@ -19,7 +21,7 @@ export class TaskManager {
   private readonly tasks = new Map<string, InspectionServices>()
   private readonly executions = new Map<string, Promise<void>>()
   private readonly results = new Map<string, Inspection>()
-  private readonly cronIds = new Set<string>()
+  private readonly cronHandlers = new Map<string, () => Promise<void>>()
   private queue: string[] = []
   private mainWindow: BrowserWindow | null = null
   private concurrency = 4
@@ -27,7 +29,10 @@ export class TaskManager {
   private generation = 0
   private stopPromise?: Promise<void>
   constructor(private readonly deps: ManagerDependencies = {
-    api, createTask: (task, window) => new InspectionServices(task, window, inspectionDependencies), cron: CronServices.getInstance(),
+    api,
+    getAutoVipInfo,
+    createTask: (task, window) => new InspectionServices(task, window, inspectionDependencies),
+    cron: CronServices.getInstance(),
   }) { }
 
   static getInstance() { return this.instance ??= new TaskManager() }
@@ -74,24 +79,29 @@ export class TaskManager {
     const response = await this.deps.api.deleteTaskAPI(params)
     if (response.code === 0) for (const id of params.taskIds) {
       this.deps.cron.delete(id)
-      this.cronIds.delete(id)
+      this.cronHandlers.delete(id)
       this.results.delete(id)
     }
     return response
   }
   private schedule(task: Inspection) {
     if (this.stopping) return
-    if (task.executionMethod !== 'AUTO') { this.deps.cron.delete(task._id); this.cronIds.delete(task._id); return }
+    if (task.executionMethod !== 'AUTO') { this.deps.cron.delete(task._id); this.cronHandlers.delete(task._id); return }
     const match = String(task.autoExecutionTime).match(/^(\d{1,2}):(\d{2})$/)
     if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) throw new Error('巡查定时时间格式应为 HH:mm')
-    const generation = this.generation
+    const handler = async () => {
+      if (this.cronHandlers.get(task._id) !== handler) return
+      try {
+        const { code, data } = await this.deps.getAutoVipInfo()
+        if (code === 0 && Number(data?.auto_vip_type) > 0 && this.cronHandlers.get(task._id) === handler) {
+          await this.executeTask(task)
+        }
+      } catch (error) { log.error('定时巡查启动失败:', error) }
+    }
     this.deps.cron.register({
-      name: task._id, expression: `${Number(match[2])} ${Number(match[1])} * * *`, handler: async () => {
-        try { if (generation === this.generation) await this.executeTask(task) }
-        catch (error) { log.error('定时巡查启动失败:', error) }
-      }
+      name: task._id, expression: `${Number(match[2])} ${Number(match[1])} * * *`, handler,
     })
-    this.cronIds.add(task._id)
+    this.cronHandlers.set(task._id, handler)
   }
   async restoreScheduledTasks() {
     const generation = this.generation
@@ -168,10 +178,10 @@ export class TaskManager {
     this.queue = []
     this.stopPromise = (async () => {
       try {
-        for (const id of this.cronIds) {
+        for (const id of this.cronHandlers.keys()) {
           try { this.deps.cron.delete(id) } catch (error) { log.error('停止巡查定时器失败:', error) }
         }
-        this.cronIds.clear()
+        this.cronHandlers.clear()
         await Promise.allSettled([...this.tasks.values()].map(task => task.stopTask()))
         await Promise.allSettled([...this.executions.values()])
         for (const [id, task] of this.tasks) this.notify(id, task.getTaskInfo())

@@ -6,13 +6,14 @@ import type { Inspection } from '../../electron/services/inspection/type.js'
 const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL?.endsWith('/inspection/task-manager.services.ts') || context.parentURL?.endsWith('/inspection/task-manager.services.js')) {
-      if (specifier === './api.services.js' || specifier === './inspection-runtime.services.js' || (specifier === '../../log/index.js' || specifier === '../../log/business.js')) return { url: 'test:manager:' + specifier, shortCircuit: true }
+      if (specifier === './api.services.js' || specifier === './inspection-runtime.services.js' || specifier === '../account.services.js' || (specifier === '../../log/index.js' || specifier === '../../log/business.js')) return { url: 'test:manager:' + specifier, shortCircuit: true }
     }
     return next(specifier, context)
   },
   load(url, context, next) {
     if (url === 'test:manager:./api.services.js') return { format: 'module', shortCircuit: true, source: 'export {};' }
     if (url === 'test:manager:./inspection-runtime.services.js') return { format: 'module', shortCircuit: true, source: 'export const inspectionDependencies = {};' }
+    if (url === 'test:manager:../account.services.js') return { format: 'module', shortCircuit: true, source: 'export function getAutoVipInfo() { throw new Error("Unexpected membership lookup"); }' }
     if ((url === 'test:manager:../../log/index.js' || url === 'test:manager:../../log/business.js')) return { format: 'module', shortCircuit: true, source: 'export default { info() {}, warn() {}, error() {} };' }
     return next(url, context)
   },
@@ -41,7 +42,7 @@ class FakeTask {
   }
   finish() { this.info.status = 'completed'; this.done.resolve() }
 }
-function fixture() {
+function fixture(getAutoVipInfo = async () => ({ code: 0, data: { auto_vip_type: 0 } })) {
   const created: FakeTask[] = [], deleted: string[] = [], scheduled: any[] = [], synced: any[] = []
   let list: Inspection[] = []
   const api = {
@@ -52,7 +53,7 @@ function fixture() {
     deleteTaskAPI: async () => ({ code: 0, data: 'ok', message: '' }),
     getTimerTaskListAPI: async () => ({ code: 0, data: list, message: '' }),
   }
-  const manager = new TaskManager({ api, createTask: info => { const task = new FakeTask(info); created.push(task); return task }, cron: { register: data => scheduled.push(data), delete: id => deleted.push(id) } } as any)
+  const manager = new TaskManager({ api, getAutoVipInfo, createTask: info => { const task = new FakeTask(info); created.push(task); return task }, cron: { register: data => scheduled.push(data), delete: id => deleted.push(id) } } as any)
   return { manager, created, api, deleted, scheduled, synced, list: (data: Inspection[]) => { list = data } }
 }
 test('duplicate starts reserve once and saturated tasks queue instead of disappearing', async () => {
@@ -114,6 +115,24 @@ test('deleting multiple tasks removes every associated cron registration', async
   await f.manager.deleteTask({ taskIds: ['a', 'b'] })
   assert.deepEqual(f.deleted, ['a', 'b'])
 })
+
+test('restored cron tasks use the effective membership returned for the logged-in account', async () => {
+  let vipType = 0
+  const f = fixture(async () => ({ code: 0, data: { auto_vip_type: vipType } }))
+  f.list([{ ...taskInfo('a'), executionMethod: 'AUTO', autoExecutionTime: '09:00' }])
+  await f.manager.restoreScheduledTasks()
+
+  const { handler } = f.scheduled[0]
+  await handler()
+  assert.equal(f.created.length, 0)
+
+  vipType = 4
+  await handler()
+  assert.equal(f.created.length, 1)
+  assert.equal(f.created[0].started, 1)
+  await f.manager.stopAllTasks()
+})
+
 test('start rejection and dead UI cannot retain slots or prevent the next task', async () => {
   const f = fixture()
   f.manager.setMainWindow({ isDestroyed: () => false, webContents: { send() { throw new Error('dead renderer') } } } as any)

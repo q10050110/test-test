@@ -5,16 +5,24 @@ import { QuestionCircleOutlined, LoginOutlined } from '@ant-design/icons-vue'
 import { formatNumberByUnit } from '@/utils/index'
 import { useUserStore } from '@/stores'
 const userStore = useUserStore()
-// 获取选品数据
+// 今日用量按当前登录账号查询，与共享剩余额度独立。
 const dataInfo = ref<HomeData>()
-const getDataInfo = async () => {
-  const { code, data } = await window.electronAPI.invoke<Response<HomeData>>(
-    'get-today-data-count',
-    {},
-  )
-  if (!code) dataInfo.value = data
-}
-getDataInfo()
+watch(
+  () => userStore.user?._id,
+  async (accountId, _previousId, onCleanup) => {
+    dataInfo.value = undefined
+    if (!accountId) return
+
+    let active = true
+    onCleanup(() => { active = false })
+    const { code, data } = await window.electronAPI.invoke<Response<HomeData>>(
+      'get-today-data-count',
+      {},
+    )
+    if (active && code === 0) dataInfo.value = data
+  },
+  { immediate: true },
+)
 
 // 获取跟卖推荐
 const recommendedCategories = ref<RecommendedCategories[]>([])
@@ -58,11 +66,11 @@ const goSelectGoods = (parentCategoryId: string, categoryId: string) => {
     <div class="top-stats">
       <div class="stat-card">
         <div class="title">今日选品数量</div>
-        <div class="value">{{ dataInfo?.pickCount || 0 }}</div>
+        <div class="value">{{ dataInfo?.pickCount ?? '—' }}</div>
       </div>
       <div class="stat-card">
         <div class="title">今日巡查商品数量</div>
-        <div class="value">{{ dataInfo?.followSellCount || 0 }}</div>
+        <div class="value">{{ dataInfo?.followSellCount ?? '—' }}</div>
       </div>
     </div>
 

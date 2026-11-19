@@ -2,6 +2,7 @@ export type platform = 'OZON' | 'WB'
 
 export type User = {
   _id: string
+  pid?: string | null
   name: string
   phone: string
   vip_type: number

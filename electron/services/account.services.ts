@@ -44,20 +44,31 @@ export const login = async (data: { phone: string; pwd: string }) => {
     }
   }
 }
-export const getUserInfo = async (data: { token: string }) => {
-  const res = await request<InterfaceResult<any>, InterfaceResult<any>>({
-    url: '/api/user/userBase/getUserInfo',
-    method: 'post',
-    data,
-  })
-  const vipInfo = await request<InterfaceResult<UserVipInfo>, InterfaceResult<UserVipInfo>>({
+export const getAutoVipInfo = (data: { token?: string } = {}) =>
+  request<InterfaceResult<UserVipInfo>, InterfaceResult<UserVipInfo>>({
     url: '/api/auto/autoTask/getAutoVipInfo',
     method: 'post',
     data
   })
-  if (res.code === 0) operationStore.set('user', { ...res.data, ...vipInfo.data })
 
-  return { code: 0, message: '获取用户信息成功', data: { ...res.data, ...vipInfo.data } }
+type AccountProfile = { _id: string; pid?: string | null }
+
+const getAccountProfile = (data: { token?: string } = {}) =>
+  request<InterfaceResult<AccountProfile>, InterfaceResult<AccountProfile>>({
+    url: '/api/user/userBase/getUserInfo',
+    method: 'post',
+    data,
+  })
+
+export const getUserInfo = async (data: { token: string }) => {
+  const { token } = data
+  const { code, data: profile } = await getAccountProfile(data)
+  if (code !== 0 || !profile?._id) throw new Error('获取用户信息失败，请稍后重试')
+  const vipInfo = await getAutoVipInfo(data)
+  const user = { ...profile, ...vipInfo.data, _id: profile._id, pid: profile.pid }
+  if (operationStore.get('token') === token) operationStore.set('user', user)
+
+  return { code: 0, message: '获取用户信息成功', data: user }
 }
 
 export const logout = async (token: string) => {
@@ -102,37 +113,37 @@ export const getVipInfo = async () => {
   }
 }
 
-export const getVipPayInfo = async (auto_vip_type: 1 | 2 | 3 | 4) => {
+const requestVipPurchase = async <T>(url: string, auto_vip_type: 1 | 2 | 3 | 4) => {
   try {
-    return await request<InterfaceResult<VipPayInfo>, InterfaceResult<VipPayInfo>>({
-      url: '/api/other/pay/autoVipPayInfo',
+    const token = operationStore.get('token')
+    if (!token) return { code: 401, message: '请先登录', data: null }
+
+    const { code, data } = await getAccountProfile()
+    if (token !== operationStore.get('token')) {
+      return { code: 401, message: '登录状态已变更，请重新操作', data: null }
+    }
+    if (code !== 0 || !data?._id) throw new Error('获取用户信息失败，请稍后重试')
+    if (data.pid) return { code: 403, message: '子账号无权限购买', data: null }
+
+    return await request<InterfaceResult<T>, InterfaceResult<T>>({
+      url,
       method: 'post',
       data: { auto_vip_type }
     })
   } catch (error) {
     return {
       code: 400,
-      message: error,
+      message: error instanceof Error ? error.message : String(error),
       data: null,
     }
   }
 }
 
-export const payVip = async (auto_vip_type: 1 | 2 | 3 | 4) => {
-  try {
-    return await request<InterfaceResult<VipResult>, InterfaceResult<VipResult>>({
-      url: '/api/other/pay/autoVipPayCode',
-      method: 'post',
-      data: { auto_vip_type }
-    })
-  } catch (error) {
-    return {
-      code: 400,
-      message: error,
-      data: null,
-    }
-  }
-}
+export const getVipPayInfo = (auto_vip_type: 1 | 2 | 3 | 4) =>
+  requestVipPurchase<VipPayInfo>('/api/other/pay/autoVipPayInfo', auto_vip_type)
+
+export const payVip = (auto_vip_type: 1 | 2 | 3 | 4) =>
+  requestVipPurchase<VipResult>('/api/other/pay/autoVipPayCode', auto_vip_type)
 
 export const getVipPayResult = async (mchOrderNo: string) => {
   try {
