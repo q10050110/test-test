@@ -2,6 +2,10 @@ import type { AppInfo, Version } from '@/types'
 import { defineStore } from 'pinia'
 import type { Task } from '@/types/selectGoods'
 
+const baseWidth = 1500
+const baseFontSize = 14
+const remBase = 16 // 与 vite.config.ts 中 postcss-pxtorem 的 rootValue 一致
+
 export const useAppStore = defineStore('app', () => {
   const appInfo = ref<AppInfo>()
   const loading = ref(false)
@@ -14,7 +18,7 @@ export const useAppStore = defineStore('app', () => {
   )
   const theme = ref({
     token: {
-      fontSize: 16,
+      fontSize: baseFontSize,
     },
   })
   const initAppInfo = async () => {
@@ -31,18 +35,15 @@ export const useAppStore = defineStore('app', () => {
   const setUpdate = (value: 'hasUpdate' | 'hasNew' | 'download' | 'downloaded' | 'isInstall') =>
     (updateStatus.value = value)
   const setRootFontSize = () => {
-    const baseWidth = 1300
-    const baseFontSize = 16
-    const width = window.innerWidth
-    const scale = width / baseWidth
-    const fontSize = Math.max(12, Math.min(18, baseFontSize * scale))
-    console.log('fontSize', fontSize)
+    const fontSize = Math.max(12, Math.min(18, (window.innerWidth / baseWidth) * baseFontSize))
     setTheme({
+      ...theme.value,
       token: {
-        fontSize: Math.max(12, fontSize),
+        ...theme.value.token,
+        fontSize,
       },
     })
-    document.documentElement.style.fontSize = fontSize + 'px'
+    document.documentElement.style.fontSize = `${(fontSize / baseFontSize) * remBase}px`
   }
 
   const openHandle = async (eventType: 'quit' | 'logout' = 'quit') => {

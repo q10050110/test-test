@@ -589,6 +589,19 @@ const formatData = (date: number | string) => {
         cursor: help;
       }
     }
+
+    &:first-child {
+      text-align: left;
+
+      .header,
+      .body {
+        padding-inline-start: 20px;
+      }
+
+      .body {
+        align-items: flex-start;
+      }
+    }
   }
 }
 

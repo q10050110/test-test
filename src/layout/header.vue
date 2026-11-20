@@ -43,12 +43,10 @@ const cancelHandle = () => {
 }
 
 window.electronAPI.on('maximize', () => {
-  store.setRootFontSize()
   isMax.value = true
 })
 
 window.electronAPI.on('unmaximize', () => {
-  store.setRootFontSize()
   isMax.value = false
 })
 </script>

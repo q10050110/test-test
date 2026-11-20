@@ -156,7 +156,7 @@ const openUrl = (url: string) => {
           flex: 1;
           .list {
             padding: 0px 20px;
-            font-size: 16px;
+            font-size: 14px;
             color: #333333;
             .item {
               display: flex;

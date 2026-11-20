@@ -19,15 +19,15 @@ const openKeys = ref<string[]>([])
 const convertMenuItems = (menus: MenuItem[]): ItemType[] => {
   return menus
     .filter((item) => !item.hidden)
-    .map((item) => {
-      const menuItem: ItemType = {
+    .map((item): ItemType => {
+      const menuItem = {
         key: item.path,
         label: item.title,
         icon: item.icon,
       }
-      // 如果有子菜单,递归处理
-      if (item.children && item.children.length > 0) {
-        menuItem.children = convertMenuItems(item.children)
+
+      if (item.children?.length) {
+        return { ...menuItem, children: convertMenuItems(item.children) }
       }
 
       return menuItem

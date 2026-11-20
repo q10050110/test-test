@@ -98,7 +98,13 @@ const onResize = debounce(() => {
   appStore.setRootFontSize()
 }, 100)
 
+appStore.setRootFontSize()
 window.addEventListener('resize', onResize)
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  onResize.cancel()
+})
+
 const router = useRoute()
 onMounted(async () => {
   if (router.path !== '/login') {
