@@ -83,9 +83,12 @@ const openUrl = (url: string) => {
                       {{ dayjs(store.user?.expire_time).format('YYYY-MM-DD HH:mm:ss') }}
                     </div>
                   </div>
-                  <a-button type="primary" class="vip-btn" @click="store.setShowVipModal(true)">{{
-                    store.user?.auto_vip_type === 0 ? '去开通' : '去续费'
-                  }}</a-button>
+                  <a-button
+                    type="primary"
+                    class="vip-btn"
+                    @click="store.setShowVipModal(true, true)"
+                    >{{ store.user?.auto_vip_type === 0 ? '去开通' : '去续费' }}</a-button
+                  >
                 </div>
                 <a-button type="link" @click="logoutHandle" class="logout-btn">退出登录</a-button>
               </div>

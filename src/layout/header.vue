@@ -64,7 +64,7 @@ window.electronAPI.on('unmaximize', () => {
     </div>
     <div class="drag"></div>
     <div class="right">
-      <div class="customer-vip" @click="userStore.setShowVipModal(true)">
+      <div class="customer-vip" @click="userStore.setShowVipModal(true, true)">
         <img src="@/assets/window/vip.png" style="margin-right: 5px" />
         开通/续费VIP
       </div>

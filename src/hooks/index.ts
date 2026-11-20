@@ -58,7 +58,7 @@ export const useVipCheck = () => {
       const res = await feedback.confirm('此功能仅限会员使用，请开通会员', {
         okText: '去开通',
       })
-      if (res) userStore.setShowVipModal(true)
+      if (res) userStore.setShowVipModal(true, true)
       return;
     }
     callback()

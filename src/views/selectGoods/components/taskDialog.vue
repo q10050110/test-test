@@ -714,8 +714,11 @@ defineExpose({
           <section>
             <h3 class="section-title">
               <span>自动上架</span>
-              <a-tooltip title="开启后，任务结束后将自动上架所有符合条件的商品">
-                <QuestionCircleOutlined class="info-icon" />
+              <a-tooltip
+                title="开启后，任务结束后将自动上架所有符合条件的商品；
+上架时会消耗erp的帮豆额度"
+              >
+                <img src="@/assets/view/vip-logo.png" class="info-icon" />
               </a-tooltip>
               <a-switch
                 :checked="formData.isUseAutoUpGoods"
@@ -1817,6 +1820,8 @@ section {
 }
 
 .info-icon {
+  width: 14px;
+  height: 14px;
   color: #ccc;
   cursor: help;
   font-size: 14px;

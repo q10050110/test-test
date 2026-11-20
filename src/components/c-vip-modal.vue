@@ -117,12 +117,13 @@ const getPayInfo = async () => {
     return feedback.warning('您已经是会员，不能开通体验卡会员')
   getPayLoading.value = true
   try {
-    const { code, data: VipInfo, message } = await window.electronAPI.invoke<Response<VipPayInfo>>(
-      'get-vip-pay-info',
-      {
-        auto_vip_type: selectedCard.value,
-      },
-    )
+    const {
+      code,
+      data: VipInfo,
+      message,
+    } = await window.electronAPI.invoke<Response<VipPayInfo>>('get-vip-pay-info', {
+      auto_vip_type: selectedCard.value,
+    })
     if (code === 403) return feedback.warning(message)
     if (code !== 0) return feedback.error(message)
     const contentVNode = h('div', {}, [
@@ -193,7 +194,7 @@ watch(
         // 等待最新会员信息与套餐配置，避免沿用上一次打开时的选择。
         await Promise.all([userStore.getUser(), getVipOption()])
         if (active) {
-          if (!userStore.checkVipPurchase()) {
+          if (!userStore.checkVipPurchase(true)) {
             userStore.setShowVipModal(false)
             return
           }
@@ -316,6 +317,16 @@ const formatData = (date: number | string) => {
                 <div class="body">
                   <div class="body-item">
                     {{ item.day_pick_count === -1 ? '不限' : item.day_pick_count }}
+                    <template v-if="item.auto_vip_type === 99">
+                      <a-tooltip :trigger="['hover', 'focus']">
+                        <template #title>主子账号共用选品额度</template>
+                        <QuestionCircleOutlined
+                          class="device-limit-help"
+                          tabindex="0"
+                          aria-label="主子账号共用选品额度"
+                        />
+                      </a-tooltip>
+                    </template>
                   </div>
                   <div class="body-item">
                     {{ item.auto_vip_type == 99 ? '每日巡查店铺数' : '不限' }}

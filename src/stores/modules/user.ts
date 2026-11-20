@@ -56,14 +56,14 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const checkVipPurchase = () => {
-    if (!isSubAccount.value) return true
+  const checkVipPurchase = (noValid: boolean = false) => {
+    if (!isSubAccount.value || noValid) return true
     feedback.warning('子账号无权限购买')
     return false
   }
 
-  const setShowVipModal = (show: boolean) => {
-    if (show && !checkVipPurchase()) return
+  const setShowVipModal = (show: boolean, noValid: boolean = false) => {
+    if (show && !checkVipPurchase(noValid)) return
     hasShowVipModal.value = show
   }
 
